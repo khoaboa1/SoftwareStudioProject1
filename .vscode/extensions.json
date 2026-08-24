@@ -1,0 +1,8 @@
+{
+  "recommendations": [
+    "atlassian.atlascode",
+    "github.vscode-pull-request-github",
+    "eamodio.gitlens",
+    "editorconfig.editorconfig"
+  ]
+}

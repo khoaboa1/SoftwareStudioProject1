@@ -1,0 +1,43 @@
+#!/bin/sh
+# Reject commits whose subject line carries no Jira issue key.
+# Set the expected project key once:   git config jira.projectKey SSP
+# With no key configured, any PROJECT-123 shaped token is accepted.
+
+msg_file="$1"
+subject=$(sed -n '1p' "$msg_file")
+
+# Let merges, reverts, and fixup/squash commits through untouched.
+case "$subject" in
+  "Merge "*|"Revert "*|"fixup!"*|"squash!"*) exit 0 ;;
+esac
+
+# Ignore comment lines / empty messages (git aborts on those anyway).
+[ -z "$(grep -v '^#' "$msg_file" | tr -d '[:space:]')" ] && exit 0
+
+project=$(git config jira.projectKey)
+if [ -n "$project" ]; then
+  pattern="(^|[^A-Za-z0-9])$project-[0-9]+([^0-9]|$)"
+  hint="$project-123"
+else
+  pattern="(^|[^A-Za-z0-9])[A-Z][A-Z0-9]+-[0-9]+([^0-9]|$)"
+  hint="PROJ-123"
+fi
+
+if printf '%s' "$subject" | grep -qE "$pattern"; then
+  exit 0
+fi
+
+cat >&2 <<MSG
+
+  Commit rejected: no Jira issue key in the subject line.
+
+    subject: $subject
+    expected: "$hint Short description of the change"
+
+  Naming your branch after the issue (feature/$hint-something) lets the
+  prepare-commit-msg hook add the key for you.
+
+  To bypass once (avoid on shared branches):  git commit --no-verify
+
+MSG
+exit 1

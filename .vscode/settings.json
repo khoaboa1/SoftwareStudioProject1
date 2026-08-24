@@ -1,0 +1,24 @@
+{
+  "files.eol": "\n",
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+
+  "editor.formatOnSave": true,
+  "editor.rulers": [72, 100],
+
+  "git.branchProtection": ["main"],
+  "git.branchProtectionPrompt": "alwaysPrompt",
+  "git.pruneOnFetch": true,
+  "git.autofetch": true,
+  "git.inputValidationSubjectLength": 72,
+
+  "githubPullRequests.pullBranch": "never",
+
+  "atlascode.jira.explorer.nestSubtasks": true,
+  "atlascode.jira.startWorkBranchTemplate.customPrefixes": [
+    "feature",
+    "bugfix",
+    "chore"
+  ],
+  "atlascode.jira.startWorkBranchTemplate.customTemplate": "{{prefix}}/{{issueKey}}-{{summary}}"
+}

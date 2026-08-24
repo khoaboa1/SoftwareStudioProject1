@@ -1,0 +1,13 @@
+
+# ------------------------------------------------------------------
+# SSP-123 Short summary in the imperative mood (max ~72 chars)
+#
+# Why this change is needed and what it does. Wrap at 72 columns.
+#
+# Jira Smart Commit commands (optional):
+#   #comment Left a note on the issue
+#   #time 1h 30m Worked on the parser
+#   #in-progress   #done
+#
+# The issue key MUST be in the first line, or the commit is rejected.
+# ------------------------------------------------------------------

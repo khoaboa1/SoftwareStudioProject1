@@ -1,0 +1,28 @@
+#!/bin/sh
+# Prefix the commit subject with the Jira issue key taken from the branch name.
+# Branch: feature/SSP-12-user-login  ->  commit subject gets "SSP-12 " prepended.
+# Skipped for merges, squashes, amends, and messages that already carry a key.
+
+msg_file="$1"
+msg_source="$2"
+
+case "$msg_source" in
+  merge|squash) exit 0 ;;
+esac
+
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+[ "$branch" = "HEAD" ] && exit 0
+
+key=$(printf '%s' "$branch" | grep -oE '[A-Z][A-Z0-9]+-[0-9]+' | head -1)
+[ -z "$key" ] && exit 0
+
+# Already mentioned anywhere in the message? Leave it alone.
+if grep -qE "(^|[^A-Z0-9])$key([^0-9]|$)" "$msg_file"; then
+  exit 0
+fi
+
+tmp="$msg_file.jira.$$"
+{
+  printf '%s ' "$key"
+  cat "$msg_file"
+} > "$tmp" && mv "$tmp" "$msg_file"
