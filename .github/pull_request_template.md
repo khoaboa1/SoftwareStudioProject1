@@ -1,7 +1,7 @@
 ## Jira issue
 
 <!-- Replace with the real key. Jira links the PR to the issue via this. -->
-SSP-___
+SSP1-___
 
 ## What changed
 

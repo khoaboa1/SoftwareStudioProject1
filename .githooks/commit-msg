@@ -1,6 +1,6 @@
 #!/bin/sh
 # Reject commits whose subject line carries no Jira issue key.
-# Set the expected project key once:   git config jira.projectKey SSP
+# Set the expected project key once:   git config jira.projectKey SSP1
 # With no key configured, any PROJECT-123 shaped token is accepted.
 
 msg_file="$1"

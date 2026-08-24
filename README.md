@@ -18,15 +18,15 @@ Jira board (Development panel, commits, branches, PRs).
 **Branch naming** — `<type>/<ISSUE-KEY>-<short-description>`
 
 ```
-feature/SSP-12-user-login
-bugfix/SSP-27-fix-null-avatar
-chore/SSP-3-ci-pipeline
+feature/SSP1-12-user-login
+bugfix/SSP1-27-fix-null-avatar
+chore/SSP1-3-ci-pipeline
 ```
 
 **Commit messages** — start the subject with the issue key:
 
 ```
-SSP-12 Add password hashing to signup flow
+SSP1-12 Add password hashing to signup flow
 ```
 
 The `prepare-commit-msg` hook pulls the key out of your branch name automatically,
@@ -37,9 +37,9 @@ with no key.
 
 | Syntax | Effect |
 |---|---|
-| `SSP-12 #comment Fixed the race condition` | Adds a comment to the issue |
-| `SSP-12 #time 2h 30m Refactoring` | Logs work against the issue |
-| `SSP-12 #done` / `#in-progress` | Transitions the issue |
+| `SSP1-12 #comment Fixed the race condition` | Adds a comment to the issue |
+| `SSP1-12 #time 2h 30m Refactoring` | Logs work against the issue |
+| `SSP1-12 #done` / `#in-progress` | Transitions the issue |
 
 ## Team conventions
 

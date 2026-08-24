@@ -1,6 +1,6 @@
 #!/bin/sh
 # Prefix the commit subject with the Jira issue key taken from the branch name.
-# Branch: feature/SSP-12-user-login  ->  commit subject gets "SSP-12 " prepended.
+# Branch: feature/SSP1-12-user-login  ->  commit subject gets "SSP1-12 " prepended.
 # Skipped for merges, squashes, amends, and messages that already carry a key.
 
 msg_file="$1"
