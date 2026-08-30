@@ -43,3 +43,31 @@
   - AC 2: Given I am an unverified user, when I attempt to send a direct message to a seller, then the app blocks the action and prompts me to verify my university email first.
 
 ## Use cases (Khoa)- describe a specific interaction between a user and the system step by step.
+
+1. Use Case 1 — List an Item for Sale
+
+Actor: Khoa, a student moving out of a dorm
+
+Steps:
+
+1. Khoa logs in to Handoff.
+2. Khoa selects the option to create a new listing.
+3. Khoa enters the item name, description, price, and uploads a photo.
+4. Khoa submits the listing.
+5. The system validates the information.
+6. The system adds the item to the campus marketplace feed.
+7. The system confirms that the listing was successfully created.
+
+8. Use Case 2 — Claim an Item
+
+Actor: Chuong, an incoming freshman
+
+Steps:
+
+1. Chuong logs in to Handoff.
+2. Chuong browses the campus marketplace feed.
+3. Chuong selects an available item that he wants.
+4. Chuong selects the option to request or claim the item..
+5. The system sends the claim request to the seller.
+6. The system confirms to Chuong that her request was successfully submitted.
+7. The seller sees that Chuong has requested the item and can continue arranging the exchange.
