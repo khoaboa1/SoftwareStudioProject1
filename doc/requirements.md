@@ -1,5 +1,13 @@
 ## Personas (Hudson) — describe the people who will use your app. Each persona has a name, background, and goals.
 
+- Sarah, 18, incoming freshman living on campus. She wants to buy affordable dorm essentials from nearby students and ensure she is safely meeting up with verified peers.
+
+- Alex, 22, graduating senior moving out of state. He wants to sell his used furniture quickly for extra cash and avoid the hassle of hauling bulky items back home.
+
+- David, 19, budget-conscious sophomore moving into his first apartment. He wants to set up automated alerts for specific keywords like "mini-fridge" and find the absolute best deals to stick to his tight budget.
+
+- Chloe, 21, international student flying back home. She wants to bundle all of her small dorm accessories into a single listing and sell them quickly before her flight leaves, without having to manage multiple buyers.
+
 ## User stories (Chuong)
 
 1. Create a list of sale items
