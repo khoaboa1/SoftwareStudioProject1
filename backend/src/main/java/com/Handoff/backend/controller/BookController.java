@@ -1,7 +1,7 @@
-package com.Handoff.controller;
+package com.Handoff.backend.controller;
 
-import com.Handoff.model.Book;
-import com.Handoff.service.BookService;
+import com.Handoff.backend.model.Book;
+import com.Handoff.backend.service.BookService;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
@@ -10,14 +10,14 @@ import java.util.List;
 @CrossOrigin(origins = "http://localhost:5173")
 public class BookController {
 
-    private final BookService bookService;
+  private final BookService bookService;
 
-    public BookController(BookService bookService) {
-        this.bookService = bookService;
-    }
+  public BookController(BookService bookService) {
+    this.bookService = bookService;
+  }
 
-    @GetMapping
-    public List<Book> getAllBooks() {
-        return bookService.getAllBooks();
-    }
+  @GetMapping
+  public List<Book> getAllBooks() {
+    return bookService.getAllBooks();
+  }
 }

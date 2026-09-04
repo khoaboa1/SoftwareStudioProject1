@@ -1,6 +1,6 @@
-package com.Handoff.service;
+package com.Handoff.backend.service;
 
-import com.Handoff.model.Book;
+import com.Handoff.backend.model.Book;
 import org.springframework.stereotype.Service;
 import java.util.Arrays;
 import java.util.List;
