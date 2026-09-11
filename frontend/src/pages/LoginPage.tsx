@@ -5,6 +5,7 @@ import { Button } from '../components/ui/Button'
 import { FormAlert } from '../components/ui/FormAlert'
 import { TextField } from '../components/ui/TextField'
 import { validateEmail, validatePassword } from '../lib/validation'
+import { ApiError, login, logout, type Student } from '../lib/api'
 
 type FieldErrors = {
   email?: string
@@ -16,8 +17,10 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<FieldErrors>({})
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
+  const [serverError, setServerError] = useState<string | null>(null)
+  const [loggedInStudent, setLoggedInStudent] = useState<Student | null>(null)
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
     const nextErrors: FieldErrors = {
@@ -28,12 +31,40 @@ export function LoginPage() {
     if (nextErrors.email || nextErrors.password) return
 
     setStatus('submitting')
+    setServerError(null)
 
-    // TODO: replace with a real call once the backend exposes an auth endpoint
-    // (see SSP1-5 — only a read-only Student listing API exists so far).
-    window.setTimeout(() => {
+    try {
+      const student = await login({ email, password })
+      setLoggedInStudent(student)
+      setStatus('idle')
+    } catch (error) {
+      setServerError(
+        error instanceof ApiError ? error.message : 'Something went wrong. Please try again.',
+      )
       setStatus('error')
-    }, 800)
+    }
+  }
+
+  async function handleLogout() {
+    await logout()
+    setLoggedInStudent(null)
+    setEmail('')
+    setPassword('')
+    setStatus('idle')
+  }
+
+  if (loggedInStudent) {
+    return (
+      <AuthCard
+        title="You're logged in"
+        subtitle={`Logged in as ${loggedInStudent.studentName}`}
+        footer={null}
+      >
+        <Button type="button" onClick={handleLogout}>
+          Log out
+        </Button>
+      </AuthCard>
+    )
   }
 
   return (
@@ -52,12 +83,7 @@ export function LoginPage() {
         </>
       }
     >
-      {status === 'error' && (
-        <FormAlert kind="error">
-          We couldn't log you in — login isn't connected yet. This is a UI
-          skeleton.
-        </FormAlert>
-      )}
+      {status === 'error' && serverError && <FormAlert kind="error">{serverError}</FormAlert>}
 
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
         <TextField

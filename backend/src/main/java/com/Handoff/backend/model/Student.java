@@ -1,29 +1,53 @@
 package com.Handoff.backend.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Table;
+
 import java.util.ArrayList;
 import java.util.List;
 
+@Entity
+@Table(name = "students")
 public class Student {
+
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
+
   private String studentName;
+
+  @Column(unique = true, nullable = false)
   private String email;
+
+  @JsonIgnore
+  @Column(nullable = false)
+  private String passwordHash;
+
+  @ElementCollection
+  @CollectionTable(name = "student_selling_items", joinColumns = @JoinColumn(name = "student_id"))
+  @Column(name = "item")
   private List<String> sellingItems;
+
   private String dormLocation;
 
-  // Default Constructor
   public Student() {
   }
 
-  // Create student account with (optional) selling list/dorm location (since Id,
-  // name,
-  // and email are required fields)
-
-  public Student(Long id, String studentName, String email, List<String> sellingItems, String dormLocation) {
-    this.id = id;
+  public Student(String studentName, String email, String passwordHash,
+                 List<String> sellingItems, String dormLocation) {
     this.studentName = studentName;
     this.email = email;
+    this.passwordHash = passwordHash;
     this.sellingItems = sellingItems != null ? new ArrayList<>(sellingItems) : null;
-    this.dormLocation = dormLocation != null ? dormLocation : null;
+    this.dormLocation = dormLocation;
   }
 
   public Long getId() {
@@ -50,6 +74,14 @@ public class Student {
     this.email = email;
   }
 
+  public String getPasswordHash() {
+    return passwordHash;
+  }
+
+  public void setPasswordHash(String passwordHash) {
+    this.passwordHash = passwordHash;
+  }
+
   public List<String> getSellingItems() {
     return sellingItems;
   }
@@ -65,8 +97,6 @@ public class Student {
   public void setDormLocation(String dormLocation) {
     this.dormLocation = dormLocation;
   }
-
-  // Helper methods to update selling items
 
   public void addSellingItems(List<String> items) {
     if (items == null || items.isEmpty()) {

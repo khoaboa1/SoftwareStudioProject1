@@ -1,19 +1,21 @@
 package com.Handoff.backend.service;
 
 import com.Handoff.backend.model.Student;
+import com.Handoff.backend.repository.StudentRepository;
 import org.springframework.stereotype.Service;
 
-import java.util.Arrays;
 import java.util.List;
 
 @Service
 public class StudentService {
 
+  private final StudentRepository studentRepository;
+
+  public StudentService(StudentRepository studentRepository) {
+    this.studentRepository = studentRepository;
+  }
+
   public List<Student> getAllStudents() {
-    return Arrays.asList(
-        new Student(1L, "Sarah", "sarah@tulane.edu", Arrays.asList("Desk Lamp", "Mini Fridge"), "Wall Residence Hall"),
-        new Student(2L, "Alex", "alex@tulane.edu", Arrays.asList("Study Desk", "Office Chair"), "Aron Residences"),
-        new Student(3L, "Chloe", "chloe@tulane.edu", Arrays.asList("Bedside Fan", "Storage Bins"), "Weatherhead"),
-        new Student(4L, "Brian", "brian@tulane.edu", null, null));
+    return studentRepository.findAll();
   }
 }
