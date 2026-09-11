@@ -1,0 +1,25 @@
+@import "tailwindcss";
+@import "@fontsource/geist-sans/400.css";
+@import "@fontsource/geist-sans/500.css";
+@import "@fontsource/geist-sans/600.css";
+@import "@fontsource/geist-sans/700.css";
+
+@theme {
+  --font-sans: "Geist Sans", ui-sans-serif, system-ui, sans-serif;
+
+  /* Handoff accent: warm coral/orange. Single accent, locked across the app. */
+  --color-accent-50: #fff4ed;
+  --color-accent-100: #ffe6d5;
+  --color-accent-200: #ffc9a8;
+  --color-accent-300: #ffa470;
+  --color-accent-400: #ff7a3d;
+  --color-accent-500: #f2622e;
+  --color-accent-600: #e04a1c;
+  --color-accent-700: #ba3818;
+  --color-accent-800: #942e19;
+  --color-accent-900: #782917;
+}
+
+body {
+  font-family: var(--font-sans);
+}
