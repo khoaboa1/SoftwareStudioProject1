@@ -10,6 +10,7 @@ import {
   validateName,
   validatePassword,
 } from '../lib/validation'
+import { ApiError, signup } from '../lib/api'
 
 type FieldErrors = {
   name?: string
@@ -24,9 +25,10 @@ export function SignupPage() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [errors, setErrors] = useState<FieldErrors>({})
-  const [status, setStatus] = useState<'idle' | 'submitting' | 'success'>('idle')
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle')
+  const [serverError, setServerError] = useState<string | null>(null)
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
     const nextErrors: FieldErrors = {
@@ -39,12 +41,17 @@ export function SignupPage() {
     if (Object.values(nextErrors).some(Boolean)) return
 
     setStatus('submitting')
+    setServerError(null)
 
-    // TODO: replace with a real call once the backend exposes signup +
-    // .edu verification endpoints (see SSP1-5 for current backend scope).
-    window.setTimeout(() => {
+    try {
+      await signup({ studentName: name, email, password })
       setStatus('success')
-    }, 800)
+    } catch (error) {
+      setServerError(
+        error instanceof ApiError ? error.message : 'Something went wrong. Please try again.',
+      )
+      setStatus('error')
+    }
   }
 
   return (
@@ -64,11 +71,9 @@ export function SignupPage() {
       }
     >
       {status === 'success' && (
-        <FormAlert kind="success">
-          Account details captured locally — sign-up isn't wired to a
-          backend yet. This is a UI skeleton.
-        </FormAlert>
+        <FormAlert kind="success">Account created! You can now log in.</FormAlert>
       )}
+      {status === 'error' && serverError && <FormAlert kind="error">{serverError}</FormAlert>}
 
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
         <TextField
