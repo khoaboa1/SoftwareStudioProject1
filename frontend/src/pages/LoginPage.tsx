@@ -1,11 +1,12 @@
 import { type FormEvent, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { AuthCard } from '../components/AuthCard'
 import { Button } from '../components/ui/Button'
 import { FormAlert } from '../components/ui/FormAlert'
 import { TextField } from '../components/ui/TextField'
 import { validateEmail, validatePassword } from '../lib/validation'
-import { ApiError, login, logout, type Student } from '../lib/api'
+import { ApiError, login } from '../lib/api'
+import { useAuth } from '../lib/auth-context'
 
 type FieldErrors = {
   email?: string
@@ -13,12 +14,13 @@ type FieldErrors = {
 }
 
 export function LoginPage() {
+  const navigate = useNavigate()
+  const { setStudent } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<FieldErrors>({})
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [serverError, setServerError] = useState<string | null>(null)
-  const [loggedInStudent, setLoggedInStudent] = useState<Student | null>(null)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -35,36 +37,14 @@ export function LoginPage() {
 
     try {
       const student = await login({ email, password })
-      setLoggedInStudent(student)
-      setStatus('idle')
+      setStudent(student)
+      navigate('/feed')
     } catch (error) {
       setServerError(
         error instanceof ApiError ? error.message : 'Something went wrong. Please try again.',
       )
       setStatus('error')
     }
-  }
-
-  async function handleLogout() {
-    await logout()
-    setLoggedInStudent(null)
-    setEmail('')
-    setPassword('')
-    setStatus('idle')
-  }
-
-  if (loggedInStudent) {
-    return (
-      <AuthCard
-        title="You're logged in"
-        subtitle={`Logged in as ${loggedInStudent.studentName}`}
-        footer={null}
-      >
-        <Button type="button" onClick={handleLogout}>
-          Log out
-        </Button>
-      </AuthCard>
-    )
   }
 
   return (
