@@ -41,8 +41,20 @@ export type Student = {
   id: number
   studentName: string
   email: string
+  emailVerified: boolean
   sellingItems: string[] | null
   dormLocation: string | null
+}
+
+export type LoginResult = {
+  requiresPin: boolean
+  message: string
+  id?: number
+  studentName?: string
+  email?: string
+  emailVerified?: boolean
+  sellingItems?: string[] | null
+  dormLocation?: string | null
 }
 
 export function signup(input: {
@@ -56,8 +68,30 @@ export function signup(input: {
   })
 }
 
-export function login(input: { email: string; password: string }): Promise<Student> {
-  return request<Student>('/auth/login', {
+export function login(input: {
+  email: string
+  password: string
+  deviceId?: string
+}): Promise<LoginResult> {
+  return request<LoginResult>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function verifyPin(input: {
+  email: string
+  pin: string
+  deviceId?: string
+}): Promise<Student> {
+  return request<Student>('/auth/verify-pin', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function resendPin(input: { email: string }): Promise<void> {
+  return request<void>('/auth/resend-pin', {
     method: 'POST',
     body: JSON.stringify(input),
   })
@@ -65,4 +99,8 @@ export function login(input: { email: string; password: string }): Promise<Stude
 
 export function logout(): Promise<void> {
   return request<void>('/auth/logout', { method: 'POST' })
+}
+
+export function fetchCurrentUser(): Promise<Student | null> {
+  return request<Student>('/auth/me').catch(() => null)
 }

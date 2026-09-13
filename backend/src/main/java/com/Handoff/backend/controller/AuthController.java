@@ -2,12 +2,17 @@ package com.Handoff.backend.controller;
 
 import com.Handoff.backend.dto.ErrorResponse;
 import com.Handoff.backend.dto.LoginRequest;
+import com.Handoff.backend.dto.LoginResponse;
+import com.Handoff.backend.dto.ResendPinRequest;
 import com.Handoff.backend.dto.SignupRequest;
+import com.Handoff.backend.dto.VerificationRequest;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.service.AuthService;
 import com.Handoff.backend.service.EmailAlreadyRegisteredException;
 import com.Handoff.backend.service.InvalidCredentialsException;
 import com.Handoff.backend.service.InvalidSignupException;
+import com.Handoff.backend.service.InvalidVerificationPinException;
+import com.Handoff.backend.service.VerificationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
@@ -26,9 +31,11 @@ public class AuthController {
   private static final String SESSION_STUDENT_ID = "studentId";
 
   private final AuthService authService;
+  private final VerificationService verificationService;
 
-  public AuthController(AuthService authService) {
+  public AuthController(AuthService authService, VerificationService verificationService) {
     this.authService = authService;
+    this.verificationService = verificationService;
   }
 
   @PostMapping("/signup")
@@ -38,11 +45,27 @@ public class AuthController {
   }
 
   @PostMapping("/login")
-  public ResponseEntity<Student> login(@RequestBody LoginRequest request, HttpServletRequest httpRequest) {
-    Student student = authService.login(request.email(), request.password());
+  public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+    LoginResponse response = authService.login(request.email(), request.password(), request.deviceId());
+    if (!response.isRequiresPin()) {
+      HttpSession session = httpRequest.getSession(true);
+      session.setAttribute(SESSION_STUDENT_ID, response.getId());
+    }
+    return ResponseEntity.ok(response);
+  }
+
+  @PostMapping("/verify-pin")
+  public ResponseEntity<Student> verifyPin(@RequestBody VerificationRequest request, HttpServletRequest httpRequest) {
+    Student verified = verificationService.verifyPin(request.email(), request.pin(), request.deviceId());
     HttpSession session = httpRequest.getSession(true);
-    session.setAttribute(SESSION_STUDENT_ID, student.getId());
-    return ResponseEntity.ok(student);
+    session.setAttribute(SESSION_STUDENT_ID, verified.getId());
+    return ResponseEntity.ok(verified);
+  }
+
+  @PostMapping("/resend-pin")
+  public ResponseEntity<Void> resendPin(@RequestBody ResendPinRequest request) {
+    verificationService.resendPin(request.email());
+    return ResponseEntity.noContent().build();
   }
 
   @PostMapping("/logout")
@@ -79,5 +102,10 @@ public class AuthController {
   @ExceptionHandler(InvalidCredentialsException.class)
   public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {
     return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse(ex.getMessage()));
+  }
+
+  @ExceptionHandler(InvalidVerificationPinException.class)
+  public ResponseEntity<ErrorResponse> handleInvalidVerificationPin(InvalidVerificationPinException ex) {
+    return ResponseEntity.badRequest().body(new ErrorResponse(ex.getMessage()));
   }
 }
