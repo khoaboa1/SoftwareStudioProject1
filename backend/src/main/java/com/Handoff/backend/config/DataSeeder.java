@@ -29,17 +29,21 @@ public class DataSeeder implements CommandLineRunner {
     String hashedPassword = passwordEncoder.encode(SEED_PASSWORD);
     Student sarah = new Student("Sarah", "sarah@tulane.edu", hashedPassword,
         List.of("Desk Lamp", "Mini Fridge"), "Wall Residence Hall");
+    sarah.setVerified(true);
     sarah.setEmailVerified(true);
 
     Student alex = new Student("Alex", "alex@tulane.edu", hashedPassword,
         List.of("Study Desk", "Office Chair"), "Aron Residences");
+    alex.setVerified(true);
     alex.setEmailVerified(true);
 
     Student chloe = new Student("Chloe", "chloe@tulane.edu", hashedPassword,
         List.of("Bedside Fan", "Storage Bins"), "Weatherhead");
+    chloe.setVerified(true);
     chloe.setEmailVerified(true);
 
     Student brian = new Student("Brian", "brian@tulane.edu", hashedPassword, null, null);
+    brian.setVerified(true);
     brian.setEmailVerified(true);
 
     studentRepository.saveAll(List.of(sarah, alex, chloe, brian));

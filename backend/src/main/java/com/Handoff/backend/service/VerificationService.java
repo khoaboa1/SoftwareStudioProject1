@@ -184,6 +184,7 @@ public class VerificationService {
       throw new InvalidVerificationPinException("Incorrect verification PIN");
     }
 
+    student.setVerified(true);
     student.setEmailVerified(true);
     student.setVerificationPin(null);
     student.setVerificationPinExpiry(null);

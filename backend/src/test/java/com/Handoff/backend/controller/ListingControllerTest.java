@@ -5,6 +5,8 @@ import com.Handoff.backend.dto.LoginRequest;
 import com.Handoff.backend.dto.SignupRequest;
 import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.StudentRepository;
+import com.Handoff.backend.dto.VerificationRequest;
+import com.Handoff.backend.model.Student;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,12 +53,15 @@ class ListingControllerTest {
     mockMvc.perform(post("/auth/signup").contentType("application/json").content(signupBody))
         .andExpect(status().isCreated());
 
-    String loginBody = objectMapper.writeValueAsString(new LoginRequest(email, "Password123!"));
-    MvcResult loginResult = mockMvc.perform(post("/auth/login").contentType("application/json").content(loginBody))
+    Student student = studentRepository.findByEmail(email).orElseThrow();
+    VerificationRequest verifyBody = new VerificationRequest(email, student.getVerificationPin(), "test-device");
+    MvcResult verifyResult = mockMvc.perform(post("/auth/verify-pin")
+        .contentType("application/json")
+        .content(objectMapper.writeValueAsString(verifyBody)))
         .andExpect(status().isOk())
         .andReturn();
 
-    HttpSession session = loginResult.getRequest().getSession(false);
+    HttpSession session = verifyResult.getRequest().getSession(false);
     return (MockHttpSession) session;
   }
 

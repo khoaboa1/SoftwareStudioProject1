@@ -12,6 +12,7 @@ public class LoginResponse {
   private List<String> sellingItems;
   private String dormLocation;
   private boolean emailVerified;
+  private boolean verified;
   private String message;
 
   public LoginResponse() {
@@ -26,6 +27,7 @@ public class LoginResponse {
     res.sellingItems = student.getSellingItems();
     res.dormLocation = student.getDormLocation();
     res.emailVerified = student.isEmailVerified();
+    res.verified = student.isVerified();
     res.message = "Login successful";
     return res;
   }
@@ -92,6 +94,14 @@ public class LoginResponse {
 
   public void setEmailVerified(boolean emailVerified) {
     this.emailVerified = emailVerified;
+  }
+
+  public boolean isVerified() {
+    return verified;
+  }
+
+  public void setVerified(boolean verified) {
+    this.verified = verified;
   }
 
   public String getMessage() {

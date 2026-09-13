@@ -2,6 +2,8 @@ package com.Handoff.backend.controller;
 
 import com.Handoff.backend.dto.LoginRequest;
 import com.Handoff.backend.dto.SignupRequest;
+import com.Handoff.backend.dto.VerificationRequest;
+import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.StudentRepository;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +16,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.LocalDateTime;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -42,16 +47,39 @@ class AuthControllerTest {
     String signupBody = objectMapper.writeValueAsString(
         new SignupRequest("Jane Doe", "jane@tulane.edu", "Password123!"));
 
+    // 1. Signup creates unverified account
     mockMvc.perform(post("/auth/signup").contentType("application/json").content(signupBody))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.email").value("jane@tulane.edu"))
+        .andExpect(jsonPath("$.verified").value(false))
         .andExpect(jsonPath("$.passwordHash").doesNotExist());
 
+    // 2. Unverified login requires PIN
     String loginBody = objectMapper.writeValueAsString(
         new LoginRequest("jane@tulane.edu", "Password123!"));
 
+    mockMvc.perform(post("/auth/login").contentType("application/json").content(loginBody))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.requiresPin").value(true));
+
+    // 3. Verify PIN
+    Student saved = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    String pin = saved.getVerificationPin();
+
+    VerificationRequest verifyBody = new VerificationRequest("jane@tulane.edu", pin, "device-1");
+    MvcResult verifyResult = mockMvc.perform(post("/auth/verify-pin")
+        .contentType("application/json")
+        .content(objectMapper.writeValueAsString(verifyBody)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.verified").value(true))
+        .andExpect(jsonPath("$.emailVerified").value(true))
+        .andReturn();
+
+    // 4. Subsequent login succeeds without requiring PIN
     MvcResult loginResult = mockMvc.perform(post("/auth/login").contentType("application/json").content(loginBody))
         .andExpect(status().isOk())
+        .andExpect(jsonPath("$.requiresPin").value(false))
+        .andExpect(jsonPath("$.verified").value(true))
         .andExpect(jsonPath("$.studentName").value("Jane Doe"))
         .andReturn();
 
@@ -59,7 +87,8 @@ class AuthControllerTest {
 
     mockMvc.perform(get("/auth/me").session((MockHttpSession) session))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.email").value("jane@tulane.edu"));
+        .andExpect(jsonPath("$.email").value("jane@tulane.edu"))
+        .andExpect(jsonPath("$.verified").value(true));
 
     mockMvc.perform(post("/auth/logout").session((MockHttpSession) session))
         .andExpect(status().isNoContent());
@@ -69,16 +98,43 @@ class AuthControllerTest {
   }
 
   @Test
-  void signup_returnsConflict_whenEmailAlreadyRegistered() throws Exception {
+  void signup_returnsConflict_whenVerifiedEmailAlreadyRegistered() throws Exception {
     String body = objectMapper.writeValueAsString(
         new SignupRequest("Jane Doe", "jane@tulane.edu", "Password123!"));
 
     mockMvc.perform(post("/auth/signup").contentType("application/json").content(body))
         .andExpect(status().isCreated());
 
+    // Mark verified
+    Student saved = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    saved.setVerified(true);
+    studentRepository.save(saved);
+
     mockMvc.perform(post("/auth/signup").contentType("application/json").content(body))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.message").value("Email already registered"));
+  }
+
+  @Test
+  void signup_whenUnverified_refreshesPinAndAccount() throws Exception {
+    String body1 = objectMapper.writeValueAsString(
+        new SignupRequest("Jane Doe", "jane@tulane.edu", "Password123!"));
+    mockMvc.perform(post("/auth/signup").contentType("application/json").content(body1))
+        .andExpect(status().isCreated());
+
+    Student firstSaved = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    String firstPin = firstSaved.getVerificationPin();
+
+    String body2 = objectMapper.writeValueAsString(
+        new SignupRequest("Jane Updated", "jane@tulane.edu", "NewPassword123!"));
+    mockMvc.perform(post("/auth/signup").contentType("application/json").content(body2))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.studentName").value("Jane Updated"));
+
+    Student secondSaved = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    assertThat(secondSaved.getStudentName()).isEqualTo("Jane Updated");
+    // Old PIN was replaced by fresh PIN
+    assertThat(secondSaved.getVerificationPin()).isNotNull();
   }
 
   @Test
@@ -117,9 +173,8 @@ class AuthControllerTest {
 
   @Test
   void login_returnsUnauthorized_forOauthOnlyUser() throws Exception {
-    // Create an OAuth-only student (no password)
-    com.Handoff.backend.model.Student oauthStudent =
-        new com.Handoff.backend.model.Student("OAuth User", "oauth@tulane.edu", null, "google", null, null);
+    Student oauthStudent =
+        new Student("OAuth User", "oauth@tulane.edu", null, "google", null, null);
     studentRepository.save(oauthStudent);
 
     String loginBody = objectMapper.writeValueAsString(
@@ -137,23 +192,25 @@ class AuthControllerTest {
     mockMvc.perform(post("/auth/signup").contentType("application/json").content(signupBody))
         .andExpect(status().isCreated());
 
-    com.Handoff.backend.model.Student saved = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    Student saved = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
     String pin = saved.getVerificationPin();
 
-    com.Handoff.backend.dto.VerificationRequest verifyBody =
-        new com.Handoff.backend.dto.VerificationRequest("jane@tulane.edu", pin, "device-browser-1");
+    VerificationRequest verifyBody =
+        new VerificationRequest("jane@tulane.edu", pin, "device-browser-1");
 
     MvcResult result = mockMvc.perform(post("/auth/verify-pin")
         .contentType("application/json")
         .content(objectMapper.writeValueAsString(verifyBody)))
         .andExpect(status().isOk())
+        .andExpect(jsonPath("$.verified").value(true))
         .andExpect(jsonPath("$.emailVerified").value(true))
         .andReturn();
 
     HttpSession session = result.getRequest().getSession(false);
     mockMvc.perform(get("/auth/me").session((MockHttpSession) session))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.email").value("jane@tulane.edu"));
+        .andExpect(jsonPath("$.email").value("jane@tulane.edu"))
+        .andExpect(jsonPath("$.verified").value(true));
   }
 
   @Test
@@ -163,8 +220,8 @@ class AuthControllerTest {
     mockMvc.perform(post("/auth/signup").contentType("application/json").content(signupBody))
         .andExpect(status().isCreated());
 
-    com.Handoff.backend.dto.VerificationRequest verifyBody =
-        new com.Handoff.backend.dto.VerificationRequest("jane@tulane.edu", "000000", "device-browser-1");
+    VerificationRequest verifyBody =
+        new VerificationRequest("jane@tulane.edu", "000000", "device-browser-1");
 
     mockMvc.perform(post("/auth/verify-pin")
         .contentType("application/json")
@@ -174,33 +231,57 @@ class AuthControllerTest {
   }
 
   @Test
-  void login_withNewDevice_triggersPinChallenge() throws Exception {
+  void login_verifiedUser_neverRequiresPinEvenOnNewDevice() throws Exception {
     String signupBody = objectMapper.writeValueAsString(
         new SignupRequest("Jane Doe", "jane@tulane.edu", "Password123!"));
     mockMvc.perform(post("/auth/signup").contentType("application/json").content(signupBody))
         .andExpect(status().isCreated());
 
-    // Verify first device
-    com.Handoff.backend.model.Student saved = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    // Verify account
+    Student saved = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
     mockMvc.perform(post("/auth/verify-pin")
         .contentType("application/json")
         .content(objectMapper.writeValueAsString(
-            new com.Handoff.backend.dto.VerificationRequest("jane@tulane.edu", saved.getVerificationPin(), "device-1"))))
+            new VerificationRequest("jane@tulane.edu", saved.getVerificationPin(), "device-1"))))
         .andExpect(status().isOk());
 
-    // Login with same device-1 -> succeeds directly without pin challenge
-    String loginBodySameDevice = objectMapper.writeValueAsString(
+    // Login with device-1 -> succeeds directly without pin
+    String loginDevice1 = objectMapper.writeValueAsString(
         new LoginRequest("jane@tulane.edu", "Password123!", "device-1"));
-    mockMvc.perform(post("/auth/login").contentType("application/json").content(loginBodySameDevice))
+    mockMvc.perform(post("/auth/login").contentType("application/json").content(loginDevice1))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.requiresPin").value(false))
-        .andExpect(jsonPath("$.studentName").value("Jane Doe"));
+        .andExpect(jsonPath("$.verified").value(true));
 
-    // Login with new device-2 -> triggers pin challenge
-    String loginBodyNewDevice = objectMapper.writeValueAsString(
+    // Login with new device-2 -> once verified, user is NOT asked for PIN next time they sign in!
+    String loginDevice2 = objectMapper.writeValueAsString(
         new LoginRequest("jane@tulane.edu", "Password123!", "device-2"));
-    mockMvc.perform(post("/auth/login").contentType("application/json").content(loginBodyNewDevice))
+    mockMvc.perform(post("/auth/login").contentType("application/json").content(loginDevice2))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.requiresPin").value(true));
+        .andExpect(jsonPath("$.requiresPin").value(false))
+        .andExpect(jsonPath("$.verified").value(true));
+  }
+
+  @Test
+  void login_unverifiedUserExpiredAfter30Minutes_deletesAccountAndReturnsError() throws Exception {
+    String signupBody = objectMapper.writeValueAsString(
+        new SignupRequest("Jane Doe", "jane@tulane.edu", "Password123!"));
+    mockMvc.perform(post("/auth/signup").contentType("application/json").content(signupBody))
+        .andExpect(status().isCreated());
+
+    // Age the unverified account past 30 minutes
+    Student saved = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    saved.setCreatedAt(LocalDateTime.now().minusMinutes(35));
+    studentRepository.save(saved);
+
+    String loginBody = objectMapper.writeValueAsString(
+        new LoginRequest("jane@tulane.edu", "Password123!"));
+
+    mockMvc.perform(post("/auth/login").contentType("application/json").content(loginBody))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.message").value("Verification expired after 30 minutes. Please sign up again."));
+
+    // Verify account was deleted from database
+    assertThat(studentRepository.findByEmail("jane@tulane.edu")).isEmpty();
   }
 }
