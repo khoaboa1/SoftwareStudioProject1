@@ -23,8 +23,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/auth")
 public class AuthController {
 
-  private static final String SESSION_STUDENT_ID = "studentId";
-
   private final AuthService authService;
 
   public AuthController(AuthService authService) {
@@ -41,7 +39,7 @@ public class AuthController {
   public ResponseEntity<Student> login(@RequestBody LoginRequest request, HttpServletRequest httpRequest) {
     Student student = authService.login(request.email(), request.password());
     HttpSession session = httpRequest.getSession(true);
-    session.setAttribute(SESSION_STUDENT_ID, student.getId());
+    session.setAttribute(SessionKeys.STUDENT_ID, student.getId());
     return ResponseEntity.ok(student);
   }
 
@@ -57,7 +55,7 @@ public class AuthController {
   @GetMapping("/me")
   public ResponseEntity<Student> me(HttpServletRequest httpRequest) {
     HttpSession session = httpRequest.getSession(false);
-    Long studentId = session != null ? (Long) session.getAttribute(SESSION_STUDENT_ID) : null;
+    Long studentId = session != null ? (Long) session.getAttribute(SessionKeys.STUDENT_ID) : null;
     if (studentId == null) {
       return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
