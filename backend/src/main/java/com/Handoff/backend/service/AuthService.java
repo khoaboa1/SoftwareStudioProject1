@@ -1,5 +1,6 @@
 package com.Handoff.backend.service;
 
+import com.Handoff.backend.dto.LoginResponse;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.StudentRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -16,10 +17,14 @@ public class AuthService {
 
   private final StudentRepository studentRepository;
   private final PasswordEncoder passwordEncoder;
+  private final VerificationService verificationService;
 
-  public AuthService(StudentRepository studentRepository, PasswordEncoder passwordEncoder) {
+  public AuthService(StudentRepository studentRepository,
+                     PasswordEncoder passwordEncoder,
+                     VerificationService verificationService) {
     this.studentRepository = studentRepository;
     this.passwordEncoder = passwordEncoder;
+    this.verificationService = verificationService;
   }
 
   public Student signup(String studentName, String email, String password) {
@@ -35,17 +40,43 @@ public class AuthService {
     if (studentRepository.findByEmail(email).isPresent()) {
       throw new EmailAlreadyRegisteredException("Email already registered");
     }
+
     Student student = new Student(studentName, email, passwordEncoder.encode(password), null, null);
-    return studentRepository.save(student);
+    student = studentRepository.save(student);
+
+    // Generate and send the initial 6-digit PIN for verification
+    verificationService.generateAndSendPin(student);
+
+    return student;
   }
 
-  public Student login(String email, String password) {
+  public LoginResponse login(String email, String password, String deviceId) {
     Student student = studentRepository.findByEmail(email)
         .orElseThrow(InvalidCredentialsException::new);
+
+    if (student.getPasswordHash() == null) {
+      throw new InvalidCredentialsException("This account has no password set.");
+    }
     if (!passwordEncoder.matches(password, student.getPasswordHash())) {
       throw new InvalidCredentialsException();
     }
-    return student;
+
+    // If device tracking is enabled and the device is not trusted, challenge for PIN
+    if (deviceId != null && !deviceId.isBlank()) {
+      if (!student.isDeviceTrusted(deviceId)) {
+        verificationService.generateAndSendPin(student);
+        return LoginResponse.requiresPin(
+            student.getEmail(),
+            "New device detected. A 6-digit PIN has been sent to your school email."
+        );
+      }
+    }
+
+    return LoginResponse.success(student);
+  }
+
+  public LoginResponse login(String email, String password) {
+    return login(email, password, null);
   }
 
   public Optional<Student> findById(Long id) {

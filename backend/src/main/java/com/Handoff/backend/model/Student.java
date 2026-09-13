@@ -5,14 +5,18 @@ import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(name = "students")
@@ -28,8 +32,24 @@ public class Student {
   private String email;
 
   @JsonIgnore
-  @Column(nullable = false)
+  @Column(nullable = true)
   private String passwordHash;
+
+  private String oauthProvider;
+
+  @Column(nullable = false, columnDefinition = "boolean default false")
+  private boolean emailVerified;
+
+  @JsonIgnore
+  private String verificationPin;
+
+  @JsonIgnore
+  private LocalDateTime verificationPinExpiry;
+
+  @ElementCollection(fetch = FetchType.EAGER)
+  @CollectionTable(name = "student_trusted_devices", joinColumns = @JoinColumn(name = "student_id"))
+  @Column(name = "device_id")
+  private Set<String> trustedDeviceIds = new HashSet<>();
 
   @ElementCollection
   @CollectionTable(name = "student_selling_items", joinColumns = @JoinColumn(name = "student_id"))
@@ -43,9 +63,15 @@ public class Student {
 
   public Student(String studentName, String email, String passwordHash,
                  List<String> sellingItems, String dormLocation) {
+    this(studentName, email, passwordHash, null, sellingItems, dormLocation);
+  }
+
+  public Student(String studentName, String email, String passwordHash,
+                 String oauthProvider, List<String> sellingItems, String dormLocation) {
     this.studentName = studentName;
     this.email = email;
     this.passwordHash = passwordHash;
+    this.oauthProvider = oauthProvider;
     this.sellingItems = sellingItems != null ? new ArrayList<>(sellingItems) : null;
     this.dormLocation = dormLocation;
   }
@@ -88,6 +114,14 @@ public class Student {
 
   public void setSellingItems(List<String> sellingItems) {
     this.sellingItems = sellingItems;
+  }
+
+  public String getOauthProvider() {
+    return oauthProvider;
+  }
+
+  public void setOauthProvider(String oauthProvider) {
+    this.oauthProvider = oauthProvider;
   }
 
   public String getDormLocation() {
@@ -136,6 +170,54 @@ public class Student {
   public void clearSellingItems() {
     if (this.sellingItems != null) {
       this.sellingItems.clear();
+    }
+  }
+
+  public boolean isEmailVerified() {
+    return emailVerified;
+  }
+
+  public void setEmailVerified(boolean emailVerified) {
+    this.emailVerified = emailVerified;
+  }
+
+  public String getVerificationPin() {
+    return verificationPin;
+  }
+
+  public void setVerificationPin(String verificationPin) {
+    this.verificationPin = verificationPin;
+  }
+
+  public LocalDateTime getVerificationPinExpiry() {
+    return verificationPinExpiry;
+  }
+
+  public void setVerificationPinExpiry(LocalDateTime verificationPinExpiry) {
+    this.verificationPinExpiry = verificationPinExpiry;
+  }
+
+  public Set<String> getTrustedDeviceIds() {
+    return trustedDeviceIds;
+  }
+
+  public void setTrustedDeviceIds(Set<String> trustedDeviceIds) {
+    this.trustedDeviceIds = trustedDeviceIds != null ? trustedDeviceIds : new HashSet<>();
+  }
+
+  public boolean isDeviceTrusted(String deviceId) {
+    if (deviceId == null || deviceId.isBlank()) {
+      return false;
+    }
+    return this.trustedDeviceIds != null && this.trustedDeviceIds.contains(deviceId);
+  }
+
+  public void trustDevice(String deviceId) {
+    if (deviceId != null && !deviceId.isBlank()) {
+      if (this.trustedDeviceIds == null) {
+        this.trustedDeviceIds = new HashSet<>();
+      }
+      this.trustedDeviceIds.add(deviceId);
     }
   }
 }

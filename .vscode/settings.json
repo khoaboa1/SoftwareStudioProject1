@@ -20,5 +20,7 @@
     "bugfix",
     "chore"
   ],
-  "atlascode.jira.startWorkBranchTemplate.customTemplate": "{{prefix}}/{{issueKey}}-{{summary}}"
+  "atlascode.jira.startWorkBranchTemplate.customTemplate": "{{prefix}}/{{issueKey}}-{{summary}}",
+  "java.configuration.updateBuildConfiguration": "interactive",
+  "java.compile.nullAnalysis.mode": "automatic"
 }
