@@ -1,0 +1,7 @@
+{
+  "name": "handoff",
+  "private": true,
+  "scripts": {
+    "db:setup": "sh scripts/db-setup.sh"
+  }
+}
