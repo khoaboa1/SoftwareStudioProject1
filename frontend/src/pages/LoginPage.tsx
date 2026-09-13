@@ -1,12 +1,13 @@
 import { type FormEvent, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { AuthCard } from '../components/AuthCard'
 import { Button } from '../components/ui/Button'
 import { FormAlert } from '../components/ui/FormAlert'
 import { TextField } from '../components/ui/TextField'
 import { validateEmail, validatePassword } from '../lib/validation'
-import { ApiError, login, logout, resendPin, type Student, verifyPin } from '../lib/api'
+import { ApiError, login, resendPin, verifyPin } from '../lib/api'
 import { getOrCreateDeviceId } from '../lib/device'
+import { useAuth } from '../lib/auth-context'
 
 type FieldErrors = {
   email?: string
@@ -15,6 +16,8 @@ type FieldErrors = {
 }
 
 export function LoginPage() {
+  const navigate = useNavigate()
+  const { setStudent } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [pin, setPin] = useState('')
@@ -25,7 +28,6 @@ export function LoginPage() {
   const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent'>('idle')
   const [serverError, setServerError] = useState<string | null>(null)
   const [promptMessage, setPromptMessage] = useState<string | null>(null)
-  const [loggedInStudent, setLoggedInStudent] = useState<Student | null>(null)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -52,8 +54,17 @@ export function LoginPage() {
         setPromptMessage(res.message || 'New device detected. Enter your 6-digit PIN.')
         setStatus('idle')
       } else {
-        setLoggedInStudent(res as unknown as Student)
-        setStatus('idle')
+        if (res.id && res.studentName && res.email) {
+          setStudent({
+            id: res.id,
+            studentName: res.studentName,
+            email: res.email,
+            emailVerified: res.emailVerified ?? true,
+            sellingItems: res.sellingItems ?? null,
+            dormLocation: res.dormLocation ?? null,
+          })
+        }
+        navigate('/feed')
       }
     } catch (error) {
       setServerError(
@@ -80,9 +91,8 @@ export function LoginPage() {
         pin: pin.trim(),
         deviceId: getOrCreateDeviceId(),
       })
-      setLoggedInStudent(student)
-      setStatus('idle')
-      setStep('form')
+      setStudent(student)
+      navigate('/feed')
     } catch (error) {
       setServerError(
         error instanceof ApiError ? error.message : 'Invalid verification PIN.',
@@ -104,51 +114,6 @@ export function LoginPage() {
       )
       setResendStatus('idle')
     }
-  }
-
-  async function handleLogout() {
-    await logout()
-    setLoggedInStudent(null)
-    setEmail('')
-    setPassword('')
-    setPin('')
-    setStep('form')
-    setStatus('idle')
-  }
-
-  if (loggedInStudent) {
-    return (
-      <AuthCard
-        title="You're logged in"
-        subtitle={`Logged in as ${loggedInStudent.studentName}`}
-        footer={null}
-      >
-        <div className="flex flex-col gap-5">
-          <div className="flex items-center gap-2">
-            {loggedInStudent.emailVerified ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-600/20 ring-inset">
-                <svg className="h-3.5 w-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                </svg>
-                Verified Student (.edu)
-              </span>
-            ) : (
-              <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-600/20 ring-inset">
-                Pending Verification
-              </span>
-            )}
-          </div>
-
-          <div className="text-xs text-zinc-500">
-            Email: <span className="font-medium text-zinc-700">{loggedInStudent.email}</span>
-          </div>
-
-          <Button type="button" onClick={handleLogout}>
-            Log out
-          </Button>
-        </div>
-      </AuthCard>
-    )
   }
 
   if (step === 'verify_pin') {

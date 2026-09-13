@@ -101,6 +101,47 @@ export function logout(): Promise<void> {
   return request<void>('/auth/logout', { method: 'POST' })
 }
 
-export function fetchCurrentUser(): Promise<Student | null> {
-  return request<Student>('/auth/me').catch(() => null)
+export async function getCurrentStudent(): Promise<Student | null> {
+  try {
+    return await request<Student>('/auth/me')
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      return null
+    }
+    throw error
+  }
+}
+
+export const fetchCurrentUser = getCurrentStudent
+
+export type Condition = 'NEW' | 'LIKE_NEW' | 'GOOD' | 'FAIR' | 'WORN'
+export type Category = 'FURNITURE' | 'ELECTRONICS' | 'KITCHEN' | 'DECOR' | 'CLOTHING' | 'OTHER'
+
+export type Listing = {
+  id: number
+  itemName: string
+  description: string
+  price: number
+  condition: Condition
+  category: Category
+  sellerId: number
+  sellerName: string
+  createdAt: string
+}
+
+export function getListings(): Promise<Listing[]> {
+  return request<Listing[]>('/listings')
+}
+
+export function createListing(input: {
+  itemName: string
+  description: string
+  price: number
+  condition: Condition
+  category: Category
+}): Promise<Listing> {
+  return request<Listing>('/listings', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
 }

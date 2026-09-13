@@ -28,8 +28,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/auth")
 public class AuthController {
 
-  private static final String SESSION_STUDENT_ID = "studentId";
-
   private final AuthService authService;
   private final VerificationService verificationService;
 
@@ -49,7 +47,7 @@ public class AuthController {
     LoginResponse response = authService.login(request.email(), request.password(), request.deviceId());
     if (!response.isRequiresPin()) {
       HttpSession session = httpRequest.getSession(true);
-      session.setAttribute(SESSION_STUDENT_ID, response.getId());
+      session.setAttribute(SessionKeys.STUDENT_ID, response.getId());
     }
     return ResponseEntity.ok(response);
   }
@@ -58,7 +56,7 @@ public class AuthController {
   public ResponseEntity<Student> verifyPin(@RequestBody VerificationRequest request, HttpServletRequest httpRequest) {
     Student verified = verificationService.verifyPin(request.email(), request.pin(), request.deviceId());
     HttpSession session = httpRequest.getSession(true);
-    session.setAttribute(SESSION_STUDENT_ID, verified.getId());
+    session.setAttribute(SessionKeys.STUDENT_ID, verified.getId());
     return ResponseEntity.ok(verified);
   }
 
@@ -80,7 +78,7 @@ public class AuthController {
   @GetMapping("/me")
   public ResponseEntity<Student> me(HttpServletRequest httpRequest) {
     HttpSession session = httpRequest.getSession(false);
-    Long studentId = session != null ? (Long) session.getAttribute(SESSION_STUDENT_ID) : null;
+    Long studentId = session != null ? (Long) session.getAttribute(SessionKeys.STUDENT_ID) : null;
     if (studentId == null) {
       return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
