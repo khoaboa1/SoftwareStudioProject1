@@ -6,6 +6,7 @@ import com.Handoff.backend.repository.StudentRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -37,11 +38,30 @@ public class AuthService {
     if (password == null || password.length() < 8) {
       throw new InvalidSignupException("Password must be at least 8 characters");
     }
-    if (studentRepository.findByEmail(email).isPresent()) {
-      throw new EmailAlreadyRegisteredException("Email already registered");
+
+    Optional<Student> existingOpt = studentRepository.findByEmail(email);
+    if (existingOpt.isPresent()) {
+      Student existing = existingOpt.get();
+      if (existing.isVerified()) {
+        throw new EmailAlreadyRegisteredException("Email already registered");
+      }
+
+      // If unverified account is older than 30 minutes, purge zombie account
+      if (existing.getCreatedAt() != null && existing.getCreatedAt().isBefore(LocalDateTime.now().minusMinutes(30))) {
+        studentRepository.delete(existing);
+      } else {
+        // Within 30 minutes: refresh account, send fresh PIN, invalidate old PIN
+        existing.setStudentName(studentName);
+        existing.setPasswordHash(passwordEncoder.encode(password));
+        existing.setCreatedAt(LocalDateTime.now());
+        existing = studentRepository.save(existing);
+        verificationService.generateAndSendPin(existing);
+        return existing;
+      }
     }
 
     Student student = new Student(studentName, email, passwordEncoder.encode(password), null, null);
+    student.setCreatedAt(LocalDateTime.now());
     student = studentRepository.save(student);
 
     // Generate and send the initial 6-digit PIN for verification
@@ -61,15 +81,26 @@ public class AuthService {
       throw new InvalidCredentialsException();
     }
 
-    // If device tracking is enabled and the device is not trusted, challenge for PIN
-    if (deviceId != null && !deviceId.isBlank()) {
-      if (!student.isDeviceTrusted(deviceId)) {
-        verificationService.generateAndSendPin(student);
-        return LoginResponse.requiresPin(
-            student.getEmail(),
-            "New device detected. A 6-digit PIN has been sent to your school email."
-        );
+    // Check verification status
+    if (!student.isVerified()) {
+      // If unverified and older than 30 minutes, purge zombie account
+      if (student.getCreatedAt() != null && student.getCreatedAt().isBefore(LocalDateTime.now().minusMinutes(30))) {
+        studentRepository.delete(student);
+        throw new InvalidCredentialsException("Verification expired after 30 minutes. Please sign up again.");
       }
+
+      // If unverified and within 30 minutes: send a new verification email with fresh PIN
+      verificationService.generateAndSendPin(student);
+      return LoginResponse.requiresPin(
+          student.getEmail(),
+          "Account is unverified. A new verification PIN has been sent to your school email."
+      );
+    }
+
+    // User is verified: they won't be asked for a PIN when signing in
+    if (deviceId != null && !deviceId.isBlank()) {
+      student.trustDevice(deviceId);
+      studentRepository.save(student);
     }
 
     return LoginResponse.success(student);
