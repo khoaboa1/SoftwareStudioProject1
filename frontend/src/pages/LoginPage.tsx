@@ -5,7 +5,7 @@ import { Button } from '../components/ui/Button'
 import { FormAlert } from '../components/ui/FormAlert'
 import { TextField } from '../components/ui/TextField'
 import { validateEmail, validatePassword } from '../lib/validation'
-import { ApiError, login, resendPin, verifyPin } from '../lib/api'
+import { ApiError, login, resendPin, verifyPin } from '../services/authService'
 import { getOrCreateDeviceId } from '../lib/device'
 import { useAuth } from '../lib/auth-context'
 

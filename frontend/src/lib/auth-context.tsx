@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { getCurrentStudent, type Student } from './api'
+import { getCurrentStudent, type Student } from '../services/authService'
 
 type AuthContextValue = {
   student: Student | null

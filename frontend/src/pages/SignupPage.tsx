@@ -10,7 +10,7 @@ import {
   validateName,
   validatePassword,
 } from '../lib/validation'
-import { ApiError, resendPin, signup, verifyPin } from '../lib/api'
+import { ApiError, resendPin, signup, verifyPin } from '../services/authService'
 import { getOrCreateDeviceId } from '../lib/device'
 
 type FieldErrors = {

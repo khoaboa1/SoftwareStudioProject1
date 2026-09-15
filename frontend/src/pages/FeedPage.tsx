@@ -6,15 +6,14 @@ import { FormAlert } from '../components/ui/FormAlert'
 import { TextField } from '../components/ui/TextField'
 import { SelectField } from '../components/ui/SelectField'
 import { useAuth } from '../lib/auth-context'
+import { ApiError, logout } from '../services/authService'
 import {
-  ApiError,
   createListing,
   getListings,
-  logout,
   type Category,
   type Condition,
   type Listing,
-} from '../lib/api'
+} from '../services/listingService'
 
 const CONDITION_OPTIONS: { value: Condition; label: string }[] = [
   { value: 'NEW', label: 'New' },
