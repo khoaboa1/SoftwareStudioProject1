@@ -20,6 +20,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -173,5 +174,48 @@ class ListingControllerTest {
 
     mockMvc.perform(put("/listings/1").contentType("application/json").content(updateBody))
         .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void deleteListing_owner_removesListing() throws Exception {
+    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    String createBody = objectMapper.writeValueAsString(
+        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+    MvcResult createResult = mockMvc.perform(post("/listings").session(session)
+            .contentType("application/json").content(createBody))
+        .andExpect(status().isCreated())
+        .andReturn();
+    Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
+
+    mockMvc.perform(delete("/listings/" + listingId).session(session))
+        .andExpect(status().isNoContent());
+
+    mockMvc.perform(get("/listings"))
+        .andExpect(jsonPath("$").isArray())
+        .andExpect(jsonPath("$.length()").value(0));
+  }
+
+  @Test
+  void deleteListing_notOwner_returnsForbidden() throws Exception {
+    MockHttpSession ownerSession = loginAsNewStudent("jane@tulane.edu");
+    String createBody = objectMapper.writeValueAsString(
+        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+    MvcResult createResult = mockMvc.perform(post("/listings").session(ownerSession)
+            .contentType("application/json").content(createBody))
+        .andExpect(status().isCreated())
+        .andReturn();
+    Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
+
+    MockHttpSession otherSession = loginAsNewStudent("bob@tulane.edu");
+    mockMvc.perform(delete("/listings/" + listingId).session(otherSession))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void deleteListing_listingDoesNotExist_returnsNotFound() throws Exception {
+    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+
+    mockMvc.perform(delete("/listings/999999").session(session))
+        .andExpect(status().isNotFound());
   }
 }
