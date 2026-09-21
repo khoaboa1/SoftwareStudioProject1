@@ -40,6 +40,39 @@ public class ListingService {
     return listingRepository.save(new Listing(itemName, description, price, condition, category, seller));
   }
 
+  public Listing updateListing(Long listingId, Student requester, String itemName, String description,
+                                BigDecimal price, String conditionRaw, String categoryRaw) {
+    Listing listing = getOwnedListing(listingId, requester);
+
+    if (itemName == null || itemName.isBlank()) {
+      throw new InvalidListingException("Item name is required");
+    }
+    if (description == null || description.isBlank()) {
+      throw new InvalidListingException("Description is required");
+    }
+    if (price == null || price.signum() <= 0) {
+      throw new InvalidListingException("Price must be greater than zero");
+    }
+    Condition condition = parseEnum(Condition.class, conditionRaw, "condition");
+    Category category = parseEnum(Category.class, categoryRaw, "category");
+
+    listing.setItemName(itemName);
+    listing.setDescription(description);
+    listing.setPrice(price);
+    listing.setCondition(condition);
+    listing.setCategory(category);
+    return listingRepository.save(listing);
+  }
+
+  private Listing getOwnedListing(Long listingId, Student requester) {
+    Listing listing = listingRepository.findById(listingId)
+        .orElseThrow(ListingNotFoundException::new);
+    if (!listing.getSeller().getId().equals(requester.getId())) {
+      throw new ForbiddenListingActionException();
+    }
+    return listing;
+  }
+
   private <E extends Enum<E>> E parseEnum(Class<E> enumType, String raw, String fieldLabel) {
     if (raw == null) {
       throw new InvalidListingException("Invalid " + fieldLabel);
