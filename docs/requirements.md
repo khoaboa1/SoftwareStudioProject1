@@ -79,3 +79,28 @@ Steps:
 5. The system sends the claim request to the seller.
 6. The system confirms to Chuong that her request was successfully submitted.
 7. The seller sees that Chuong has requested the item and can continue arranging the exchange.
+
+## MVP Definition
+- In Scope:
+1. Student account creation and login,
+2. Campus/school verification
+3. Create an item listing: Item name, Description, Price, Category, Photo
+4. Browse a campus-only marketplace feed
+5. View individual item listings
+6. Search/filter listings
+7. Edit or delete your own listings
+8. Request/claim an available item
+9. Mark an item as sold/claimed
+10. View your own active listings
+- Out of Scope:
+1. Mobile/iOS/Android app — web app only
+2. Shipping or delivery
+3. Integrated payments
+4. Ratings/reviews
+5. Auctions or bidding
+6. AI recommendations
+7. Facebook Marketplace/Craigslist integration
+8. Cross-campus marketplace
+9. Advanced seller profiles
+10. Push notifications
+

@@ -1,0 +1,109 @@
+package com.Handoff.backend.controller;
+
+import com.Handoff.backend.dto.ErrorResponse;
+import com.Handoff.backend.dto.LoginRequest;
+import com.Handoff.backend.dto.LoginResponse;
+import com.Handoff.backend.dto.ResendPinRequest;
+import com.Handoff.backend.dto.SignupRequest;
+import com.Handoff.backend.dto.VerificationRequest;
+import com.Handoff.backend.model.Student;
+import com.Handoff.backend.service.AuthService;
+import com.Handoff.backend.service.EmailAlreadyRegisteredException;
+import com.Handoff.backend.service.InvalidCredentialsException;
+import com.Handoff.backend.service.InvalidSignupException;
+import com.Handoff.backend.service.InvalidVerificationPinException;
+import com.Handoff.backend.service.VerificationService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/auth")
+public class AuthController {
+
+  private final AuthService authService;
+  private final VerificationService verificationService;
+
+  public AuthController(AuthService authService, VerificationService verificationService) {
+    this.authService = authService;
+    this.verificationService = verificationService;
+  }
+
+  @PostMapping("/signup")
+  public ResponseEntity<Student> signup(@RequestBody SignupRequest request) {
+    Student created = authService.signup(request.studentName(), request.email(), request.password());
+    return ResponseEntity.status(HttpStatus.CREATED).body(created);
+  }
+
+  @PostMapping("/login")
+  public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+    LoginResponse response = authService.login(request.email(), request.password(), request.deviceId());
+    if (!response.isRequiresPin()) {
+      HttpSession session = httpRequest.getSession(true);
+      session.setAttribute(SessionKeys.STUDENT_ID, response.getId());
+    }
+    return ResponseEntity.ok(response);
+  }
+
+  @PostMapping("/verify-pin")
+  public ResponseEntity<Student> verifyPin(@RequestBody VerificationRequest request, HttpServletRequest httpRequest) {
+    Student verified = verificationService.verifyPin(request.email(), request.pin(), request.deviceId());
+    HttpSession session = httpRequest.getSession(true);
+    session.setAttribute(SessionKeys.STUDENT_ID, verified.getId());
+    return ResponseEntity.ok(verified);
+  }
+
+  @PostMapping("/resend-pin")
+  public ResponseEntity<Void> resendPin(@RequestBody ResendPinRequest request) {
+    verificationService.resendPin(request.email());
+    return ResponseEntity.noContent().build();
+  }
+
+  @PostMapping("/logout")
+  public ResponseEntity<Void> logout(HttpServletRequest httpRequest) {
+    HttpSession session = httpRequest.getSession(false);
+    if (session != null) {
+      session.invalidate();
+    }
+    return ResponseEntity.noContent().build();
+  }
+
+  @GetMapping("/me")
+  public ResponseEntity<Student> me(HttpServletRequest httpRequest) {
+    HttpSession session = httpRequest.getSession(false);
+    Long studentId = session != null ? (Long) session.getAttribute(SessionKeys.STUDENT_ID) : null;
+    if (studentId == null) {
+      return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+    }
+    return authService.findById(studentId)
+        .map(ResponseEntity::ok)
+        .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+  }
+
+  @ExceptionHandler(InvalidSignupException.class)
+  public ResponseEntity<ErrorResponse> handleInvalidSignup(InvalidSignupException ex) {
+    return ResponseEntity.badRequest().body(new ErrorResponse(ex.getMessage()));
+  }
+
+  @ExceptionHandler(EmailAlreadyRegisteredException.class)
+  public ResponseEntity<ErrorResponse> handleEmailTaken(EmailAlreadyRegisteredException ex) {
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(ex.getMessage()));
+  }
+
+  @ExceptionHandler(InvalidCredentialsException.class)
+  public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {
+    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse(ex.getMessage()));
+  }
+
+  @ExceptionHandler(InvalidVerificationPinException.class)
+  public ResponseEntity<ErrorResponse> handleInvalidVerificationPin(InvalidVerificationPinException ex) {
+    return ResponseEntity.badRequest().body(new ErrorResponse(ex.getMessage()));
+  }
+}

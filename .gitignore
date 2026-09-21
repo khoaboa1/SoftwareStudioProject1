@@ -33,3 +33,6 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# Superpowers (local design specs/plans, not tracked)
+docs/superpowers/

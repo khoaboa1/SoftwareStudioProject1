@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: handoff-postgres
+    environment:
+      POSTGRES_DB: handoff
+      POSTGRES_USER: handoff
+      POSTGRES_PASSWORD: handoff
+    ports:
+      - "5432:5432"
+    volumes:
+      - handoff-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  handoff-postgres-data:
