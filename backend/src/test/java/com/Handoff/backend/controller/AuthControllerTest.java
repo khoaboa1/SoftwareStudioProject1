@@ -4,6 +4,7 @@ import com.Handoff.backend.dto.LoginRequest;
 import com.Handoff.backend.dto.SignupRequest;
 import com.Handoff.backend.dto.VerificationRequest;
 import com.Handoff.backend.model.Student;
+import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.StudentRepository;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,10 +36,14 @@ class AuthControllerTest {
   private StudentRepository studentRepository;
 
   @Autowired
+  private ListingRepository listingRepository;
+
+  @Autowired
   private ObjectMapper objectMapper;
 
   @BeforeEach
   void cleanDatabase() {
+    listingRepository.deleteAll();
     studentRepository.deleteAll();
   }
 
