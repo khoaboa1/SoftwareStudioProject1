@@ -15,6 +15,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -61,6 +62,13 @@ public class ListingController {
     Listing listing = listingService.updateListing(id, requester, request.itemName(), request.description(),
         request.price(), request.condition(), request.category());
     return ResponseEntity.ok(ListingResponse.from(listing));
+  }
+
+  @DeleteMapping("/{id}")
+  public ResponseEntity<Void> deleteListing(@PathVariable Long id, HttpServletRequest httpRequest) {
+    Student requester = currentStudent(httpRequest);
+    listingService.deleteListing(id, requester);
+    return ResponseEntity.noContent().build();
   }
 
   private Student currentStudent(HttpServletRequest httpRequest) {

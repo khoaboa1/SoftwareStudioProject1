@@ -64,6 +64,11 @@ public class ListingService {
     return listingRepository.save(listing);
   }
 
+  public void deleteListing(Long listingId, Student requester) {
+    Listing listing = getOwnedListing(listingId, requester);
+    listingRepository.delete(listing);
+  }
+
   private Listing getOwnedListing(Long listingId, Student requester) {
     Listing listing = listingRepository.findById(listingId)
         .orElseThrow(ListingNotFoundException::new);
