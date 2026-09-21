@@ -88,4 +88,28 @@ public class Listing {
   public void setCreatedAt(Instant createdAt) {
     this.createdAt = createdAt;
   }
+
+  public void setId(Long id) {
+    this.id = id;
+  }
+
+  public void setItemName(String itemName) {
+    this.itemName = itemName;
+  }
+
+  public void setDescription(String description) {
+    this.description = description;
+  }
+
+  public void setPrice(BigDecimal price) {
+    this.price = price;
+  }
+
+  public void setCondition(Condition condition) {
+    this.condition = condition;
+  }
+
+  public void setCategory(Category category) {
+    this.category = category;
+  }
 }
