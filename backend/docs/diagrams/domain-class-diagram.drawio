@@ -1,0 +1,48 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Domain Model" id="domain-model">
+    <mxGraphModel dx="1400" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="student" value="Student" style="swimlane;fontStyle=1;align=center;childLayout=stackLayout;horizontal=1;startSize=30;" vertex="1" parent="1">
+          <mxGeometry x="80" y="80" width="280" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="student-fields" value="- id: Long&#10;- studentName: String&#10;- email: String&#10;- passwordHash: String&#10;- oauthProvider: String&#10;- emailVerified: boolean&#10;- verified: boolean&#10;- createdAt: LocalDateTime&#10;- verificationPin: String&#10;- verificationPinExpiry: LocalDateTime&#10;- trustedDeviceIds: Set&lt;String&gt;&#10;- sellingItems: List&lt;String&gt;&#10;- dormLocation: String" style="text;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;whiteSpace=wrap;" vertex="1" parent="student">
+          <mxGeometry y="30" width="280" height="270" as="geometry" />
+        </mxCell>
+
+        <mxCell id="listing" value="Listing" style="swimlane;fontStyle=1;align=center;childLayout=stackLayout;horizontal=1;startSize=30;" vertex="1" parent="1">
+          <mxGeometry x="480" y="80" width="240" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="listing-fields" value="- id: Long&#10;- itemName: String&#10;- description: String&#10;- price: BigDecimal&#10;- condition: Condition&#10;- category: Category&#10;- seller: Student&#10;- createdAt: Instant" style="text;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;whiteSpace=wrap;" vertex="1" parent="listing">
+          <mxGeometry y="30" width="240" height="150" as="geometry" />
+        </mxCell>
+
+        <mxCell id="condition" value="&lt;&lt;enum&gt;&gt;&#10;Condition" style="swimlane;fontStyle=1;align=center;childLayout=stackLayout;horizontal=1;startSize=30;" vertex="1" parent="1">
+          <mxGeometry x="800" y="80" width="180" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="condition-values" value="NEW&#10;LIKE_NEW&#10;GOOD&#10;FAIR&#10;WORN" style="text;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;whiteSpace=wrap;" vertex="1" parent="condition">
+          <mxGeometry y="30" width="180" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="category" value="&lt;&lt;enum&gt;&gt;&#10;Category" style="swimlane;fontStyle=1;align=center;childLayout=stackLayout;horizontal=1;startSize=30;" vertex="1" parent="1">
+          <mxGeometry x="800" y="260" width="180" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="category-values" value="FURNITURE&#10;ELECTRONICS&#10;KITCHEN&#10;DECOR&#10;CLOTHING&#10;OTHER" style="text;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;whiteSpace=wrap;" vertex="1" parent="category">
+          <mxGeometry y="30" width="180" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge-listing-student" value="1..*         1" style="edgeStyle=entityRelationEdgeStyle;endArrow=none;startArrow=diamondThin;startFill=1;html=1;" edge="1" parent="1" source="listing" target="student">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-listing-condition" value="" style="endArrow=open;html=1;dashed=1;" edge="1" parent="1" source="listing" target="condition">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-listing-category" value="" style="endArrow=open;html=1;dashed=1;" edge="1" parent="1" source="listing" target="category">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
