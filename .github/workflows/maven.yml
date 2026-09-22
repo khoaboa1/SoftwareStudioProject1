@@ -10,7 +10,7 @@ name: Java CI with Maven
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "SSP1-62-user-story-3-ci-pipeline" ]
   pull_request:
     branches: [ "main" ]
 
