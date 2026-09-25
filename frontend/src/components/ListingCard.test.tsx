@@ -26,10 +26,11 @@ describe('ListingCard', () => {
     expect(screen.getByText(/Jane Doe/)).toBeInTheDocument()
   })
 
-  it('does not render a delete button when onDelete is not provided', () => {
+  it('does not render edit or delete buttons when the handlers are not provided', () => {
     render(<ListingCard listing={listing} />)
 
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
   })
 
   it('calls onDelete when the delete button is clicked', async () => {
@@ -40,5 +41,15 @@ describe('ListingCard', () => {
     await user.click(screen.getByRole('button', { name: 'Delete' }))
 
     expect(handleDelete).toHaveBeenCalledTimes(1)
+  })
+
+  it('calls onEdit when the edit button is clicked', async () => {
+    const user = userEvent.setup()
+    const handleEdit = vi.fn()
+
+    render(<ListingCard listing={listing} onEdit={handleEdit} />)
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+
+    expect(handleEdit).toHaveBeenCalledTimes(1)
   })
 })

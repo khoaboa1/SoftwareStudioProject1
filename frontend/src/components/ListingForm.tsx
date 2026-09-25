@@ -3,7 +3,7 @@ import { Button } from './ui/Button'
 import { FormAlert } from './ui/FormAlert'
 import { SelectField } from './ui/SelectField'
 import { TextField } from './ui/TextField'
-import { CATEGORY_OPTIONS, CONDITION_OPTIONS } from '../lib/listingOptions'
+import { CATEGORY_LABELS, CONDITION_OPTIONS } from '../lib/listingOptions'
 import type { Category, Condition } from '../services/listingService'
 
 type ListingFormProps = {
@@ -17,8 +17,10 @@ type ListingFormProps = {
   onConditionChange: (value: Condition) => void
   category: Category
   onCategoryChange: (value: Category) => void
+  categoryOptions: Category[]
   status: 'idle' | 'submitting' | 'error'
   error: string | null
+  submitLabel: string
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
 }
 
@@ -33,8 +35,10 @@ export function ListingForm({
   onConditionChange,
   category,
   onCategoryChange,
+  categoryOptions,
   status,
   error,
+  submitLabel,
   onSubmit,
 }: ListingFormProps) {
   return (
@@ -84,13 +88,13 @@ export function ListingForm({
 
       <SelectField
         label="Category"
-        options={CATEGORY_OPTIONS}
+        options={categoryOptions.map((value) => ({ value, label: CATEGORY_LABELS[value] }))}
         value={category}
         onChange={(e) => onCategoryChange(e.target.value as Category)}
       />
 
       <Button type="submit" loading={status === 'submitting'}>
-        Post listing
+        {submitLabel}
       </Button>
     </form>
   )

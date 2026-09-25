@@ -10,10 +10,11 @@ function formatPostedDate(iso: string): string {
 
 type ListingCardProps = {
   listing: Listing
+  onEdit?: () => void
   onDelete?: () => void
 }
 
-export function ListingCard({ listing, onDelete }: ListingCardProps) {
+export function ListingCard({ listing, onEdit, onDelete }: ListingCardProps) {
   return (
     <article className="flex flex-col gap-2 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-2">
@@ -33,14 +34,27 @@ export function ListingCard({ listing, onDelete }: ListingCardProps) {
         <p className="text-xs text-zinc-400">
           {listing.sellerName} · {formatPostedDate(listing.createdAt)}
         </p>
-        {onDelete && (
-          <button
-            type="button"
-            onClick={onDelete}
-            className="text-xs font-medium text-red-600 hover:text-red-700"
-          >
-            Delete
-          </button>
+        {(onEdit || onDelete) && (
+          <div className="flex items-center gap-3">
+            {onEdit && (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="text-xs font-medium text-zinc-600 hover:text-zinc-800"
+              >
+                Edit
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={onDelete}
+                className="text-xs font-medium text-red-600 hover:text-red-700"
+              >
+                Delete
+              </button>
+            )}
+          </div>
         )}
       </div>
     </article>

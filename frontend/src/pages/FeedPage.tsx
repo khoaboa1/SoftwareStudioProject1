@@ -10,18 +10,32 @@ import { ApiError, logout } from '../services/authService'
 import {
   createListing,
   deleteListing,
+  getCategories,
   getListings,
+  updateListing,
   type Category,
   type Condition,
   type Listing,
 } from '../services/listingService'
 
+function resetFormDefaults() {
+  return {
+    itemName: '',
+    description: '',
+    price: '',
+    condition: 'GOOD' as Condition,
+    category: 'OTHER' as Category,
+  }
+}
+
 export function FeedPage() {
   const navigate = useNavigate()
   const { student, setStudent } = useAuth()
   const [listings, setListings] = useState<Listing[]>([])
+  const [categoryOptions, setCategoryOptions] = useState<Category[]>([])
   const [feedError, setFeedError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [editingListingId, setEditingListingId] = useState<number | null>(null)
 
   const [itemName, setItemName] = useState('')
   const [description, setDescription] = useState('')
@@ -37,6 +51,13 @@ export function FeedPage() {
       .catch((error: unknown) => {
         setFeedError(error instanceof ApiError ? error.message : 'Could not load the feed.')
       })
+
+    getCategories()
+      .then(setCategoryOptions)
+      .catch(() => {
+        // Category dropdown falls back to an empty list; the create/edit form
+        // still works, it just has no options until this succeeds on retry.
+      })
   }, [])
 
   async function handleLogout() {
@@ -45,7 +66,40 @@ export function FeedPage() {
     navigate('/login')
   }
 
-  async function handleCreateListing(event: FormEvent<HTMLFormElement>) {
+  function toggleCreateForm() {
+    if (showForm) {
+      setShowForm(false)
+      setEditingListingId(null)
+      setFormError(null)
+      setFormStatus('idle')
+      return
+    }
+
+    setEditingListingId(null)
+    const defaults = resetFormDefaults()
+    setItemName(defaults.itemName)
+    setDescription(defaults.description)
+    setPrice(defaults.price)
+    setCondition(defaults.condition)
+    setCategory(defaults.category)
+    setFormError(null)
+    setFormStatus('idle')
+    setShowForm(true)
+  }
+
+  function openEditForm(listing: Listing) {
+    setEditingListingId(listing.id)
+    setItemName(listing.itemName)
+    setDescription(listing.description)
+    setPrice(String(listing.price))
+    setCondition(listing.condition)
+    setCategory(listing.category)
+    setFormError(null)
+    setFormStatus('idle')
+    setShowForm(true)
+  }
+
+  async function handleFormSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
     const parsedPrice = Number(price)
@@ -58,21 +112,24 @@ export function FeedPage() {
     setFormStatus('submitting')
     setFormError(null)
 
+    const input = { itemName, description, price: parsedPrice, condition, category }
+
     try {
-      const listing = await createListing({
-        itemName,
-        description,
-        price: parsedPrice,
-        condition,
-        category,
-      })
-      setListings((current) => [listing, ...current])
-      setItemName('')
-      setDescription('')
-      setPrice('')
-      setCondition('GOOD')
-      setCategory('OTHER')
+      if (editingListingId !== null) {
+        const updated = await updateListing(editingListingId, input)
+        setListings((current) => current.map((listing) => (listing.id === updated.id ? updated : listing)))
+      } else {
+        const created = await createListing(input)
+        setListings((current) => [created, ...current])
+      }
       setShowForm(false)
+      setEditingListingId(null)
+      const defaults = resetFormDefaults()
+      setItemName(defaults.itemName)
+      setDescription(defaults.description)
+      setPrice(defaults.price)
+      setCondition(defaults.condition)
+      setCategory(defaults.category)
       setFormStatus('idle')
     } catch (error) {
       setFormError(error instanceof ApiError ? error.message : 'Something went wrong. Please try again.')
@@ -111,7 +168,7 @@ export function FeedPage() {
           <Button
             type="button"
             fullWidth={false}
-            onClick={() => setShowForm((current) => !current)}
+            onClick={toggleCreateForm}
             className="px-4 py-2 text-sm"
           >
             {showForm ? 'Cancel' : 'Post a listing'}
@@ -130,9 +187,11 @@ export function FeedPage() {
             onConditionChange={setCondition}
             category={category}
             onCategoryChange={setCategory}
+            categoryOptions={categoryOptions}
             status={formStatus}
             error={formError}
-            onSubmit={handleCreateListing}
+            submitLabel={editingListingId !== null ? 'Save changes' : 'Post listing'}
+            onSubmit={handleFormSubmit}
           />
         )}
 
@@ -146,6 +205,7 @@ export function FeedPage() {
               <ListingCard
                 key={listing.id}
                 listing={listing}
+                onEdit={listing.sellerId === student?.id ? () => openEditForm(listing) : undefined}
                 onDelete={listing.sellerId === student?.id ? () => handleDelete(listing.id) : undefined}
               />
             ))}

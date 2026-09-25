@@ -19,6 +19,10 @@ export function getListings(): Promise<Listing[]> {
   return request<Listing[]>('/listings')
 }
 
+export function getCategories(): Promise<Category[]> {
+  return request<Category[]>('/listings/categories')
+}
+
 export function createListing(input: {
   itemName: string
   description: string
