@@ -3,6 +3,7 @@ package com.Handoff.backend.controller;
 import com.Handoff.backend.dto.CreateListingRequest;
 import com.Handoff.backend.dto.ErrorResponse;
 import com.Handoff.backend.dto.ListingResponse;
+import com.Handoff.backend.model.Category;
 import com.Handoff.backend.model.Listing;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.service.AuthService;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -43,6 +45,11 @@ public class ListingController {
   @GetMapping
   public List<ListingResponse> getFeed() {
     return listingService.getFeed().stream().map(ListingResponse::from).toList();
+  }
+
+  @GetMapping("/categories")
+  public List<String> getCategories() {
+    return Arrays.stream(Category.values()).map(Enum::name).toList();
   }
 
   @PostMapping

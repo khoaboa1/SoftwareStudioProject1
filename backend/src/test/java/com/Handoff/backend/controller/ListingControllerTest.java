@@ -218,4 +218,12 @@ class ListingControllerTest {
     mockMvc.perform(delete("/listings/999999").session(session))
         .andExpect(status().isNotFound());
   }
+
+  @Test
+  void getCategories_returnsAllCategoryValues() throws Exception {
+    mockMvc.perform(get("/listings/categories"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$", org.hamcrest.Matchers.containsInAnyOrder(
+            "FURNITURE", "ELECTRONICS", "KITCHEN", "DECOR", "CLOTHING", "OTHER")));
+  }
 }
