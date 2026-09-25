@@ -119,3 +119,61 @@ Each student now has an explicit `verified` boolean stored in the database. Unve
 - When `POST /auth/login` returns `{ "requiresPin": true }`, redirect or display the PIN verification view so the student can enter the newly sent code.
 - If `POST /auth/login` returns `401` with `"Verification expired after 30 minutes. Please sign up again."`, redirect to `/signup` with a message.
 
+---
+
+## Handoff Note: SSP1-67 Implement Profile Creation API
+
+### Feature Summary
+Authenticated students can generate their student profile record (`POST /api/profiles`). The backend automatically parses the student's authenticated email, extracts the school domain (e.g., `tulane.edu` from `jane@tulane.edu`), and securely stores it in the `school_domain` database column. This domain acts as the tenant identifier for future marketplace scoping. Duplicate profiles for the same student are prevented, and any manual `studentId` or `schoolDomain` parameters injected into the request body are strictly ignored.
+
+### API Endpoints
+- `POST /api/profiles`
+  - **Auth**: Requires an active session established via `/auth/login` or `/auth/verify-pin` (uses `studentId` session attribute).
+  - **Request Headers**: `Content-Type: application/json`
+  - **Request Shape**:
+    ```json
+    {
+      "name": "Jane Doe",
+      "major": "Computer Science",
+      "bio": "Junior studying CS and Math."
+    }
+    ```
+  - **Validation & Field Constraints**:
+    - `name`: String, required, max 255 characters, cannot be blank.
+    - `major`: String, required, max 255 characters, cannot be blank. Accommodates predefined university majors or custom/manual entries.
+    - `bio`: String, optional, max 1000 characters.
+  - **Success Response (201 Created)**:
+    ```json
+    {
+      "id": 1,
+      "name": "Jane Doe",
+      "major": "Computer Science",
+      "bio": "Junior studying CS and Math.",
+      "schoolDomain": "tulane.edu",
+      "studentId": 1,
+      "createdAt": "2026-09-22T00:00:00.000000"
+    }
+    ```
+  - **Error Responses**:
+    - `401 Unauthorized`: Returned when the user has no active session or is unauthenticated.
+      ```json
+      { "message": "User must be authenticated to create a profile." }
+      ```
+    - `400 Bad Request`: Returned when required fields (`name`, `major`) are missing/blank, or character limits are exceeded.
+      ```json
+      { "message": "Name is required" }
+      ```
+    - `409 Conflict`: Returned if the authenticated user already has an existing profile.
+      ```json
+      { "message": "A profile already exists for this account." }
+      ```
+
+### Auth & Session Needs
+- Relies on Spring session cookie (`JSESSIONID`). Must be authenticated.
+
+### UI Constraints or Assumptions
+- Frontend can present a dropdown of popular Tulane University majors with an "Other" option allowing manual text entry. Both flow into the `major` request field.
+- If the endpoint returns `409 Conflict`, the frontend can redirect the student to view/edit their existing profile.
+- If `401 Unauthorized` is returned, redirect the user to `/login`.
+
+
