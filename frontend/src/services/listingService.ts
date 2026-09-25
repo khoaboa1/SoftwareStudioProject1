@@ -31,3 +31,23 @@ export function createListing(input: {
     body: JSON.stringify(input),
   })
 }
+
+export function updateListing(
+  id: number,
+  input: {
+    itemName: string
+    description: string
+    price: number
+    condition: Condition
+    category: Category
+  },
+): Promise<Listing> {
+  return request<Listing>(`/listings/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
+}
+
+export function deleteListing(id: number): Promise<void> {
+  return request<void>(`/listings/${id}`, { method: 'DELETE' })
+}
