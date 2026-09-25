@@ -25,6 +25,7 @@ import tools.jackson.databind.ObjectMapper;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -365,6 +366,124 @@ class ProfileControllerTest {
     mockMvc.perform(get("/api/profiles/me")
             .session(session))
         .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.message").exists());
+  }
+
+  // =========================================================================
+  // IDOR PROTECTION AND EDGE TEST CASES (SSP1-69)
+  // =========================================================================
+
+  @Test
+  @DisplayName("Success - Fetch profile by ID returns 200 OK when user is owner")
+  void testGetProfileById_Success() throws Exception {
+    MockHttpSession session = loginAsNewStudent("User A", "userA@tulane.edu");
+    String createBody = objectMapper.writeValueAsString(new CreateProfileRequest("User A", "CS", "Bio A"));
+    MvcResult result = mockMvc.perform(post("/api/profiles").session(session).contentType(MediaType.APPLICATION_JSON).content(createBody))
+        .andExpect(status().isCreated()).andReturn();
+    
+    Long profileId = objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asLong();
+
+    mockMvc.perform(get("/api/profiles/" + profileId).session(session))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.name").value("User A"));
+  }
+
+  @Test
+  @DisplayName("Error - Cross-User Fetch (IDOR) returns 403 Forbidden")
+  void testGetProfileById_IDOR() throws Exception {
+    MockHttpSession sessionA = loginAsNewStudent("User A", "userA@tulane.edu");
+    MockHttpSession sessionB = loginAsNewStudent("User B", "userB@tulane.edu");
+
+    String createBodyB = objectMapper.writeValueAsString(new CreateProfileRequest("User B", "Math", "Bio B"));
+    MvcResult resultB = mockMvc.perform(post("/api/profiles").session(sessionB).contentType(MediaType.APPLICATION_JSON).content(createBodyB))
+        .andExpect(status().isCreated()).andReturn();
+    
+    Long profileIdB = objectMapper.readTree(resultB.getResponse().getContentAsString()).get("id").asLong();
+
+    mockMvc.perform(get("/api/profiles/" + profileIdB).session(sessionA))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.message").value("You do not have permission to access this profile."));
+  }
+
+  @Test
+  @DisplayName("Edge Case - Fetching a non-existent profile returns 404 Not Found")
+  void testGetProfileById_NotFound() throws Exception {
+    MockHttpSession sessionA = loginAsNewStudent("User A", "userA@tulane.edu");
+    
+    mockMvc.perform(get("/api/profiles/9999").session(sessionA))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.message").value("Profile not found"));
+  }
+
+  @Test
+  @DisplayName("Success - Update profile by ID returns 200 OK when user is owner")
+  void testUpdateProfile_Success() throws Exception {
+    MockHttpSession session = loginAsNewStudent("User A", "userA@tulane.edu");
+    String createBody = objectMapper.writeValueAsString(new CreateProfileRequest("User A", "CS", "Bio A"));
+    MvcResult result = mockMvc.perform(post("/api/profiles").session(session).contentType(MediaType.APPLICATION_JSON).content(createBody))
+        .andExpect(status().isCreated()).andReturn();
+    
+    Long profileId = objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asLong();
+    String updateBody = objectMapper.writeValueAsString(new com.Handoff.backend.dto.UpdateProfileRequest("User A Updated", "CS Updated", "Bio Updated"));
+
+    mockMvc.perform(put("/api/profiles/" + profileId).session(session).contentType(MediaType.APPLICATION_JSON).content(updateBody))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.name").value("User A Updated"))
+        .andExpect(jsonPath("$.major").value("CS Updated"));
+  }
+
+  @Test
+  @DisplayName("Success - Partial Update retains existing values")
+  void testUpdateProfile_PartialUpdate() throws Exception {
+    MockHttpSession session = loginAsNewStudent("User A", "userA@tulane.edu");
+    String createBody = objectMapper.writeValueAsString(new CreateProfileRequest("User A", "CS", "Bio A"));
+    MvcResult result = mockMvc.perform(post("/api/profiles").session(session).contentType(MediaType.APPLICATION_JSON).content(createBody))
+        .andExpect(status().isCreated()).andReturn();
+    
+    Long profileId = objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asLong();
+    // Only update bio, leave name and major as null
+    String updateBody = objectMapper.writeValueAsString(new com.Handoff.backend.dto.UpdateProfileRequest(null, null, "Bio Only Updated"));
+
+    mockMvc.perform(put("/api/profiles/" + profileId).session(session).contentType(MediaType.APPLICATION_JSON).content(updateBody))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.name").value("User A"))
+        .andExpect(jsonPath("$.major").value("CS"))
+        .andExpect(jsonPath("$.bio").value("Bio Only Updated"));
+  }
+
+  @Test
+  @DisplayName("Error - Cross-User Modification (IDOR) returns 403 Forbidden")
+  void testUpdateProfile_IDOR() throws Exception {
+    MockHttpSession sessionA = loginAsNewStudent("User A", "userA@tulane.edu");
+    MockHttpSession sessionB = loginAsNewStudent("User B", "userB@tulane.edu");
+
+    String createBodyB = objectMapper.writeValueAsString(new CreateProfileRequest("User B", "Math", "Bio B"));
+    MvcResult resultB = mockMvc.perform(post("/api/profiles").session(sessionB).contentType(MediaType.APPLICATION_JSON).content(createBodyB))
+        .andExpect(status().isCreated()).andReturn();
+    
+    Long profileIdB = objectMapper.readTree(resultB.getResponse().getContentAsString()).get("id").asLong();
+    String updateBody = objectMapper.writeValueAsString(new com.Handoff.backend.dto.UpdateProfileRequest("Hacked Name", "Hacked Major", "Hacked Bio"));
+
+    mockMvc.perform(put("/api/profiles/" + profileIdB).session(sessionA).contentType(MediaType.APPLICATION_JSON).content(updateBody))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.message").value("You do not have permission to modify this profile."));
+  }
+
+  @Test
+  @DisplayName("Edge Case - Update Profile Validation Failure for excessive bio length")
+  void testUpdateProfile_ValidationFailure() throws Exception {
+    MockHttpSession session = loginAsNewStudent("User A", "userA@tulane.edu");
+    String createBody = objectMapper.writeValueAsString(new CreateProfileRequest("User A", "CS", "Bio A"));
+    MvcResult result = mockMvc.perform(post("/api/profiles").session(session).contentType(MediaType.APPLICATION_JSON).content(createBody))
+        .andExpect(status().isCreated()).andReturn();
+    
+    Long profileId = objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asLong();
+    
+    String longBio = "a".repeat(1001);
+    String updateBody = objectMapper.writeValueAsString(new com.Handoff.backend.dto.UpdateProfileRequest("User A", "CS", longBio));
+
+    mockMvc.perform(put("/api/profiles/" + profileId).session(session).contentType(MediaType.APPLICATION_JSON).content(updateBody))
+        .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.message").exists());
   }
 }

@@ -19,6 +19,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -77,6 +79,22 @@ public class ProfileController {
     return ResponseEntity.status(HttpStatus.CREATED).body(createdProfile);
   }
 
+  @GetMapping("/{id}")
+  public ResponseEntity<Profile> getProfileById(@PathVariable Long id, HttpServletRequest httpRequest) {
+    Student student = currentStudent(httpRequest);
+    Profile profile = profileService.getProfileById(id, student);
+    return ResponseEntity.ok(profile);
+  }
+
+  @PutMapping("/{id}")
+  public ResponseEntity<Profile> updateProfile(@PathVariable Long id, 
+                                               @Valid @RequestBody com.Handoff.backend.dto.UpdateProfileRequest request,
+                                               HttpServletRequest httpRequest) {
+    Student student = currentStudent(httpRequest);
+    Profile profile = profileService.updateProfile(id, student, request.name(), request.major(), request.bio());
+    return ResponseEntity.ok(profile);
+  }
+
   /**
    * Helper method to extract the authenticated Student from the HTTP session.
    */
@@ -109,6 +127,11 @@ public class ProfileController {
   @ExceptionHandler(ProfileNotFoundException.class)
   public ResponseEntity<ErrorResponse> handleProfileNotFound(ProfileNotFoundException ex) {
     return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(ex.getMessage()));
+  }
+
+  @ExceptionHandler(com.Handoff.backend.service.ProfileAccessDeniedException.class)
+  public ResponseEntity<ErrorResponse> handleProfileAccessDenied(com.Handoff.backend.service.ProfileAccessDeniedException ex) {
+    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(ex.getMessage()));
   }
 
   /**
