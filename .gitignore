@@ -36,3 +36,4 @@ venv/
 
 # Superpowers (local design specs/plans, not tracked)
 docs/superpowers/
+docs/local-suggestions.md
