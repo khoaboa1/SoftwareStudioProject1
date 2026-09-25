@@ -218,4 +218,97 @@ Authenticated students can fetch their own student profile record (`GET /api/pro
 - If `401 Unauthorized` is returned, redirect the user to `/login`.
 - The `schoolDomain` field is used by the frontend to filter marketplace listings to the student's university.
 
+---
+
+## Handoff Note: SSP1-69 Enforce IDOR Protection on Profile Endpoints
+
+### Feature Summary
+Strict Insecure Direct Object Reference (IDOR) protection has been implemented for targeted profile endpoints (`GET /api/profiles/{id}` and `PUT /api/profiles/{id}`). A student can only view or modify their own profile record. Attempting to view or update another student's profile ID is physically blocked and returns `403 Forbidden`. If a requested profile ID does not exist, the API returns `404 Not Found`.
+
+### API Endpoints
+- `GET /api/profiles/{id}`
+  - **Auth**: Requires an active session (`studentId` in HTTP session).
+  - **Path Parameter**: `id` (Long) - the profile's internal ID.
+  - **Success Response (200 OK)**:
+    ```json
+    {
+      "id": 1,
+      "name": "Jane Doe",
+      "major": "Computer Science",
+      "bio": "Junior studying CS and Math.",
+      "schoolDomain": "tulane.edu",
+      "studentId": 1,
+      "createdAt": "2026-09-22T00:00:00.000000"
+    }
+    ```
+  - **Error Responses**:
+    - `401 Unauthorized`: User has no active session.
+      ```json
+      { "message": "User must be authenticated to create a profile." }
+      ```
+    - `403 Forbidden`: Authenticated student does not own this profile (Cross-User Fetch IDOR prevention).
+      ```json
+      { "message": "You do not have permission to access this profile." }
+      ```
+    - `404 Not Found`: Profile ID does not exist.
+      ```json
+      { "message": "Profile not found" }
+      ```
+
+- `PUT /api/profiles/{id}`
+  - **Auth**: Requires an active session (`studentId` in HTTP session).
+  - **Path Parameter**: `id` (Long) - the profile's internal ID.
+  - **Request Headers**: `Content-Type: application/json`
+  - **Request Shape**:
+    ```json
+    {
+      "name": "Jane Smith",
+      "major": "Data Science",
+      "bio": "Updated bio text."
+    }
+    ```
+  - **Validation & Field Constraints**:
+    - `name`: String, optional, max 255 characters. If provided, must not be blank.
+    - `major`: String, optional, max 255 characters. If provided, must not be blank.
+    - `bio`: String, optional, max 1000 characters.
+    - Note: `schoolDomain` and `studentId` cannot be updated via this endpoint (they are immutable from the client).
+  - **Success Response (200 OK)**:
+    ```json
+    {
+      "id": 1,
+      "name": "Jane Smith",
+      "major": "Data Science",
+      "bio": "Updated bio text.",
+      "schoolDomain": "tulane.edu",
+      "studentId": 1,
+      "createdAt": "2026-09-22T00:00:00.000000"
+    }
+    ```
+  - **Error Responses**:
+    - `401 Unauthorized`: User has no active session.
+      ```json
+      { "message": "User must be authenticated to create a profile." }
+      ```
+    - `403 Forbidden`: Authenticated student attempts to update another user's profile (Cross-User Modification IDOR prevention).
+      ```json
+      { "message": "You do not have permission to modify this profile." }
+      ```
+    - `404 Not Found`: Profile ID does not exist.
+      ```json
+      { "message": "Profile not found" }
+      ```
+    - `400 Bad Request`: Validation failure (e.g. exceeds character limit) or malformed JSON body.
+      ```json
+      { "message": "name: Name must not exceed 255 characters" }
+      ```
+
+### Auth & Session Needs
+- Requires standard session cookie (`JSESSIONID`).
+- Checks profile owner's `student.id` against the active session's `studentId`.
+
+### UI Constraints or Assumptions
+- When viewing or editing profile settings, the frontend should handle `403 Forbidden` by displaying an unauthorized access warning or navigating back to the student's own profile (`/api/profiles/me`).
+- If `404 Not Found` occurs on edit, prompt the student to create their profile.
+
+
 
