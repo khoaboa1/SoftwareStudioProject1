@@ -5,6 +5,7 @@ import com.Handoff.backend.model.Condition;
 import com.Handoff.backend.model.Listing;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ListingRepository;
+import com.Handoff.backend.repository.ProfileRepository;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -14,13 +15,19 @@ import java.util.List;
 public class ListingService {
 
   private final ListingRepository listingRepository;
+  private final ProfileRepository profileRepository;
 
-  public ListingService(ListingRepository listingRepository) {
+  // Keep tenant resolution in the service so callers cannot supply a domain override.
+  public ListingService(ListingRepository listingRepository, ProfileRepository profileRepository) {
     this.listingRepository = listingRepository;
+    this.profileRepository = profileRepository;
   }
 
-  public List<Listing> getFeed() {
-    return listingRepository.findAllByOrderByCreatedAtDesc();
+  /** Resolve the authenticated student's persisted profile before executing a scoped database query. */
+  public List<Listing> getFeed(Student requester) {
+    var profile = profileRepository.findByStudent_Id(requester.getId())
+        .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
+    return listingRepository.findBySchoolDomain(profile.getSchoolDomain());
   }
 
   public Listing createListing(Student seller, String itemName, String description,

@@ -1,5 +1,16 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-70 Marketplace Domain Scoping
+
+- **Endpoint:** `GET /listings`, no request body or required query parameters.
+- **Authentication:** Send the existing `JSESSIONID` cookie. The backend resolves the student from the server-side `studentId` session and loads that student's saved profile.
+- **Scoping:** Database results include only sellers whose profile `school_domain` exactly equals the requester's profile domain. Subdomains and similar suffixes are separate domains. Sellers without profiles are excluded. Client parameters such as `domain`, `schoolDomain`, and `school_domain` are ignored.
+- **Success (200):** Existing array of `{ id, itemName, description, price, condition, category, sellerId, sellerName, createdAt }`, newest first; `[]` when no matching listings exist.
+- **Errors:** `401` for an absent/stale session, with `{ "message": "You must be logged in to view marketplace listings" }`; `404` when the requester has no profile, with `{ "message": "Profile not found" }`.
+- **Frontend handoff:** Send credentials when fetching the feed; handle `401` by directing users to login and `404` by directing them to profile creation. The backend enforces school isolation; frontend filtering is unnecessary.
+- **Scope:** Listing creation, editing, deletion, and response fields retain their existing behavior. No database migration is required.
+
+
 ## Purpose
 Keep backend (Spring Boot) and frontend (React) work aligned by creating a short handoff note before implementation, instead of one side silently guessing what the other needs.
 
@@ -175,5 +186,139 @@ Authenticated students can generate their student profile record (`POST /api/pro
 - Frontend can present a dropdown of popular Tulane University majors with an "Other" option allowing manual text entry. Both flow into the `major` request field.
 - If the endpoint returns `409 Conflict`, the frontend can redirect the student to view/edit their existing profile.
 - If `401 Unauthorized` is returned, redirect the user to `/login`.
+
+---
+
+## Handoff Note: SSP1-68 Implement Profile Retrieval API
+
+### Feature Summary
+Authenticated students can fetch their own student profile record (`GET /api/profiles/me`). The backend uses the active session (`studentId` session attribute) to determine which profile to return — no ID is passed in the URL, preventing cross-user access. The response includes the `schoolDomain` extracted from the student's email during profile creation, which the frontend uses for marketplace eligibility scoping. If the student has not yet created a profile, a `404 Not Found` is returned to signal they should be redirected to the create-profile flow.
+
+### API Endpoints
+- `GET /api/profiles/me`
+  - **Auth**: Requires an active session established via `/auth/login` or `/auth/verify-pin` (uses `studentId` session attribute).
+  - **Request Headers**: None required (session cookie sent automatically).
+  - **Success Response (200 OK)**:
+    ```json
+    {
+      "id": 1,
+      "name": "Jane Doe",
+      "major": "Computer Science",
+      "bio": "Junior studying CS and Math.",
+      "schoolDomain": "tulane.edu",
+      "studentId": 1,
+      "createdAt": "2026-09-22T00:00:00.000000"
+    }
+    ```
+  - **Error Responses**:
+    - `401 Unauthorized`: Returned when the user has no active session, or the session cookie is invalid/expired.
+      ```json
+      { "message": "User must be authenticated to create a profile." }
+      ```
+    - `404 Not Found`: Returned when the authenticated user has not yet created a profile.
+      ```json
+      { "message": "Profile not found" }
+      ```
+
+### Auth & Session Needs
+- Relies on Spring session cookie (`JSESSIONID`). Must be authenticated.
+- No JWT token is used — "token" in the acceptance criteria maps to the session cookie.
+
+### UI Constraints or Assumptions
+- If `404 Not Found` is returned, the frontend should redirect the student to the profile creation page.
+- If `401 Unauthorized` is returned, redirect the user to `/login`.
+- The `schoolDomain` field is used by the frontend to filter marketplace listings to the student's university.
+
+---
+
+## Handoff Note: SSP1-69 Enforce IDOR Protection on Profile Endpoints
+
+### Feature Summary
+Strict Insecure Direct Object Reference (IDOR) protection has been implemented for targeted profile endpoints (`GET /api/profiles/{id}` and `PUT /api/profiles/{id}`). A student can only view or modify their own profile record. Attempting to view or update another student's profile ID is physically blocked and returns `403 Forbidden`. If a requested profile ID does not exist, the API returns `404 Not Found`.
+
+### API Endpoints
+- `GET /api/profiles/{id}`
+  - **Auth**: Requires an active session (`studentId` in HTTP session).
+  - **Path Parameter**: `id` (Long) - the profile's internal ID.
+  - **Success Response (200 OK)**:
+    ```json
+    {
+      "id": 1,
+      "name": "Jane Doe",
+      "major": "Computer Science",
+      "bio": "Junior studying CS and Math.",
+      "schoolDomain": "tulane.edu",
+      "studentId": 1,
+      "createdAt": "2026-09-22T00:00:00.000000"
+    }
+    ```
+  - **Error Responses**:
+    - `401 Unauthorized`: User has no active session.
+      ```json
+      { "message": "User must be authenticated to create a profile." }
+      ```
+    - `403 Forbidden`: Authenticated student does not own this profile (Cross-User Fetch IDOR prevention).
+      ```json
+      { "message": "You do not have permission to access this profile." }
+      ```
+    - `404 Not Found`: Profile ID does not exist.
+      ```json
+      { "message": "Profile not found" }
+      ```
+
+- `PUT /api/profiles/{id}`
+  - **Auth**: Requires an active session (`studentId` in HTTP session).
+  - **Path Parameter**: `id` (Long) - the profile's internal ID.
+  - **Request Headers**: `Content-Type: application/json`
+  - **Request Shape**:
+    ```json
+    {
+      "name": "Jane Smith",
+      "major": "Data Science",
+      "bio": "Updated bio text."
+    }
+    ```
+  - **Validation & Field Constraints**:
+    - `name`: String, optional. Null or blank values leave the existing value unchanged.
+    - `major`: String, optional. Null or blank values leave the existing value unchanged.
+    - `bio`: String, optional, max 1000 characters.
+    - Note: `schoolDomain` and `studentId` cannot be updated via this endpoint (they are immutable from the client).
+  - **Success Response (200 OK)**:
+    ```json
+    {
+      "id": 1,
+      "name": "Jane Smith",
+      "major": "Data Science",
+      "bio": "Updated bio text.",
+      "schoolDomain": "tulane.edu",
+      "studentId": 1,
+      "createdAt": "2026-09-22T00:00:00.000000"
+    }
+    ```
+  - **Error Responses**:
+    - `401 Unauthorized`: User has no active session.
+      ```json
+      { "message": "User must be authenticated to create a profile." }
+      ```
+    - `403 Forbidden`: Authenticated student attempts to update another user's profile (Cross-User Modification IDOR prevention).
+      ```json
+      { "message": "You do not have permission to modify this profile." }
+      ```
+    - `404 Not Found`: Profile ID does not exist.
+      ```json
+      { "message": "Profile not found" }
+      ```
+    - `400 Bad Request`: Validation failure (e.g. exceeds character limit) or malformed JSON body.
+      ```json
+      { "message": "bio: Bio cannot exceed 1000 characters" }
+      ```
+
+### Auth & Session Needs
+- Requires standard session cookie (`JSESSIONID`).
+- Checks profile owner's `student.id` against the active session's `studentId`.
+
+### UI Constraints or Assumptions
+- When viewing or editing profile settings, the frontend should handle `403 Forbidden` by displaying an unauthorized access warning or navigating back to the student's own profile (`/api/profiles/me`).
+- If `404 Not Found` occurs on edit, prompt the student to create their profile.
 
 

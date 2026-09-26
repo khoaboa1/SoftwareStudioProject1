@@ -5,6 +5,7 @@ import com.Handoff.backend.model.Condition;
 import com.Handoff.backend.model.Listing;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ListingRepository;
+import com.Handoff.backend.repository.ProfileRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -26,6 +27,10 @@ class ListingServiceTest {
   @Mock
   private ListingRepository listingRepository;
 
+  // Feed queries resolve their tenant through the server-owned profile repository.
+  @Mock
+  private ProfileRepository profileRepository;
+
   private Student newStudent(long id, String name) {
     Student student = new Student(name, name.toLowerCase() + "@tulane.edu", "hashed", null, null);
     student.setId(id);
@@ -46,7 +51,7 @@ class ListingServiceTest {
     Listing existing = newListing(10L, owner);
     when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
     when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
-    ListingService service = new ListingService(listingRepository);
+    ListingService service = new ListingService(listingRepository, profileRepository);
 
     // Act
     Listing updated = service.updateListing(10L, owner, "Mini Fridge", "Barely used",
@@ -65,7 +70,7 @@ class ListingServiceTest {
     // Arrange
     Student requester = newStudent(1L, "Jane");
     when(listingRepository.findById(99L)).thenReturn(Optional.empty());
-    ListingService service = new ListingService(listingRepository);
+    ListingService service = new ListingService(listingRepository, profileRepository);
 
     // Act & Assert
     assertThatThrownBy(() -> service.updateListing(99L, requester, "Desk Lamp", "Works great",
@@ -80,7 +85,7 @@ class ListingServiceTest {
     Student otherStudent = newStudent(2L, "Bob");
     Listing existing = newListing(10L, owner);
     when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
-    ListingService service = new ListingService(listingRepository);
+    ListingService service = new ListingService(listingRepository, profileRepository);
 
     // Act & Assert
     assertThatThrownBy(() -> service.updateListing(10L, otherStudent, "Mini Fridge", "Barely used",
@@ -94,7 +99,7 @@ class ListingServiceTest {
     Student owner = newStudent(1L, "Jane");
     Listing existing = newListing(10L, owner);
     when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
-    ListingService service = new ListingService(listingRepository);
+    ListingService service = new ListingService(listingRepository, profileRepository);
 
     // Act & Assert
     assertThatThrownBy(() -> service.updateListing(10L, owner, "Desk Lamp", "Works great",
@@ -108,7 +113,7 @@ class ListingServiceTest {
     Student owner = newStudent(1L, "Jane");
     Listing existing = newListing(10L, owner);
     when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
-    ListingService service = new ListingService(listingRepository);
+    ListingService service = new ListingService(listingRepository, profileRepository);
 
     // Act
     service.deleteListing(10L, owner);
@@ -122,7 +127,7 @@ class ListingServiceTest {
     // Arrange
     Student requester = newStudent(1L, "Jane");
     when(listingRepository.findById(99L)).thenReturn(Optional.empty());
-    ListingService service = new ListingService(listingRepository);
+    ListingService service = new ListingService(listingRepository, profileRepository);
 
     // Act & Assert
     assertThatThrownBy(() -> service.deleteListing(99L, requester))
@@ -137,7 +142,7 @@ class ListingServiceTest {
     Student otherStudent = newStudent(2L, "Bob");
     Listing existing = newListing(10L, owner);
     when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
-    ListingService service = new ListingService(listingRepository);
+    ListingService service = new ListingService(listingRepository, profileRepository);
 
     // Act & Assert
     assertThatThrownBy(() -> service.deleteListing(10L, otherStudent))
