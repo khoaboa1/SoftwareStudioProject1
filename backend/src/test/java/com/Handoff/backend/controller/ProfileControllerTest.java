@@ -8,6 +8,7 @@ import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.ProfileRepository;
 import com.Handoff.backend.repository.StudentRepository;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,6 +23,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -289,5 +291,80 @@ class ProfileControllerTest {
     assertThat(saved.getStudent().getId()).isEqualTo(authenticatedStudent.getId());
     assertThat(saved.getSchoolDomain()).isEqualTo("tulane.edu");
     assertThat(saved.getSchoolDomain()).isNotEqualTo("hacker.edu");
+  }
+
+  // =========================================================================
+  // PROFILE RETRIEVAL TEST CASES (SSP1-68)
+  // =========================================================================
+
+  @Test
+  @DisplayName("Success - Fetch own profile returns 200 OK with complete profile payload")
+  void testGetMyProfile_Success() throws Exception {
+    MockHttpSession session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
+
+    CreateProfileRequest request = new CreateProfileRequest(
+        "Jane Doe",
+        "Computer Science",
+        "Junior studying CS and Math."
+    );
+
+    // Create profile first
+    mockMvc.perform(post("/api/profiles")
+            .session(session)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isCreated());
+
+    // Now fetch it
+    mockMvc.perform(get("/api/profiles/me")
+            .session(session))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").isNumber())
+        .andExpect(jsonPath("$.name").value("Jane Doe"))
+        .andExpect(jsonPath("$.major").value("Computer Science"))
+        .andExpect(jsonPath("$.bio").value("Junior studying CS and Math."))
+        .andExpect(jsonPath("$.schoolDomain").value("tulane.edu"))
+        .andExpect(jsonPath("$.studentId").isNumber())
+        .andExpect(jsonPath("$.createdAt").exists());
+  }
+
+  @Test
+  @DisplayName("Error - Not Found when authenticated user has no profile returns 404")
+  void testGetMyProfile_NotFound() throws Exception {
+    MockHttpSession session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
+    // No profile created
+
+    mockMvc.perform(get("/api/profiles/me")
+            .session(session))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.message").value("Profile not found"));
+  }
+
+  @Test
+  @DisplayName("Security - Missing token returns 401 Unauthorized")
+  void testGetMyProfile_MissingToken() throws Exception {
+    // No session/cookie
+    mockMvc.perform(get("/api/profiles/me"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.message").exists());
+  }
+
+  @Test
+  @DisplayName("Security - Invalid/expired token returns 401 Unauthorized")
+  void testGetMyProfile_InvalidToken() throws Exception {
+    // Case 1: Bogus JSESSIONID cookie
+    mockMvc.perform(get("/api/profiles/me")
+            .cookie(new Cookie("JSESSIONID", "tampered-invalid-session")))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.message").exists());
+
+    // Case 2: Expired/invalidated session
+    MockHttpSession session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
+    session.invalidate(); // simulate expired session
+
+    mockMvc.perform(get("/api/profiles/me")
+            .session(session))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.message").exists());
   }
 }

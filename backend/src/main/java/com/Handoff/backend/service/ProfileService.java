@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service managing student profile creation and domain extraction.
+ * Service managing student profile creation, retrieval, and domain extraction.
  */
 @Service
 public class ProfileService {
@@ -70,5 +70,21 @@ public class ProfileService {
     );
 
     return profileRepository.save(profile);
+  }
+
+  /**
+   * Retrieves the authenticated student's profile.
+   *
+   * @param student authenticated student entity
+   * @return the student's Profile
+   * @throws ProfileNotFoundException if no profile exists for the student
+   */
+  @Transactional(readOnly = true)
+  public Profile getMyProfile(Student student) {
+    if (student == null) {
+      throw new NotAuthenticatedException("Student must be authenticated to retrieve a profile.");
+    }
+    return profileRepository.findByStudent_Id(student.getId())
+        .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
   }
 }

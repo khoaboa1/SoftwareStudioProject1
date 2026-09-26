@@ -176,4 +176,46 @@ Authenticated students can generate their student profile record (`POST /api/pro
 - If the endpoint returns `409 Conflict`, the frontend can redirect the student to view/edit their existing profile.
 - If `401 Unauthorized` is returned, redirect the user to `/login`.
 
+---
+
+## Handoff Note: SSP1-68 Implement Profile Retrieval API
+
+### Feature Summary
+Authenticated students can fetch their own student profile record (`GET /api/profiles/me`). The backend uses the active session (`studentId` session attribute) to determine which profile to return — no ID is passed in the URL, preventing cross-user access. The response includes the `schoolDomain` extracted from the student's email during profile creation, which the frontend uses for marketplace eligibility scoping. If the student has not yet created a profile, a `404 Not Found` is returned to signal they should be redirected to the create-profile flow.
+
+### API Endpoints
+- `GET /api/profiles/me`
+  - **Auth**: Requires an active session established via `/auth/login` or `/auth/verify-pin` (uses `studentId` session attribute).
+  - **Request Headers**: None required (session cookie sent automatically).
+  - **Success Response (200 OK)**:
+    ```json
+    {
+      "id": 1,
+      "name": "Jane Doe",
+      "major": "Computer Science",
+      "bio": "Junior studying CS and Math.",
+      "schoolDomain": "tulane.edu",
+      "studentId": 1,
+      "createdAt": "2026-09-22T00:00:00.000000"
+    }
+    ```
+  - **Error Responses**:
+    - `401 Unauthorized`: Returned when the user has no active session, or the session cookie is invalid/expired.
+      ```json
+      { "message": "User must be authenticated to create a profile." }
+      ```
+    - `404 Not Found`: Returned when the authenticated user has not yet created a profile.
+      ```json
+      { "message": "Profile not found" }
+      ```
+
+### Auth & Session Needs
+- Relies on Spring session cookie (`JSESSIONID`). Must be authenticated.
+- No JWT token is used — "token" in the acceptance criteria maps to the session cookie.
+
+### UI Constraints or Assumptions
+- If `404 Not Found` is returned, the frontend should redirect the student to the profile creation page.
+- If `401 Unauthorized` is returned, redirect the user to `/login`.
+- The `schoolDomain` field is used by the frontend to filter marketplace listings to the student's university.
+
 
