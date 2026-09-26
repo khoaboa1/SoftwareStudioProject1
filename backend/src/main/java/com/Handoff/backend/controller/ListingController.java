@@ -11,6 +11,7 @@ import com.Handoff.backend.service.InvalidListingException;
 import com.Handoff.backend.service.ListingNotFoundException;
 import com.Handoff.backend.service.ListingService;
 import com.Handoff.backend.service.NotAuthenticatedException;
+import com.Handoff.backend.service.ProfileNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
@@ -41,8 +42,10 @@ public class ListingController {
   }
 
   @GetMapping
-  public List<ListingResponse> getFeed() {
-    return listingService.getFeed().stream().map(ListingResponse::from).toList();
+  public List<ListingResponse> getFeed(HttpServletRequest httpRequest) {
+    // Only the server-side session determines identity; domain query parameters are never bound.
+    Student requester = currentStudent(httpRequest, "You must be logged in to view marketplace listings");
+    return listingService.getFeed(requester).stream().map(ListingResponse::from).toList();
   }
 
   @PostMapping
@@ -72,10 +75,22 @@ public class ListingController {
   }
 
   private Student currentStudent(HttpServletRequest httpRequest) {
+    // Preserve existing authentication errors for listing mutations.
+    return currentStudent(httpRequest, "You must be logged in to post a listing");
+  }
+
+  private Student currentStudent(HttpServletRequest httpRequest, String errorMessage) {
+    // Validate that the session still refers to a real student without creating a new session.
     HttpSession session = httpRequest.getSession(false);
     Long studentId = session != null ? (Long) session.getAttribute(SessionKeys.STUDENT_ID) : null;
     return (studentId != null ? authService.findById(studentId) : Optional.<Student>empty())
-        .orElseThrow(NotAuthenticatedException::new);
+        .orElseThrow(() -> new NotAuthenticatedException(errorMessage));
+  }
+
+  @ExceptionHandler(ProfileNotFoundException.class)
+  public ResponseEntity<ErrorResponse> handleProfileNotFound(ProfileNotFoundException ex) {
+    // A missing requester profile cannot fall back to a global marketplace feed.
+    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(ex.getMessage()));
   }
 
   @ExceptionHandler(NotAuthenticatedException.class)

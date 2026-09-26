@@ -1,5 +1,16 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-70 Marketplace Domain Scoping
+
+- **Endpoint:** `GET /listings`, no request body or required query parameters.
+- **Authentication:** Send the existing `JSESSIONID` cookie. The backend resolves the student from the server-side `studentId` session and loads that student's saved profile.
+- **Scoping:** Database results include only sellers whose profile `school_domain` exactly equals the requester's profile domain. Subdomains and similar suffixes are separate domains. Sellers without profiles are excluded. Client parameters such as `domain`, `schoolDomain`, and `school_domain` are ignored.
+- **Success (200):** Existing array of `{ id, itemName, description, price, condition, category, sellerId, sellerName, createdAt }`, newest first; `[]` when no matching listings exist.
+- **Errors:** `401` for an absent/stale session, with `{ "message": "You must be logged in to view marketplace listings" }`; `404` when the requester has no profile, with `{ "message": "Profile not found" }`.
+- **Frontend handoff:** Send credentials when fetching the feed; handle `401` by directing users to login and `404` by directing them to profile creation. The backend enforces school isolation; frontend filtering is unnecessary.
+- **Scope:** Listing creation, editing, deletion, and response fields retain their existing behavior. No database migration is required.
+
+
 ## Purpose
 Keep backend (Spring Boot) and frontend (React) work aligned by creating a short handoff note before implementation, instead of one side silently guessing what the other needs.
 
@@ -309,6 +320,5 @@ Strict Insecure Direct Object Reference (IDOR) protection has been implemented f
 ### UI Constraints or Assumptions
 - When viewing or editing profile settings, the frontend should handle `403 Forbidden` by displaying an unauthorized access warning or navigating back to the student's own profile (`/api/profiles/me`).
 - If `404 Not Found` occurs on edit, prompt the student to create their profile.
-
 
 
