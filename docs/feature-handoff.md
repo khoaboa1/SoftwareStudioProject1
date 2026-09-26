@@ -268,8 +268,8 @@ Strict Insecure Direct Object Reference (IDOR) protection has been implemented f
     }
     ```
   - **Validation & Field Constraints**:
-    - `name`: String, optional, max 255 characters. If provided, must not be blank.
-    - `major`: String, optional, max 255 characters. If provided, must not be blank.
+    - `name`: String, optional. Null or blank values leave the existing value unchanged.
+    - `major`: String, optional. Null or blank values leave the existing value unchanged.
     - `bio`: String, optional, max 1000 characters.
     - Note: `schoolDomain` and `studentId` cannot be updated via this endpoint (they are immutable from the client).
   - **Success Response (200 OK)**:
@@ -299,7 +299,7 @@ Strict Insecure Direct Object Reference (IDOR) protection has been implemented f
       ```
     - `400 Bad Request`: Validation failure (e.g. exceeds character limit) or malformed JSON body.
       ```json
-      { "message": "name: Name must not exceed 255 characters" }
+      { "message": "bio: Bio cannot exceed 1000 characters" }
       ```
 
 ### Auth & Session Needs

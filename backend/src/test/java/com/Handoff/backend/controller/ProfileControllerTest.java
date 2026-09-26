@@ -467,6 +467,50 @@ class ProfileControllerTest {
     mockMvc.perform(put("/api/profiles/" + profileIdB).session(sessionA).contentType(MediaType.APPLICATION_JSON).content(updateBody))
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.message").value("You do not have permission to modify this profile."));
+
+    Profile unchanged = profileRepository.findById(profileIdB).orElseThrow();
+    assertThat(unchanged.getName()).isEqualTo("User B");
+    assertThat(unchanged.getMajor()).isEqualTo("Math");
+    assertThat(unchanged.getBio()).isEqualTo("Bio B");
+    assertThat(unchanged.getStudentId()).isEqualTo(sessionB.getAttribute(SessionKeys.STUDENT_ID));
+    assertThat(unchanged.getSchoolDomain()).isEqualTo("tulane.edu");
+  }
+
+  @Test
+  @DisplayName("Security - Targeted profile endpoints require an authenticated session")
+  void testTargetedProfileEndpoints_Unauthenticated() throws Exception {
+    mockMvc.perform(get("/api/profiles/1"))
+        .andExpect(status().isUnauthorized());
+    mockMvc.perform(put("/api/profiles/1")
+            .contentType(MediaType.APPLICATION_JSON).content("{\"bio\":\"Unauthorized\"}"))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  @DisplayName("Security - Update ignores injected profile identity and ownership fields")
+  void testUpdateProfile_IgnoresOwnershipInjection() throws Exception {
+    MockHttpSession session = loginAsNewStudent("User A", "userA@tulane.edu");
+    MvcResult created = mockMvc.perform(post("/api/profiles").session(session)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(new CreateProfileRequest("User A", "CS", "Bio A"))))
+        .andExpect(status().isCreated()).andReturn();
+    long profileId = objectMapper.readTree(created.getResponse().getContentAsString()).get("id").asLong();
+
+    mockMvc.perform(put("/api/profiles/" + profileId).session(session)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("""
+                {"bio":"Updated", "id":9999, "studentId":9999,
+                 "student":{"id":9999}, "schoolDomain":"attacker.edu"}
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(profileId))
+        .andExpect(jsonPath("$.studentId").value(session.getAttribute(SessionKeys.STUDENT_ID)))
+        .andExpect(jsonPath("$.schoolDomain").value("tulane.edu"));
+
+    Profile saved = profileRepository.findById(profileId).orElseThrow();
+    assertThat(saved.getStudentId()).isEqualTo(session.getAttribute(SessionKeys.STUDENT_ID));
+    assertThat(saved.getSchoolDomain()).isEqualTo("tulane.edu");
+    assertThat(saved.getBio()).isEqualTo("Updated");
   }
 
   @Test
