@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Service managing student profile creation and domain extraction.
+ * Service managing student profile creation, retrieval, and domain extraction.
  */
 @Service
 public class ProfileService {
@@ -68,6 +68,81 @@ public class ProfileService {
         bio != null ? bio.trim() : null,
         schoolDomain
     );
+
+    return profileRepository.save(profile);
+  }
+
+  /**
+   * Retrieves the authenticated student's profile.
+   *
+   * @param student authenticated student entity
+   * @return the student's Profile
+   * @throws ProfileNotFoundException if no profile exists for the student
+   */
+  @Transactional(readOnly = true)
+  public Profile getMyProfile(Student student) {
+    if (student == null) {
+      throw new NotAuthenticatedException("Student must be authenticated to retrieve a profile.");
+    }
+    return profileRepository.findByStudent_Id(student.getId())
+        .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
+  }
+
+  /**
+   * Retrieves a specific profile by its ID, enforcing authorization.
+   *
+   * @param id the profile ID
+   * @param student authenticated student entity
+   * @return the Profile
+   * @throws ProfileNotFoundException if profile does not exist
+   * @throws ProfileAccessDeniedException if the profile does not belong to the student
+   */
+  @Transactional(readOnly = true)
+  public Profile getProfileById(Long id, Student student) {
+    if (student == null) {
+      throw new NotAuthenticatedException("Student must be authenticated to retrieve a profile.");
+    }
+    Profile profile = profileRepository.findById(id)
+        .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
+
+    if (!profile.getStudent().getId().equals(student.getId())) {
+      throw new ProfileAccessDeniedException("You do not have permission to access this profile.");
+    }
+
+    return profile;
+  }
+
+  /**
+   * Updates a specific profile by its ID, enforcing authorization.
+   *
+   * @param id the profile ID
+   * @param student authenticated student entity
+   * @param name new name (optional)
+   * @param major new major (optional)
+   * @param bio new bio (optional)
+   * @return the updated Profile
+   */
+  @Transactional
+  public Profile updateProfile(Long id, Student student, String name, String major, String bio) {
+    if (student == null) {
+      throw new NotAuthenticatedException("Student must be authenticated to update a profile.");
+    }
+    Profile profile = profileRepository.findById(id)
+        .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
+
+    if (!profile.getStudent().getId().equals(student.getId())) {
+      throw new ProfileAccessDeniedException("You do not have permission to modify this profile.");
+    }
+
+    if (name != null && !name.isBlank()) {
+      profile.setName(name.trim());
+    }
+    if (major != null && !major.isBlank()) {
+      profile.setMajor(major.trim());
+    }
+    if (bio != null) {
+      profile.setBio(bio.trim());
+    }
 
     return profileRepository.save(profile);
   }
