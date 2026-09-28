@@ -1,46 +1,91 @@
 <mxfile host="app.diagrams.net">
   <diagram name="Domain Model" id="domain-model">
-    <mxGraphModel dx="1400" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="900" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
 
-        <mxCell id="student" value="Student" style="swimlane;fontStyle=1;align=center;childLayout=stackLayout;horizontal=1;startSize=30;" vertex="1" parent="1">
-          <mxGeometry x="80" y="80" width="280" height="300" as="geometry" />
+        <!-- Student class -->
+        <mxCell id="student" value="Student" style="swimlane;fontStyle=1;align=center;verticalAlign=middle;childLayout=stackLayout;horizontal=1;startSize=30;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="80" y="80" width="260" height="320" as="geometry" />
         </mxCell>
-        <mxCell id="student-fields" value="- id: Long&#10;- studentName: String&#10;- email: String&#10;- passwordHash: String&#10;- oauthProvider: String&#10;- emailVerified: boolean&#10;- verified: boolean&#10;- createdAt: LocalDateTime&#10;- verificationPin: String&#10;- verificationPinExpiry: LocalDateTime&#10;- trustedDeviceIds: Set&lt;String&gt;&#10;- sellingItems: List&lt;String&gt;&#10;- dormLocation: String" style="text;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;whiteSpace=wrap;" vertex="1" parent="student">
-          <mxGeometry y="30" width="280" height="270" as="geometry" />
+        <mxCell id="student-fields" value="+Id: Long&#10;+StudentName: String&#10;+Email: String&#10;+EmailVerified: boolean&#10;+DormLocation: String" style="text;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;spacingBottom=4;whiteSpace=wrap;fontColor=#000000;" vertex="1" parent="student">
+          <mxGeometry y="30" width="260" height="100" as="geometry" />
         </mxCell>
-
-        <mxCell id="listing" value="Listing" style="swimlane;fontStyle=1;align=center;childLayout=stackLayout;horizontal=1;startSize=30;" vertex="1" parent="1">
-          <mxGeometry x="480" y="80" width="240" height="180" as="geometry" />
-        </mxCell>
-        <mxCell id="listing-fields" value="- id: Long&#10;- itemName: String&#10;- description: String&#10;- price: BigDecimal&#10;- condition: Condition&#10;- category: Category&#10;- seller: Student&#10;- createdAt: Instant" style="text;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;whiteSpace=wrap;" vertex="1" parent="listing">
-          <mxGeometry y="30" width="240" height="150" as="geometry" />
+        <mxCell id="student-methods" value="+Signup()&#10;+Login()&#10;+Logout()&#10;+VerifyEmail()&#10;+CreateListing()&#10;+UpdateListing()&#10;+DeleteListing()" style="text;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;spacingBottom=4;whiteSpace=wrap;fontColor=#000000;" vertex="1" parent="student">
+          <mxGeometry y="130" width="260" height="190" as="geometry" />
         </mxCell>
 
-        <mxCell id="condition" value="&lt;&lt;enum&gt;&gt;&#10;Condition" style="swimlane;fontStyle=1;align=center;childLayout=stackLayout;horizontal=1;startSize=30;" vertex="1" parent="1">
-          <mxGeometry x="800" y="80" width="180" height="140" as="geometry" />
+        <!-- Listing class -->
+        <mxCell id="listing" value="Listing" style="swimlane;fontStyle=1;align=center;verticalAlign=middle;childLayout=stackLayout;horizontal=1;startSize=30;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="480" y="80" width="260" height="230" as="geometry" />
         </mxCell>
-        <mxCell id="condition-values" value="NEW&#10;LIKE_NEW&#10;GOOD&#10;FAIR&#10;WORN" style="text;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;whiteSpace=wrap;" vertex="1" parent="condition">
-          <mxGeometry y="30" width="180" height="110" as="geometry" />
+        <mxCell id="listing-fields" value="+Id: Long&#10;+ItemName: String&#10;+Description: String&#10;+Price: BigDecimal&#10;+Condition: Condition&#10;+Category: Category&#10;+CreatedAt: Instant" style="text;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;spacingBottom=4;whiteSpace=wrap;fontColor=#000000;" vertex="1" parent="listing">
+          <mxGeometry y="30" width="260" height="140" as="geometry" />
         </mxCell>
-
-        <mxCell id="category" value="&lt;&lt;enum&gt;&gt;&#10;Category" style="swimlane;fontStyle=1;align=center;childLayout=stackLayout;horizontal=1;startSize=30;" vertex="1" parent="1">
-          <mxGeometry x="800" y="260" width="180" height="150" as="geometry" />
-        </mxCell>
-        <mxCell id="category-values" value="FURNITURE&#10;ELECTRONICS&#10;KITCHEN&#10;DECOR&#10;CLOTHING&#10;OTHER" style="text;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;whiteSpace=wrap;" vertex="1" parent="category">
-          <mxGeometry y="30" width="180" height="120" as="geometry" />
+        <mxCell id="listing-methods" value="" style="text;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;whiteSpace=wrap;fontColor=#000000;" vertex="1" parent="listing">
+          <mxGeometry y="170" width="260" height="60" as="geometry" />
         </mxCell>
 
-        <mxCell id="edge-listing-student" value="1..*         1" style="edgeStyle=entityRelationEdgeStyle;endArrow=none;startArrow=diamondThin;startFill=1;html=1;" edge="1" parent="1" source="listing" target="student">
+        <!-- Condition enumeration -->
+        <mxCell id="condition" value="&lt;&lt;enumeration&gt;&gt;&#10;Condition" style="swimlane;fontStyle=1;align=center;verticalAlign=middle;childLayout=stackLayout;horizontal=1;startSize=40;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="880" y="80" width="200" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="condition-values" value="NEW&#10;LIKE_NEW&#10;GOOD&#10;FAIR&#10;WORN" style="text;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;spacingBottom=4;whiteSpace=wrap;fontColor=#000000;" vertex="1" parent="condition">
+          <mxGeometry y="40" width="200" height="140" as="geometry" />
+        </mxCell>
+
+        <!-- Category enumeration -->
+        <mxCell id="category" value="&lt;&lt;enumeration&gt;&gt;&#10;Category" style="swimlane;fontStyle=1;align=center;verticalAlign=middle;childLayout=stackLayout;horizontal=1;startSize=40;fillColor=#ffffff;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="880" y="320" width="200" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="category-values" value="FURNITURE&#10;ELECTRONICS&#10;KITCHEN&#10;DECOR&#10;CLOTHING&#10;OTHER" style="text;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;spacingBottom=4;whiteSpace=wrap;fontColor=#000000;" vertex="1" parent="category">
+          <mxGeometry y="40" width="200" height="160" as="geometry" />
+        </mxCell>
+
+        <!-- Student -> Listing association -->
+        <mxCell id="edge-student-listing" value="" style="edgeStyle=entityRelationEdgeStyle;rounded=0;endArrow=none;startArrow=none;html=1;strokeColor=#000000;" edge="1" parent="1" source="student" target="listing">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="edge-listing-condition" value="" style="endArrow=open;html=1;dashed=1;" edge="1" parent="1" source="listing" target="condition">
+        <mxCell id="label-student-listing-1" value="+1" style="text;html=1;align=center;verticalAlign=middle;fontColor=#000000;fontStyle=1;" vertex="1" connectable="0" parent="edge-student-listing">
+          <mxGeometry x="-0.75" relative="1" as="geometry">
+            <mxPoint as="offset" y="-14" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="label-student-listing-2" value="+0..*" style="text;html=1;align=center;verticalAlign=middle;fontColor=#000000;fontStyle=1;" vertex="1" connectable="0" parent="edge-student-listing">
+          <mxGeometry x="0.75" relative="1" as="geometry">
+            <mxPoint as="offset" y="-14" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Listing -> Condition association -->
+        <mxCell id="edge-listing-condition" value="" style="edgeStyle=entityRelationEdgeStyle;rounded=0;endArrow=none;startArrow=none;html=1;strokeColor=#000000;" edge="1" parent="1" source="listing" target="condition">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="edge-listing-category" value="" style="endArrow=open;html=1;dashed=1;" edge="1" parent="1" source="listing" target="category">
+        <mxCell id="label-listing-condition-1" value="+0..*" style="text;html=1;align=center;verticalAlign=middle;fontColor=#000000;fontStyle=1;" vertex="1" connectable="0" parent="edge-listing-condition">
+          <mxGeometry x="-0.75" relative="1" as="geometry">
+            <mxPoint as="offset" y="-14" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="label-listing-condition-2" value="+1" style="text;html=1;align=center;verticalAlign=middle;fontColor=#000000;fontStyle=1;" vertex="1" connectable="0" parent="edge-listing-condition">
+          <mxGeometry x="0.75" relative="1" as="geometry">
+            <mxPoint as="offset" y="-14" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Listing -> Category association -->
+        <mxCell id="edge-listing-category" value="" style="edgeStyle=entityRelationEdgeStyle;rounded=0;endArrow=none;startArrow=none;html=1;strokeColor=#000000;" edge="1" parent="1" source="listing" target="category">
           <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="label-listing-category-1" value="+0..*" style="text;html=1;align=center;verticalAlign=middle;fontColor=#000000;fontStyle=1;" vertex="1" connectable="0" parent="edge-listing-category">
+          <mxGeometry x="-0.75" relative="1" as="geometry">
+            <mxPoint as="offset" y="-14" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="label-listing-category-2" value="+1" style="text;html=1;align=center;verticalAlign=middle;fontColor=#000000;fontStyle=1;" vertex="1" connectable="0" parent="edge-listing-category">
+          <mxGeometry x="0.75" relative="1" as="geometry">
+            <mxPoint as="offset" y="-14" />
+          </mxGeometry>
         </mxCell>
       </root>
     </mxGraphModel>
