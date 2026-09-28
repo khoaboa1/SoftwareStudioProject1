@@ -1,12 +1,14 @@
 package com.Handoff.backend.controller;
 
 import com.Handoff.backend.dto.CreateProfileRequest;
+import com.Handoff.backend.dto.UpdateProfileRequest;
 import com.Handoff.backend.dto.ErrorResponse;
 import com.Handoff.backend.model.Profile;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.service.AuthService;
 import com.Handoff.backend.service.DuplicateProfileException;
 import com.Handoff.backend.service.NotAuthenticatedException;
+import com.Handoff.backend.service.ProfileAccessDeniedException;
 import com.Handoff.backend.service.ProfileNotFoundException;
 import com.Handoff.backend.service.ProfileService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,6 +21,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -78,6 +82,37 @@ public class ProfileController {
   }
 
   /**
+   * Retrieves a specific profile by ID, enforcing IDOR ownership checks.
+   *
+   * @param id          profile ID to retrieve
+   * @param httpRequest HTTP servlet request to access the user session
+   * @return 200 OK with the Profile, 403 Forbidden if not the owner, or 404 Not Found
+   */
+  @GetMapping("/{id}")
+  public ResponseEntity<Profile> getProfileById(@PathVariable Long id, HttpServletRequest httpRequest) {
+    Student student = currentStudent(httpRequest);
+    Profile profile = profileService.getProfileById(id, student);
+    return ResponseEntity.ok(profile);
+  }
+
+  /**
+   * Updates a specific profile by ID, enforcing IDOR ownership checks.
+   *
+   * @param id          profile ID to update
+   * @param request     incoming update fields (name, major, bio)
+   * @param httpRequest HTTP servlet request to access the user session
+   * @return 200 OK with updated Profile, 403 Forbidden if not the owner, or 404 Not Found
+   */
+  @PutMapping("/{id}")
+  public ResponseEntity<Profile> updateProfile(@PathVariable Long id, 
+                                               @Valid @RequestBody UpdateProfileRequest request,
+                                               HttpServletRequest httpRequest) {
+    Student student = currentStudent(httpRequest);
+    Profile profile = profileService.updateProfile(id, student, request.name(), request.major(), request.bio());
+    return ResponseEntity.ok(profile);
+  }
+
+  /**
    * Helper method to extract the authenticated Student from the HTTP session.
    */
   private Student currentStudent(HttpServletRequest httpRequest) {
@@ -109,6 +144,14 @@ public class ProfileController {
   @ExceptionHandler(ProfileNotFoundException.class)
   public ResponseEntity<ErrorResponse> handleProfileNotFound(ProfileNotFoundException ex) {
     return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(ex.getMessage()));
+  }
+
+  /**
+   * Handles cross-user unauthorized access (IDOR) with HTTP 403 Forbidden.
+   */
+  @ExceptionHandler(ProfileAccessDeniedException.class)
+  public ResponseEntity<ErrorResponse> handleProfileAccessDenied(ProfileAccessDeniedException ex) {
+    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(ex.getMessage()));
   }
 
   /**
