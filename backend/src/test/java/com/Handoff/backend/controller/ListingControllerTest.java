@@ -7,6 +7,8 @@ import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.StudentRepository;
 import com.Handoff.backend.dto.VerificationRequest;
 import com.Handoff.backend.model.Student;
+import com.Handoff.backend.model.Profile;
+import com.Handoff.backend.repository.ProfileRepository;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,11 +43,16 @@ class ListingControllerTest {
   private ListingRepository listingRepository;
 
   @Autowired
+  private ProfileRepository profileRepository;
+
+  @Autowired
   private ObjectMapper objectMapper;
 
   @BeforeEach
   void cleanDatabase() {
     listingRepository.deleteAll();
+    // Profiles reference students, so remove them before resetting student fixtures.
+    profileRepository.deleteAll();
     studentRepository.deleteAll();
   }
 
@@ -71,6 +78,10 @@ class ListingControllerTest {
   void createListing_thenFeed_returnsItNewestFirst() throws Exception {
     MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
 
+    // Reading the feed now requires a profile with a server-owned school domain.
+    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
+
     String body = objectMapper.writeValueAsString(
         new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
 
@@ -79,7 +90,7 @@ class ListingControllerTest {
         .andExpect(jsonPath("$.itemName").value("Desk Lamp"))
         .andExpect(jsonPath("$.sellerName").value("Jane Doe"));
 
-    mockMvc.perform(get("/listings"))
+    mockMvc.perform(get("/listings").session(session))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].itemName").value("Desk Lamp"));
   }
@@ -179,6 +190,9 @@ class ListingControllerTest {
   @Test
   void deleteListing_owner_removesListing() throws Exception {
     MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    // Keep deletion verification within the owner's authenticated school feed.
+    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
     String createBody = objectMapper.writeValueAsString(
         new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
     MvcResult createResult = mockMvc.perform(post("/listings").session(session)
@@ -190,7 +204,8 @@ class ListingControllerTest {
     mockMvc.perform(delete("/listings/" + listingId).session(session))
         .andExpect(status().isNoContent());
 
-    mockMvc.perform(get("/listings"))
+    mockMvc.perform(get("/listings").session(session))
+        .andExpect(status().isOk())
         .andExpect(jsonPath("$").isArray())
         .andExpect(jsonPath("$.length()").value(0));
   }
