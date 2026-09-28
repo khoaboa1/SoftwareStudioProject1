@@ -52,7 +52,7 @@ public class ListingController {
 
   @GetMapping("/categories")
   public List<String> getCategories() {
-    return Arrays.stream(Category.values()).map(Enum::name).toList();
+    return Arrays.stream(Category.values()).map(category -> category.name()).toList();
   }
 
   @PostMapping
