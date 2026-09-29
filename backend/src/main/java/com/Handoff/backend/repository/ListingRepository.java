@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ListingRepository extends JpaRepository<Listing, Long> {
   /**
@@ -23,4 +24,15 @@ public interface ListingRepository extends JpaRepository<Listing, Long> {
       order by listing.createdAt desc
       """)
   List<Listing> findBySchoolDomain(@Param("schoolDomain") String schoolDomain);
+
+  @Query("""
+      select listing from Listing listing
+      join fetch listing.seller seller
+      where listing.id = :id and exists (
+        select profile.id from Profile profile
+        where profile.student = seller and profile.schoolDomain = :schoolDomain
+      )
+      """)
+  Optional<Listing> findByIdAndSchoolDomain(@Param("id") Long id,
+                                             @Param("schoolDomain") String schoolDomain);
 }

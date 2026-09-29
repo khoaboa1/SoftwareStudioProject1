@@ -1,5 +1,14 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-78 Get Listing by ID
+
+- **Endpoint:** `GET /listings/{id}`; `id` is the listing's numeric ID. No request body or domain parameter is required.
+- **Authentication:** Send the existing `JSESSIONID` cookie. The backend resolves the student from the server-side session.
+- **Visibility:** The requester and seller must each have a saved profile with the same exact `schoolDomain`. The backend enforces this rule; client-supplied domain parameters cannot override it.
+- **Success (200):** One `{ id, itemName, description, price, condition, category, sellerId, sellerName, createdAt }` object, using the same shape as the feed.
+- **Errors:** `401` with `{ "message": "You must be logged in to view marketplace listings" }` for no or stale session; `404` with `{ "message": "Profile not found" }` when the requester has no profile; `404` with `{ "message": "Listing not found" }` when the ID is absent, the seller has no profile, or the seller belongs to another school.
+- **Frontend handoff:** Use the returned object for a listing detail view if needed. Route students without a profile to profile creation. No frontend code is included in SSP1-78.
+
 ## Handoff Note: SSP1-70 Marketplace Domain Scoping
 
 - **Endpoint:** `GET /listings`, no request body or required query parameters.

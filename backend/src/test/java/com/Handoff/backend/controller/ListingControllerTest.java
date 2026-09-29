@@ -129,6 +129,8 @@ class ListingControllerTest {
   @Test
   void updateListing_owner_updatesFields() throws Exception {
     MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
     String createBody = objectMapper.writeValueAsString(
         new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
     MvcResult createResult = mockMvc.perform(post("/listings").session(session)
@@ -145,6 +147,14 @@ class ListingControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.itemName").value("Mini Fridge"))
         .andExpect(jsonPath("$.price").value(40.00));
+
+    mockMvc.perform(get("/listings/" + listingId).session(session))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.itemName").value("Mini Fridge"))
+        .andExpect(jsonPath("$.description").value("Barely used"))
+        .andExpect(jsonPath("$.price").value(40.00))
+        .andExpect(jsonPath("$.condition").value("LIKE_NEW"))
+        .andExpect(jsonPath("$.category").value("KITCHEN"));
   }
 
   @Test
