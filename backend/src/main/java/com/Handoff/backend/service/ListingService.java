@@ -30,6 +30,13 @@ public class ListingService {
     return listingRepository.findBySchoolDomain(profile.getSchoolDomain());
   }
 
+  public Listing getListing(Long id, Student requester) {
+    var profile = profileRepository.findByStudent_Id(requester.getId())
+        .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
+    return listingRepository.findByIdAndSchoolDomain(id, profile.getSchoolDomain())
+        .orElseThrow(ListingNotFoundException::new);
+  }
+
   public Listing createListing(Student seller, String itemName, String description,
                                 BigDecimal price, String conditionRaw, String categoryRaw) {
     if (itemName == null || itemName.isBlank()) {

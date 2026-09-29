@@ -50,6 +50,12 @@ public class ListingController {
     return listingService.getFeed(requester).stream().map(ListingResponse::from).toList();
   }
 
+  @GetMapping("/{id}")
+  public ListingResponse getListing(@PathVariable Long id, HttpServletRequest httpRequest) {
+    Student requester = currentStudent(httpRequest, "You must be logged in to view marketplace listings");
+    return ListingResponse.from(listingService.getListing(id, requester));
+  }
+
   @GetMapping("/categories")
   public List<String> getCategories() {
     return Arrays.stream(Category.values()).map(Enum::name).toList();

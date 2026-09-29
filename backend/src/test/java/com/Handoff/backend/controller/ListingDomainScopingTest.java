@@ -53,10 +53,95 @@ class ListingDomainScopingTest {
   }
 
   /** Give listings deterministic timestamps so ordering assertions do not depend on clock timing. */
-  private void listing(Student seller, String name, long seconds) {
+  private Listing listing(Student seller, String name, long seconds) {
     Listing listing = new Listing(name, "Test item", BigDecimal.TEN, Condition.GOOD, Category.FURNITURE, seller);
     listing.setCreatedAt(Instant.parse("2026-01-01T00:00:00Z").plusSeconds(seconds));
-    listingRepository.save(listing);
+    return listingRepository.save(listing);
+  }
+
+  @Test
+  void getListing_sameSchoolPeer_returnsListingDetails() throws Exception {
+    Student viewer = student("viewer", "tulane.edu");
+    Student seller = student("peer", "tulane.edu");
+    Listing item = listing(seller, "Desk Lamp", 1);
+
+    mockMvc.perform(get("/listings/" + item.getId()).session(session(viewer)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(item.getId()))
+        .andExpect(jsonPath("$.itemName").value("Desk Lamp"))
+        .andExpect(jsonPath("$.description").value("Test item"))
+        .andExpect(jsonPath("$.price").value(10))
+        .andExpect(jsonPath("$.condition").value("GOOD"))
+        .andExpect(jsonPath("$.category").value("FURNITURE"))
+        .andExpect(jsonPath("$.sellerId").value(seller.getId()))
+        .andExpect(jsonPath("$.sellerName").value("peer"))
+        .andExpect(jsonPath("$.createdAt").exists());
+  }
+
+  @Test
+  void getListing_owner_returnsOwnListing() throws Exception {
+    Student owner = student("owner", "tulane.edu");
+    Listing item = listing(owner, "Desk Lamp", 1);
+
+    mockMvc.perform(get("/listings/" + item.getId()).session(session(owner)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.itemName").value("Desk Lamp"));
+  }
+
+  @Test
+  void getListing_otherSchool_returnsNotFound_evenWithDomainOverride() throws Exception {
+    Student viewer = student("viewer", "tulane.edu");
+    Listing item = listing(student("other", "other-school.edu"), "Private", 1);
+
+    mockMvc.perform(get("/listings/" + item.getId()).session(session(viewer))
+            .param("domain", "other-school.edu"))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.message").value("Listing not found"));
+  }
+
+  @Test
+  void getListing_sellerWithoutProfile_returnsNotFound() throws Exception {
+    Student viewer = student("viewer", "tulane.edu");
+    Listing item = listing(student("legacy", null), "Legacy", 1);
+
+    mockMvc.perform(get("/listings/" + item.getId()).session(session(viewer)))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.message").value("Listing not found"));
+  }
+
+  @Test
+  void getListing_missingId_returnsNotFound() throws Exception {
+    Student viewer = student("viewer", "tulane.edu");
+
+    mockMvc.perform(get("/listings/999999").session(session(viewer)))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.message").value("Listing not found"));
+  }
+
+  @Test
+  void getListing_requesterWithoutProfile_returnsProfileNotFound() throws Exception {
+    Student viewer = student("viewer", null);
+    Listing item = listing(student("seller", "tulane.edu"), "Desk Lamp", 1);
+
+    mockMvc.perform(get("/listings/" + item.getId()).session(session(viewer)))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.message").value("Profile not found"));
+  }
+
+  @Test
+  void getListing_withoutSession_returnsUnauthorized() throws Exception {
+    mockMvc.perform(get("/listings/1"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.message").value("You must be logged in to view marketplace listings"));
+  }
+
+  @Test
+  void getListing_withStaleSession_returnsUnauthorized() throws Exception {
+    MockHttpSession stale = new MockHttpSession();
+    stale.setAttribute(SessionKeys.STUDENT_ID, Long.MAX_VALUE);
+
+    mockMvc.perform(get("/listings/1").session(stale))
+        .andExpect(status().isUnauthorized());
   }
 
   @Test
