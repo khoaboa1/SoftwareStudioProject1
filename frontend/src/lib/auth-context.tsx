@@ -8,6 +8,7 @@ type AuthContextValue = {
   loading: boolean
   setStudent: (student: Student | null) => void
   markProfileComplete: () => void
+  markProfileMissing: () => void
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -47,8 +48,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setHasProfile(true)
   }
 
+  function markProfileMissing() {
+    setHasProfile(false)
+  }
+
   return (
-    <AuthContext.Provider value={{ student, hasProfile, loading, setStudent, markProfileComplete }}>
+    <AuthContext.Provider value={{ student, hasProfile, loading, setStudent, markProfileComplete, markProfileMissing }}>
       {children}
     </AuthContext.Provider>
   )
