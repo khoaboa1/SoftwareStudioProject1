@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import userEvent from '@testing-library/user-event'
+import { describe, expect, it, vi } from 'vitest'
 import { ProfileView } from './ProfileView'
 import type { Profile } from '../services/profileService'
 
@@ -71,5 +72,21 @@ describe('ProfileView', () => {
     render(<ProfileView status="error" />)
 
     expect(screen.getByRole('status')).toHaveTextContent('Something went wrong loading this profile.')
+  })
+
+  it('does not show an edit button without onEdit', () => {
+    render(<ProfileView status="ready" profile={profile} />)
+
+    expect(screen.queryByRole('button', { name: 'Edit profile' })).not.toBeInTheDocument()
+  })
+
+  it('calls onEdit when the edit button is clicked', async () => {
+    const user = userEvent.setup()
+    const handleEdit = vi.fn()
+    render(<ProfileView status="ready" profile={profile} onEdit={handleEdit} />)
+
+    await user.click(screen.getByRole('button', { name: 'Edit profile' }))
+
+    expect(handleEdit).toHaveBeenCalledTimes(1)
   })
 })
