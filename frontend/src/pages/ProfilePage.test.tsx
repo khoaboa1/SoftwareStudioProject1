@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProfilePage } from './ProfilePage'
 import { ApiError, getMyProfile, updateProfile, type Profile } from '../services/profileService'
+import { getListings } from '../services/listingService'
 
 const setStudent = vi.fn()
 const markProfileMissing = vi.fn()
@@ -14,6 +15,10 @@ vi.mock('../lib/auth-context', () => ({
     setStudent,
     markProfileMissing,
   }),
+}))
+
+vi.mock('../services/listingService', () => ({
+  getListings: vi.fn(),
 }))
 
 vi.mock('../services/profileService', async (importOriginal) => ({
@@ -48,6 +53,7 @@ describe('ProfilePage', () => {
   beforeEach(() => {
     vi.mocked(getMyProfile).mockReset()
     vi.mocked(updateProfile).mockReset()
+    vi.mocked(getListings).mockReset().mockResolvedValue([])
     setStudent.mockClear()
     markProfileMissing.mockClear()
   })
@@ -104,6 +110,36 @@ describe('ProfilePage', () => {
     renderPage()
 
     expect(await screen.findByRole('status')).toHaveTextContent('Could not load your profile.')
+  })
+
+  it("shows the student's listings below the profile", async () => {
+    vi.mocked(getMyProfile).mockResolvedValue(profile)
+    vi.mocked(getListings).mockResolvedValue([
+      {
+        id: 5,
+        itemName: 'Mini Fridge',
+        description: 'Cold',
+        price: 40,
+        condition: 'GOOD',
+        category: 'KITCHEN',
+        sellerId: profile.studentId,
+        sellerName: 'Jane Doe',
+        createdAt: '2026-09-23T00:00:00Z',
+      },
+    ])
+
+    renderPage()
+
+    expect(await screen.findByRole('heading', { name: 'My listings (1)' })).toBeInTheDocument()
+    expect(screen.getByText('Mini Fridge')).toBeInTheDocument()
+  })
+
+  it('does not load listings until the profile has loaded', () => {
+    vi.mocked(getMyProfile).mockReturnValue(new Promise(() => {}))
+
+    renderPage()
+
+    expect(getListings).not.toHaveBeenCalled()
   })
 
   describe('editing', () => {

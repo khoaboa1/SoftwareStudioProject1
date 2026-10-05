@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '../components/AppHeader'
 import { ProfileEditForm } from '../components/ProfileEditForm'
+import { MyListings } from '../components/MyListings'
 import { ProfileView } from '../components/ProfileView'
 import { FormAlert } from '../components/ui/FormAlert'
 import { useAuth } from '../lib/auth-context'
@@ -100,6 +101,7 @@ export function ProfilePage() {
         ) : (
           <ProfileView {...state} />
         )}
+        {state.status === 'ready' && <MyListings sellerId={state.profile.studentId} />}
       </main>
     </div>
   )
