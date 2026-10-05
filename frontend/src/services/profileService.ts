@@ -9,6 +9,7 @@ export type Profile = {
   bio: string | null
   schoolDomain: string
   studentId: number
+  createdAt: string
 }
 
 export function getMyProfile(): Promise<Profile> {

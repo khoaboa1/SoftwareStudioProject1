@@ -5,6 +5,7 @@ import { LoginPage } from './pages/LoginPage'
 import { SignupPage } from './pages/SignupPage'
 import { FeedPage } from './pages/FeedPage'
 import { ProfileSetupPage } from './pages/ProfileSetupPage'
+import { ProfilePage } from './pages/ProfilePage'
 
 function RequireAuth({ children }: { children: ReactElement }) {
   const { student, hasProfile, loading } = useAuth()
@@ -56,6 +57,14 @@ function App() {
           element={
             <RequireAuth>
               <FeedPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <RequireAuth>
+              <ProfilePage />
             </RequireAuth>
           }
         />

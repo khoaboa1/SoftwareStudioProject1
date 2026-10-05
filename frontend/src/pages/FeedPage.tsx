@@ -1,12 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Logo } from '../components/Logo'
+import { AppHeader } from '../components/AppHeader'
 import { Button } from '../components/ui/Button'
 import { FormAlert } from '../components/ui/FormAlert'
 import { ListingCard } from '../components/ListingCard'
 import { ListingForm } from '../components/ListingForm'
 import { useAuth } from '../lib/auth-context'
-import { ApiError, logout } from '../services/authService'
+import { ApiError } from '../services/authService'
 import {
   createListing,
   deleteListing,
@@ -29,8 +28,7 @@ function resetFormDefaults() {
 }
 
 export function FeedPage() {
-  const navigate = useNavigate()
-  const { student, setStudent } = useAuth()
+  const { student } = useAuth()
   const [listings, setListings] = useState<Listing[]>([])
   const [categoryOptions, setCategoryOptions] = useState<Category[]>([])
   const [feedError, setFeedError] = useState<string | null>(null)
@@ -59,12 +57,6 @@ export function FeedPage() {
         // still works, it just has no options until this succeeds on retry.
       })
   }, [])
-
-  async function handleLogout() {
-    await logout()
-    setStudent(null)
-    navigate('/login')
-  }
 
   function toggleCreateForm() {
     if (showForm) {
@@ -147,20 +139,7 @@ export function FeedPage() {
 
   return (
     <div className="min-h-dvh bg-zinc-50">
-      <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-          <div className="flex items-center gap-2">
-            <Logo className="h-8 w-8" />
-            <span className="text-lg font-semibold text-zinc-900">Handoff</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-zinc-600">Logged in as {student?.studentName}</span>
-            <Button type="button" fullWidth={false} onClick={handleLogout} className="px-4 py-2 text-sm">
-              Log out
-            </Button>
-          </div>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="mx-auto max-w-5xl px-4 py-8">
         <div className="mb-6 flex items-center justify-between">
