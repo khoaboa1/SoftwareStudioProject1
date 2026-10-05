@@ -37,3 +37,16 @@ export function createProfile(input: {
     body: JSON.stringify(input),
   })
 }
+
+export type ProfileUpdate = {
+  name: string
+  major: string
+  bio: string
+}
+
+export function updateProfile(id: number, input: ProfileUpdate): Promise<Profile> {
+  return request<Profile>(`/api/profiles/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
+}

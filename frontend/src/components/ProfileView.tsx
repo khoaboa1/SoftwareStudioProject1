@@ -1,11 +1,12 @@
 import { GraduationCap, Buildings } from '@phosphor-icons/react'
+import { Button } from './ui/Button'
 import { FormAlert } from './ui/FormAlert'
 import type { Profile } from '../services/profileService'
 
 type ProfileViewProps =
   | { status: 'loading' }
   | { status: 'error'; error?: string }
-  | { status: 'ready'; profile: Profile }
+  | { status: 'ready'; profile: Profile; onEdit?: () => void }
 
 function initialsOf(name: string): string {
   const words = name.trim().split(/\s+/)
@@ -39,7 +40,7 @@ export function ProfileView(props: ProfileViewProps) {
     return <FormAlert kind="error">{props.error ?? 'Something went wrong loading this profile.'}</FormAlert>
   }
 
-  const { profile } = props
+  const { profile, onEdit } = props
   const bio = profile.bio?.trim()
 
   return (
@@ -67,6 +68,11 @@ export function ProfileView(props: ProfileViewProps) {
           </div>
           <p className="text-xs text-zinc-400">Member since {formatMemberSince(profile.createdAt)}</p>
         </div>
+        {onEdit && (
+          <Button type="button" fullWidth={false} onClick={onEdit} className="px-4 py-2 text-sm sm:ml-auto">
+            Edit profile
+          </Button>
+        )}
       </div>
 
       <div className="mt-6 border-t border-zinc-100 pt-5">
