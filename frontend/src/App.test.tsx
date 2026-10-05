@@ -10,6 +10,11 @@ vi.mock('./services/authService', async (importOriginal) => ({
   getCurrentStudent: vi.fn(),
 }))
 
+vi.mock('./services/listingService', () => ({
+  getListings: vi.fn().mockResolvedValue([]),
+  getCategories: vi.fn().mockResolvedValue([]),
+}))
+
 vi.mock('./services/profileService', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./services/profileService')>()),
   getMyProfile: vi.fn(),
