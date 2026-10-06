@@ -5,14 +5,10 @@ import com.Handoff.backend.dto.UpdateProfileRequest;
 import com.Handoff.backend.dto.ErrorResponse;
 import com.Handoff.backend.model.Profile;
 import com.Handoff.backend.model.Student;
-import com.Handoff.backend.service.AuthService;
 import com.Handoff.backend.service.DuplicateProfileException;
-import com.Handoff.backend.service.NotAuthenticatedException;
 import com.Handoff.backend.service.ProfileAccessDeniedException;
-import com.Handoff.backend.service.ProfileNotFoundException;
 import com.Handoff.backend.service.ProfileService;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,8 +23,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Optional;
-
 /**
  * Controller exposing REST endpoints for student profile management.
  */
@@ -36,12 +30,14 @@ import java.util.Optional;
 @RequestMapping("/api/profiles")
 public class ProfileController {
 
-  private final ProfileService profileService;
-  private final AuthService authService;
+  private static final String NOT_AUTHENTICATED = "User must be authenticated to create a profile.";
 
-  public ProfileController(ProfileService profileService, AuthService authService) {
+  private final ProfileService profileService;
+  private final CurrentStudentResolver currentStudentResolver;
+
+  public ProfileController(ProfileService profileService, CurrentStudentResolver currentStudentResolver) {
     this.profileService = profileService;
-    this.authService = authService;
+    this.currentStudentResolver = currentStudentResolver;
   }
 
   /**
@@ -52,7 +48,7 @@ public class ProfileController {
    */
   @GetMapping("/me")
   public ResponseEntity<Profile> getMyProfile(HttpServletRequest httpRequest) {
-    Student student = currentStudent(httpRequest);
+    Student student = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED);
     Profile profile = profileService.getMyProfile(student);
     return ResponseEntity.ok(profile);
   }
@@ -68,7 +64,7 @@ public class ProfileController {
   public ResponseEntity<Profile> createProfile(@Valid @RequestBody CreateProfileRequest request,
                                                HttpServletRequest httpRequest) {
     // Authenticate and retrieve current session student
-    Student student = currentStudent(httpRequest);
+    Student student = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED);
 
     // Delegate creation to service layer
     Profile createdProfile = profileService.createProfile(
@@ -90,7 +86,7 @@ public class ProfileController {
    */
   @GetMapping("/{id}")
   public ResponseEntity<Profile> getProfileById(@PathVariable Long id, HttpServletRequest httpRequest) {
-    Student student = currentStudent(httpRequest);
+    Student student = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED);
     Profile profile = profileService.getProfileById(id, student);
     return ResponseEntity.ok(profile);
   }
@@ -107,27 +103,9 @@ public class ProfileController {
   public ResponseEntity<Profile> updateProfile(@PathVariable Long id, 
                                                @Valid @RequestBody UpdateProfileRequest request,
                                                HttpServletRequest httpRequest) {
-    Student student = currentStudent(httpRequest);
+    Student student = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED);
     Profile profile = profileService.updateProfile(id, student, request.name(), request.major(), request.bio());
     return ResponseEntity.ok(profile);
-  }
-
-  /**
-   * Helper method to extract the authenticated Student from the HTTP session.
-   */
-  private Student currentStudent(HttpServletRequest httpRequest) {
-    HttpSession session = httpRequest.getSession(false);
-    Long studentId = session != null ? (Long) session.getAttribute(SessionKeys.STUDENT_ID) : null;
-    return (studentId != null ? authService.findById(studentId) : Optional.<Student>empty())
-        .orElseThrow(() -> new NotAuthenticatedException("User must be authenticated to create a profile."));
-  }
-
-  /**
-   * Handles unauthenticated requests with HTTP 401.
-   */
-  @ExceptionHandler(NotAuthenticatedException.class)
-  public ResponseEntity<ErrorResponse> handleNotAuthenticated(NotAuthenticatedException ex) {
-    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse(ex.getMessage()));
   }
 
   /**
@@ -136,14 +114,6 @@ public class ProfileController {
   @ExceptionHandler(DuplicateProfileException.class)
   public ResponseEntity<ErrorResponse> handleDuplicateProfile(DuplicateProfileException ex) {
     return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(ex.getMessage()));
-  }
-
-  /**
-   * Handles profile not found with HTTP 404 Not Found.
-   */
-  @ExceptionHandler(ProfileNotFoundException.class)
-  public ResponseEntity<ErrorResponse> handleProfileNotFound(ProfileNotFoundException ex) {
-    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(ex.getMessage()));
   }
 
   /**
