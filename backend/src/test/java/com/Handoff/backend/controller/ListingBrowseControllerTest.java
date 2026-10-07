@@ -25,6 +25,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Exercises SSP1-90 through HTTP, the real service, and the test database so
+ * response metadata and database filtering are verified together.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
@@ -163,12 +167,14 @@ class ListingBrowseControllerTest {
   }
 
   private Student student(String name, String email, String domain) {
+    // Persist the tenant separately because production scoping reads Profile.schoolDomain.
     Student student = studentRepository.save(new Student(name, email, "hashed", null, null));
     profileRepository.save(new Profile(student, name, "Computer Science", null, domain));
     return student;
   }
 
   private MockHttpSession session(Student student) {
+    // Match the server-side session established by the existing authentication flow.
     MockHttpSession session = new MockHttpSession();
     session.setAttribute(SessionKeys.STUDENT_ID, student.getId());
     return session;
@@ -176,6 +182,7 @@ class ListingBrowseControllerTest {
 
   private Listing listing(Student seller, String name, String description, String price,
                           Category category, ListingStatus status, long seconds) {
+    // Fixed timestamps make pagination and ordering assertions deterministic.
     Listing listing = new Listing(name, description, new BigDecimal(price),
         Condition.GOOD, category, seller);
     listing.setStatus(status);

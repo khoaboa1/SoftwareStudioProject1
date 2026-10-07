@@ -12,16 +12,22 @@ import org.springframework.data.jpa.domain.Specification;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Builds one database predicate from the optional SSP1-90 browse filters. */
 public final class ListingSpecifications {
 
   private ListingSpecifications() {
   }
 
+  /**
+   * Combines tenant isolation, lifecycle visibility, keyword search, and
+   * attribute filters with AND so the page query and count query stay aligned.
+   */
   public static Specification<Listing> visibleBrowseResults(String schoolDomain,
                                                              ListingBrowseRequest request) {
     return (root, query, criteriaBuilder) -> {
       List<Predicate> predicates = new ArrayList<>();
 
+      // Derive tenancy from each seller's persisted profile; clients cannot override the domain.
       Subquery<Long> matchingProfile = query.subquery(Long.class);
       Root<Profile> profile = matchingProfile.from(Profile.class);
       matchingProfile.select(profile.get("id"));
@@ -36,6 +42,7 @@ public final class ListingSpecifications {
           criteriaBuilder.isNull(root.get("status"))));
 
       if (request.keyword() != null) {
+        // Escape SQL LIKE metacharacters so user input is matched as literal text.
         String escaped = escapeLike(request.keyword());
         String pattern = "%" + escaped + "%";
         predicates.add(criteriaBuilder.or(
@@ -56,6 +63,7 @@ public final class ListingSpecifications {
     };
   }
 
+  /** Escape the configured LIKE escape character before percent and underscore. */
   private static String escapeLike(String value) {
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
   }

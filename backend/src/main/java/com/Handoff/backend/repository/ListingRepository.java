@@ -9,6 +9,10 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * JpaSpecificationExecutor supports the optional SSP1-90 filters while the
+ * named queries below preserve the existing feed and detail behavior.
+ */
 public interface ListingRepository extends JpaRepository<Listing, Long>, JpaSpecificationExecutor<Listing> {
   /**
    * Match the seller's persisted profile by exact domain in the database.

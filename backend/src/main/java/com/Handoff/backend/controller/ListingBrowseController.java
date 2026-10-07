@@ -14,6 +14,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * HTTP boundary for the paginated marketplace browse API introduced by SSP1-90.
+ * The existing {@code /listings} controller remains unchanged for clients that
+ * still expect a bare JSON array.
+ */
 @RestController
 @RequestMapping("/api/listings")
 public class ListingBrowseController {
@@ -29,6 +34,10 @@ public class ListingBrowseController {
     this.currentStudentResolver = currentStudentResolver;
   }
 
+  /**
+   * Authenticates the requester, converts raw query strings into a validated
+   * request, and delegates all tenant-scoped database work to the service.
+   */
   @GetMapping
   public ListingPageResponse browse(
       @RequestParam(required = false) String q,
@@ -40,12 +49,15 @@ public class ListingBrowseController {
       @RequestParam(required = false) String page,
       @RequestParam(required = false) String limit,
       HttpServletRequest httpRequest) {
+    // Resolve identity from the server-side session before parsing or querying.
     Student requester = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED);
+    // Parsing in one DTO keeps defaults and validation consistent for every caller.
     ListingBrowseRequest browseRequest = ListingBrowseRequest.parse(
         q, category, minPrice, maxPrice, sortBy, sortOrder, page, limit);
     return listingService.browseListings(requester, browseRequest);
   }
 
+  /** Preserve the API's standard {"message": "..."} validation-error shape. */
   @ExceptionHandler(InvalidListingException.class)
   public ResponseEntity<ErrorResponse> handleInvalidRequest(InvalidListingException exception) {
     return ResponseEntity.badRequest().body(new ErrorResponse(exception.getMessage()));

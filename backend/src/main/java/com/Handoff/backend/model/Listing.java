@@ -33,6 +33,7 @@ public class Listing {
   @Enumerated(EnumType.STRING)
   private Category category;
 
+  // New listings are immediately browseable unless a future workflow changes their lifecycle.
   @Enumerated(EnumType.STRING)
   private ListingStatus status = ListingStatus.ACTIVE;
 

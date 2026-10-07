@@ -8,6 +8,11 @@ import java.math.BigDecimal;
 import java.util.Locale;
 import java.util.Map;
 
+/**
+ * Validated, normalized search criteria for the listings browse endpoint.
+ * Keeping parsing here prevents controller and repository layers from handling
+ * untrusted strings independently.
+ */
 public record ListingBrowseRequest(
     String keyword,
     Category category,
@@ -20,11 +25,13 @@ public record ListingBrowseRequest(
 
   private static final int MAX_LIMIT = 100;
   private static final int MAX_KEYWORD_LENGTH = 200;
+  // Map public API values to known entity properties; never pass arbitrary sort fields to JPA.
   private static final Map<String, String> SORT_FIELDS = Map.of(
       "createdAt", "createdAt",
       "price", "price",
       "itemName", "itemName");
 
+  /** Apply endpoint defaults and reject malformed or unsupported query values. */
   public static ListingBrowseRequest parse(String q, String category, String minPrice,
                                            String maxPrice, String sortBy, String sortOrder,
                                            String page, String limit) {
@@ -32,6 +39,7 @@ public record ListingBrowseRequest(
     Category parsedCategory = parseCategory(category);
     BigDecimal parsedMinPrice = parsePrice("minPrice", minPrice);
     BigDecimal parsedMaxPrice = parsePrice("maxPrice", maxPrice);
+    // Validate related fields after each value has been parsed independently.
     if (parsedMinPrice != null && parsedMaxPrice != null
         && parsedMinPrice.compareTo(parsedMaxPrice) > 0) {
       throw new InvalidListingException("minPrice cannot be greater than maxPrice");
@@ -44,6 +52,7 @@ public record ListingBrowseRequest(
     }
 
     Sort.Direction direction = parseSortDirection(sortOrder);
+    // The public API uses one-based pages; the service converts them for Spring Data.
     int parsedPage = parseInteger("page", page, 1);
     int parsedLimit = parseInteger("limit", limit, 20);
     if (parsedPage < 1) {
@@ -65,6 +74,7 @@ public record ListingBrowseRequest(
     if (value.length() > MAX_KEYWORD_LENGTH) {
       throw new InvalidListingException("q cannot exceed 200 characters");
     }
+    // Database predicates compare lower-case values for case-insensitive matching.
     return value.toLowerCase(Locale.ROOT);
   }
 
