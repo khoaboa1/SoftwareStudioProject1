@@ -4,9 +4,17 @@ import com.Handoff.backend.model.Category;
 import com.Handoff.backend.model.Condition;
 import com.Handoff.backend.model.Listing;
 import com.Handoff.backend.model.Student;
+import com.Handoff.backend.dto.ListingBrowseRequest;
+import com.Handoff.backend.dto.ListingPageResponse;
+import com.Handoff.backend.dto.ListingResponse;
 import com.Handoff.backend.repository.ListingRepository;
+import com.Handoff.backend.repository.ListingSpecifications;
 import com.Handoff.backend.repository.ProfileRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -28,6 +36,21 @@ public class ListingService {
     var profile = profileRepository.findByStudent_Id(requester.getId())
         .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
     return listingRepository.findBySchoolDomain(profile.getSchoolDomain());
+  }
+
+  @Transactional(readOnly = true)
+  public ListingPageResponse browseListings(Student requester, ListingBrowseRequest request) {
+    var profile = profileRepository.findByStudent_Id(requester.getId())
+        .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
+    Sort sort = Sort.by(request.sortDirection(), request.sortBy())
+        .and(Sort.by(request.sortDirection(), "id"));
+    PageRequest pageRequest = PageRequest.of(request.page() - 1, request.limit(), sort);
+    Page<Listing> result = listingRepository.findAll(
+        ListingSpecifications.visibleBrowseResults(profile.getSchoolDomain(), request), pageRequest);
+
+    List<ListingResponse> items = result.getContent().stream().map(ListingResponse::from).toList();
+    return new ListingPageResponse(items, new ListingPageResponse.Meta(
+        result.getTotalElements(), request.page(), result.getTotalPages(), request.limit()));
   }
 
   public Listing getListing(Long id, Student requester) {
