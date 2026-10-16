@@ -2,13 +2,18 @@ package com.Handoff.backend.repository;
 
 import com.Handoff.backend.model.Listing;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface ListingRepository extends JpaRepository<Listing, Long> {
+/**
+ * JpaSpecificationExecutor supports the optional SSP1-90 filters while the
+ * named queries below preserve the existing feed and detail behavior.
+ */
+public interface ListingRepository extends JpaRepository<Listing, Long>, JpaSpecificationExecutor<Listing> {
   /**
    * Match the seller's persisted profile by exact domain in the database.
    * EXISTS excludes sellers without profiles; fetching sellers also avoids per-item lookups

@@ -4,9 +4,17 @@ import com.Handoff.backend.model.Category;
 import com.Handoff.backend.model.Condition;
 import com.Handoff.backend.model.Listing;
 import com.Handoff.backend.model.Student;
+import com.Handoff.backend.dto.ListingBrowseRequest;
+import com.Handoff.backend.dto.ListingPageResponse;
+import com.Handoff.backend.dto.ListingResponse;
 import com.Handoff.backend.repository.ListingRepository;
+import com.Handoff.backend.repository.ListingSpecifications;
 import com.Handoff.backend.repository.ProfileRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -28,6 +36,29 @@ public class ListingService {
     var profile = profileRepository.findByStudent_Id(requester.getId())
         .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
     return listingRepository.findBySchoolDomain(profile.getSchoolDomain());
+  }
+
+  /**
+   * Runs the validated browse query inside a read-only transaction and maps the
+   * result to the API-owned response envelope while related seller data is available.
+   */
+  @Transactional(readOnly = true)
+  public ListingPageResponse browseListings(Student requester, ListingBrowseRequest request) {
+    // Resolve the school domain from the authenticated user's profile, never from a query parameter.
+    var profile = profileRepository.findByStudent_Id(requester.getId())
+        .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
+    // ID provides deterministic ordering when multiple listings share the requested sort value.
+    Sort sort = Sort.by(request.sortDirection(), request.sortBy())
+        .and(Sort.by(request.sortDirection(), "id"));
+    // Spring Data uses zero-based pages; the public contract uses one-based pages.
+    PageRequest pageRequest = PageRequest.of(request.page() - 1, request.limit(), sort);
+    Page<Listing> result = listingRepository.findAll(
+        ListingSpecifications.visibleBrowseResults(profile.getSchoolDomain(), request), pageRequest);
+
+    // Return explicit DTOs so persistence details and Page internals do not leak into JSON.
+    List<ListingResponse> items = result.getContent().stream().map(ListingResponse::from).toList();
+    return new ListingPageResponse(items, new ListingPageResponse.Meta(
+        result.getTotalElements(), request.page(), result.getTotalPages(), request.limit()));
   }
 
   public Listing getListing(Long id, Student requester) {

@@ -1,5 +1,16 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-90 Paginated Browse & Search API
+
+- **Endpoint:** `GET /api/listings` with optional `q`, `category`, `minPrice`, `maxPrice`, `sortBy`, `sortOrder`, `page`, and `limit` query parameters.
+- **Authentication:** Send the existing `JSESSIONID` cookie. Results are limited to sellers whose saved profile has the requester's exact `schoolDomain`.
+- **Defaults:** `page=1`, `limit=20`, `sortBy=createdAt`, and `sortOrder=desc`. `limit` must be 1–100. Supported sort fields are `createdAt`, `price`, and `itemName`.
+- **Filtering:** `q` is a trimmed, case-insensitive literal substring search over item name and description. Category matching is case-insensitive. Price bounds are inclusive. Supplied filters combine with AND.
+- **Visibility:** Only `ACTIVE` listings are returned. Existing rows without a lifecycle value are treated as active during migration. Draft, inactive, deleted, cross-school, and sellers without profiles are excluded.
+- **Success (200):** `{ "items": [<existing listing response>], "meta": { "totalItems": 1, "currentPage": 1, "totalPages": 1, "pageSize": 20 } }`. A positive page beyond the final page returns empty `items` with the actual totals.
+- **Errors:** `401` with `{ "message": "You must be logged in to view marketplace listings" }`; `404` with `{ "message": "Profile not found" }`; `400` with `{ "message": "..." }` for malformed prices/integers, invalid bounds, unsupported category/sort values, or pagination outside allowed bounds.
+- **Frontend constraints:** Send credentials, render `items`, and use `meta` to drive pagination. The existing `GET /listings` endpoint still returns a bare array for backward compatibility.
+
 ## Handoff Note: SSP1-78 Get Listing by ID
 
 - **Endpoint:** `GET /listings/{id}`; `id` is the listing's numeric ID. No request body or domain parameter is required.
@@ -329,5 +340,4 @@ Strict Insecure Direct Object Reference (IDOR) protection has been implemented f
 ### UI Constraints or Assumptions
 - When viewing or editing profile settings, the frontend should handle `403 Forbidden` by displaying an unauthorized access warning or navigating back to the student's own profile (`/api/profiles/me`).
 - If `404 Not Found` occurs on edit, prompt the student to create their profile.
-
 
