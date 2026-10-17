@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { Logo } from './Logo'
 import { Button } from './ui/Button'
 import { useAuth } from '../lib/auth-context'
-import { logout } from '../services/authService'
+import { createAuthFacade } from '../services/authFacade'
 
 function navLinkClass({ isActive }: { isActive: boolean }) {
   return `whitespace-nowrap text-sm font-medium ${isActive ? 'text-accent-700' : 'text-zinc-600 hover:text-zinc-900'}`
@@ -11,10 +11,10 @@ function navLinkClass({ isActive }: { isActive: boolean }) {
 export function AppHeader() {
   const navigate = useNavigate()
   const { student, setStudent } = useAuth()
+  const auth = createAuthFacade(setStudent)
 
   async function handleLogout() {
-    await logout()
-    setStudent(null)
+    await auth.signOut()
     navigate('/login')
   }
 
