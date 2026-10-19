@@ -5,12 +5,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Map;
 
 /** Google Apps Script webhook relay over HTTPS (port 443, works on campus Wi-Fi). */
 @Component
@@ -20,6 +22,7 @@ public class WebhookEmailSender implements EmailSender {
   private static final Logger logger = LoggerFactory.getLogger(WebhookEmailSender.class);
 
   private final String mailWebhookUrl;
+  private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
   public WebhookEmailSender(@Value("${mail.webhook.url:}") String mailWebhookUrl) {
     this.mailWebhookUrl = mailWebhookUrl;
@@ -31,10 +34,12 @@ public class WebhookEmailSender implements EmailSender {
       return false;
     }
     try {
-      String jsonPayload = String.format(
-          "{\"to\":\"%s\",\"subject\":\"Your Handoff Verification PIN: %s\",\"body\":\"Welcome to Handoff!\\n\\nYour 6-digit verification PIN is: %s\\n\\nThis PIN will expire in 15 minutes.\\n\\nBest,\\nThe Handoff Team\"}",
-          to, pin, pin
-      );
+      String jsonPayload = jsonMapper.writeValueAsString(Map.of(
+          "to", String.valueOf(to),
+          "subject", "Your Handoff Verification PIN: " + pin,
+          "body", "Welcome to Handoff!\n\nYour 6-digit verification PIN is: " + pin +
+              "\n\nThis PIN will expire in 15 minutes.\n\nBest,\nThe Handoff Team"
+      ));
 
       HttpClient client = HttpClient.newBuilder()
           .followRedirects(HttpClient.Redirect.ALWAYS)
