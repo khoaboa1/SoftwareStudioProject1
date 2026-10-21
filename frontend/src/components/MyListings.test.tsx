@@ -42,7 +42,7 @@ describe('MyListings', () => {
 
     renderMyListings()
 
-    expect(screen.getByText('Loading your listings…')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Loading listings')
   })
 
   it('shows only the listings posted by this seller', async () => {
@@ -108,7 +108,7 @@ describe('MyListings', () => {
 
     renderMyListings()
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Database unavailable')
+    expect(await screen.findByText('Database unavailable')).toBeInTheDocument()
   })
 
   it('shows a generic message when the request fails without an API error', async () => {
@@ -116,6 +116,6 @@ describe('MyListings', () => {
 
     renderMyListings()
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Could not load your listings.')
+    expect(await screen.findByText('Could not load your listings.')).toBeInTheDocument()
   })
 })

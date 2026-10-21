@@ -1,5 +1,12 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-84 Listing Thumbnails (Frontend → Backend)
+
+- **Feature summary:** Browse cards and the listing detail page reserve a 4:3 thumbnail slot. For now, they show a category icon placeholder.
+- **Request:** Add an optional `imageUrl: string | null` to listing responses from `GET /listings`, `GET /listings/{id}`, and `GET /api/listings`, plus a way to set it when creating or updating a listing.
+- **Frontend behavior:** Show the image when `imageUrl` is present; use the category placeholder when it is null. This is a future integration and does not block the current browse UI.
+- **Authentication:** No auth or session changes are needed.
+
 ## Handoff Note: SSP1-90 Paginated Browse & Search API
 
 - **Endpoint:** `GET /api/listings` with optional `q`, `category`, `minPrice`, `maxPrice`, `sortBy`, `sortOrder`, `page`, and `limit` query parameters.

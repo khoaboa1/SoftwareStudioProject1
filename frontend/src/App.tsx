@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './lib/auth-context'
 import { LoginPage } from './pages/LoginPage'
 import { SignupPage } from './pages/SignupPage'
 import { FeedPage } from './pages/FeedPage'
+import { ListingDetailPage } from './pages/ListingDetailPage'
 import { ProfileSetupPage } from './pages/ProfileSetupPage'
 import { ProfilePage } from './pages/ProfilePage'
 
@@ -57,6 +58,14 @@ function App() {
           element={
             <RequireAuth>
               <FeedPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/listings/:id"
+          element={
+            <RequireAuth>
+              <ListingDetailPage />
             </RequireAuth>
           }
         />

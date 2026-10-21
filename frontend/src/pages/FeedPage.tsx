@@ -3,6 +3,9 @@ import { AppHeader } from '../components/AppHeader'
 import { Button } from '../components/ui/Button'
 import { FormAlert } from '../components/ui/FormAlert'
 import { ListingCard } from '../components/ListingCard'
+import { ListingGrid } from '../components/ListingGrid'
+import { ListingGridSkeleton } from '../components/ListingCardSkeleton'
+import { ListingsEmptyState } from '../components/ListingsEmptyState'
 import { ListingForm } from '../components/ListingForm'
 import { useAuth } from '../lib/auth-context'
 import { ApiError } from '../services/authService'
@@ -27,11 +30,16 @@ function resetFormDefaults() {
   }
 }
 
+type FeedState =
+  | { status: 'loading' }
+  | { status: 'error'; error: string }
+  | { status: 'ready'; listings: Listing[] }
+
 export function FeedPage() {
   const { student } = useAuth()
-  const [listings, setListings] = useState<Listing[]>([])
+  const [feedState, setFeedState] = useState<FeedState>({ status: 'loading' })
   const [categoryOptions, setCategoryOptions] = useState<Category[]>([])
-  const [feedError, setFeedError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingListingId, setEditingListingId] = useState<number | null>(null)
 
@@ -45,9 +53,9 @@ export function FeedPage() {
 
   useEffect(() => {
     getListings()
-      .then(setListings)
+      .then((listings) => setFeedState({ status: 'ready', listings }))
       .catch((error: unknown) => {
-        setFeedError(error instanceof ApiError ? error.message : 'Could not load the feed.')
+        setFeedState({ status: 'error', error: error instanceof ApiError ? error.message : 'Could not load the feed.' })
       })
 
     getCategories()
@@ -109,10 +117,14 @@ export function FeedPage() {
     try {
       if (editingListingId !== null) {
         const updated = await updateListing(editingListingId, input)
-        setListings((current) => current.map((listing) => (listing.id === updated.id ? updated : listing)))
+        setFeedState((current) => current.status === 'ready'
+          ? { status: 'ready', listings: current.listings.map((listing) => (listing.id === updated.id ? updated : listing)) }
+          : current)
       } else {
         const created = await createListing(input)
-        setListings((current) => [created, ...current])
+        setFeedState((current) => current.status === 'ready'
+          ? { status: 'ready', listings: [created, ...current.listings] }
+          : current)
       }
       setShowForm(false)
       setEditingListingId(null)
@@ -131,9 +143,11 @@ export function FeedPage() {
 
   function handleDelete(id: number) {
     deleteListing(id)
-      .then(() => setListings((current) => current.filter((listing) => listing.id !== id)))
+      .then(() => setFeedState((current) => current.status === 'ready'
+        ? { status: 'ready', listings: current.listings.filter((listing) => listing.id !== id) }
+        : current))
       .catch((error: unknown) => {
-        setFeedError(error instanceof ApiError ? error.message : 'Could not delete the listing.')
+        setActionError(error instanceof ApiError ? error.message : 'Could not delete the listing.')
       })
   }
 
@@ -141,7 +155,7 @@ export function FeedPage() {
     <div className="min-h-dvh bg-zinc-50">
       <AppHeader />
 
-      <main className="mx-auto max-w-5xl px-4 py-8">
+      <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-xl font-semibold text-zinc-900">Campus Marketplace</h1>
           <Button
@@ -174,13 +188,14 @@ export function FeedPage() {
           />
         )}
 
-        {feedError && <FormAlert kind="error">{feedError}</FormAlert>}
+        {actionError && <FormAlert kind="error">{actionError}</FormAlert>}
 
-        {listings.length === 0 && !feedError ? (
-          <p className="text-sm text-zinc-500">No listings yet. Be the first to post one!</p>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {listings.map((listing) => (
+        {feedState.status === 'loading' && <ListingGridSkeleton />}
+        {feedState.status === 'error' && <FormAlert kind="error">{feedState.error}</FormAlert>}
+        {feedState.status === 'ready' && feedState.listings.length === 0 && <ListingsEmptyState />}
+        {feedState.status === 'ready' && feedState.listings.length > 0 && (
+          <ListingGrid>
+            {feedState.listings.map((listing) => (
               <ListingCard
                 key={listing.id}
                 listing={listing}
@@ -188,7 +203,7 @@ export function FeedPage() {
                 onDelete={listing.sellerId === student?.id ? () => handleDelete(listing.id) : undefined}
               />
             ))}
-          </div>
+          </ListingGrid>
         )}
       </main>
     </div>
