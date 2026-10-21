@@ -19,6 +19,10 @@ export function getListings(): Promise<Listing[]> {
   return request<Listing[]>('/listings')
 }
 
+export function getListing(id: number): Promise<Listing> {
+  return request<Listing>(`/listings/${id}`)
+}
+
 export function getCategories(): Promise<Category[]> {
   return request<Category[]>('/listings/categories')
 }

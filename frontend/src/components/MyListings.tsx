@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ListingCard } from './ListingCard'
+import { ListingGrid } from './ListingGrid'
+import { ListingGridSkeleton } from './ListingCardSkeleton'
 import { FormAlert } from './ui/FormAlert'
 import { ApiError } from '../services/httpClient'
 import { getListings, type Listing } from '../services/listingService'
@@ -45,7 +47,7 @@ export function MyListings({ sellerId }: { sellerId: number }) {
         {state.status === 'ready' ? `My listings (${state.listings.length})` : 'My listings'}
       </h2>
 
-      {state.status === 'loading' && <p className="text-sm text-zinc-500">Loading your listings…</p>}
+      {state.status === 'loading' && <ListingGridSkeleton count={2} />}
 
       {state.status === 'error' && <FormAlert kind="error">{state.error}</FormAlert>}
 
@@ -59,11 +61,11 @@ export function MyListings({ sellerId }: { sellerId: number }) {
       )}
 
       {state.status === 'ready' && state.listings.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <ListingGrid>
           {state.listings.map((listing) => (
             <ListingCard key={listing.id} listing={listing} />
           ))}
-        </div>
+        </ListingGrid>
       )}
     </section>
   )
