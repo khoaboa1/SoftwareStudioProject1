@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { AppHeader } from '../components/AppHeader'
 import { Button } from '../components/ui/Button'
 import { FormAlert } from '../components/ui/FormAlert'
@@ -7,6 +8,7 @@ import { ListingGrid } from '../components/ListingGrid'
 import { ListingGridSkeleton } from '../components/ListingCardSkeleton'
 import { ListingsEmptyState } from '../components/ListingsEmptyState'
 import { ListingForm } from '../components/ListingForm'
+import { SearchBar } from '../components/SearchBar'
 import { useAuth } from '../lib/auth-context'
 import { ApiError } from '../services/authService'
 import {
@@ -14,6 +16,7 @@ import {
   deleteListing,
   getCategories,
   getListings,
+  searchListings,
   updateListing,
   type Category,
   type Condition,
@@ -37,6 +40,8 @@ type FeedState =
 
 export function FeedPage() {
   const { student } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const query = (searchParams.get('q') ?? '').trim()
   const [feedState, setFeedState] = useState<FeedState>({ status: 'loading' })
   const [categoryOptions, setCategoryOptions] = useState<Category[]>([])
   const [actionError, setActionError] = useState<string | null>(null)
@@ -52,12 +57,6 @@ export function FeedPage() {
   const [formError, setFormError] = useState<string | null>(null)
 
   useEffect(() => {
-    getListings()
-      .then((listings) => setFeedState({ status: 'ready', listings }))
-      .catch((error: unknown) => {
-        setFeedState({ status: 'error', error: error instanceof ApiError ? error.message : 'Could not load the feed.' })
-      })
-
     getCategories()
       .then(setCategoryOptions)
       .catch(() => {
@@ -65,6 +64,34 @@ export function FeedPage() {
         // still works, it just has no options until this succeeds on retry.
       })
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    // oxlint-disable-next-line react/set-state-in-effect -- A new query must show the loading skeleton immediately.
+    setFeedState({ status: 'loading' })
+    const listingsRequest = query
+      ? searchListings({ q: query, limit: 100 }).then((page) => page.items)
+      : getListings()
+
+    listingsRequest
+      .then((listings) => {
+        if (!cancelled) setFeedState({ status: 'ready', listings })
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setFeedState({ status: 'error', error: error instanceof ApiError ? error.message : 'Could not load the feed.' })
+      })
+
+    return () => { cancelled = true }
+  }, [query])
+
+  function handleSearch(term: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (term) next.set('q', term)
+      else next.delete('q')
+      return next
+    }, { replace: true })
+  }
 
   function toggleCreateForm() {
     if (showForm) {
@@ -167,6 +194,8 @@ export function FeedPage() {
             {showForm ? 'Cancel' : 'Post a listing'}
           </Button>
         </div>
+
+        <SearchBar value={query} onSearch={handleSearch} />
 
         {showForm && (
           <ListingForm
