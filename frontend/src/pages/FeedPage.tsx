@@ -8,21 +8,23 @@ import { ListingGrid } from '../components/ListingGrid'
 import { ListingGridSkeleton } from '../components/ListingCardSkeleton'
 import { ListingsEmptyState } from '../components/ListingsEmptyState'
 import { ListingForm } from '../components/ListingForm'
+import { Pagination } from '../components/Pagination'
+import { FeedError } from '../components/FeedError'
 import { SearchBar } from '../components/SearchBar'
 import { FilterBar } from '../components/FilterBar'
-import { isBrowseActive, parseBrowseParams, toSearchParams } from '../lib/browseParams'
+import { parseBrowseParams, toSearchParams } from '../lib/browseParams'
 import { useAuth } from '../lib/auth-context'
 import { ApiError } from '../services/authService'
 import {
   createListing,
   deleteListing,
   getCategories,
-  getListings,
   searchListings,
   updateListing,
   type Category,
   type Condition,
   type Listing,
+  type ListingPage,
 } from '../services/listingService'
 
 function resetFormDefaults() {
@@ -37,8 +39,8 @@ function resetFormDefaults() {
 
 type FeedState =
   | { status: 'loading' }
-  | { status: 'error'; error: string }
-  | { status: 'ready'; listings: Listing[] }
+  | { status: 'error' }
+  | { status: 'ready'; listings: Listing[]; meta: ListingPage['meta'] }
 
 export function FeedPage() {
   const { student } = useAuth()
@@ -46,6 +48,7 @@ export function FeedPage() {
   const filters = useMemo(() => parseBrowseParams(searchParams), [searchParams])
   const filtersKey = JSON.stringify(filters)
   const [feedState, setFeedState] = useState<FeedState>({ status: 'loading' })
+  const [reloadToken, setReloadToken] = useState(0)
   const [clearVersion, setClearVersion] = useState(0)
   const [categoryOptions, setCategoryOptions] = useState<Category[]>([])
   const [actionError, setActionError] = useState<string | null>(null)
@@ -73,21 +76,22 @@ export function FeedPage() {
     let cancelled = false
     // oxlint-disable-next-line react/set-state-in-effect -- New filters must show the loading skeleton immediately.
     setFeedState({ status: 'loading' })
-    const listingsRequest = isBrowseActive(filters)
-      ? searchListings(toSearchParams(filters)).then((page) => page.items)
-      : getListings()
-
-    listingsRequest
-      .then((listings) => {
-        if (!cancelled) setFeedState({ status: 'ready', listings })
+    searchListings(toSearchParams(filters))
+      .then(({ items, meta }) => {
+        if (cancelled) return
+        if (items.length === 0 && meta.totalPages > 0 && filters.page > meta.totalPages) {
+          updateParams({ page: meta.totalPages > 1 ? String(meta.totalPages) : null })
+          return
+        }
+        setFeedState({ status: 'ready', listings: items, meta })
       })
-      .catch((error: unknown) => {
-        if (!cancelled) setFeedState({ status: 'error', error: error instanceof ApiError ? error.message : 'Could not load the feed.' })
+      .catch(() => {
+        if (!cancelled) setFeedState({ status: 'error' })
       })
 
     return () => { cancelled = true }
   // oxlint-disable-next-line react-hooks/exhaustive-deps -- The serialized parsed filters are the request key.
-  }, [filtersKey])
+  }, [filtersKey, reloadToken])
 
   function updateParams(patch: Record<string, string | null>) {
     setSearchParams((prev) => {
@@ -96,8 +100,14 @@ export function FeedPage() {
         if (value === null) next.delete(key)
         else next.set(key, value)
       }
+      if (!('page' in patch)) next.delete('page')
       return next
     }, { replace: true })
+  }
+
+  function handlePageChange(page: number) {
+    updateParams({ page: page > 1 ? String(page) : null })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function handleSearch(term: string) {
@@ -159,16 +169,11 @@ export function FeedPage() {
 
     try {
       if (editingListingId !== null) {
-        const updated = await updateListing(editingListingId, input)
-        setFeedState((current) => current.status === 'ready'
-          ? { status: 'ready', listings: current.listings.map((listing) => (listing.id === updated.id ? updated : listing)) }
-          : current)
+        await updateListing(editingListingId, input)
       } else {
-        const created = await createListing(input)
-        setFeedState((current) => current.status === 'ready'
-          ? { status: 'ready', listings: [created, ...current.listings] }
-          : current)
+        await createListing(input)
       }
+      setReloadToken((t) => t + 1)
       setShowForm(false)
       setEditingListingId(null)
       const defaults = resetFormDefaults()
@@ -186,9 +191,7 @@ export function FeedPage() {
 
   function handleDelete(id: number) {
     deleteListing(id)
-      .then(() => setFeedState((current) => current.status === 'ready'
-        ? { status: 'ready', listings: current.listings.filter((listing) => listing.id !== id) }
-        : current))
+      .then(() => setReloadToken((t) => t + 1))
       .catch((error: unknown) => {
         setActionError(error instanceof ApiError ? error.message : 'Could not delete the listing.')
       })
@@ -237,19 +240,22 @@ export function FeedPage() {
         {actionError && <FormAlert kind="error">{actionError}</FormAlert>}
 
         {feedState.status === 'loading' && <ListingGridSkeleton />}
-        {feedState.status === 'error' && <FormAlert kind="error">{feedState.error}</FormAlert>}
+        {feedState.status === 'error' && <FeedError onRetry={() => setReloadToken((t) => t + 1)} />}
         {feedState.status === 'ready' && feedState.listings.length === 0 && <ListingsEmptyState />}
         {feedState.status === 'ready' && feedState.listings.length > 0 && (
-          <ListingGrid>
-            {feedState.listings.map((listing) => (
-              <ListingCard
-                key={listing.id}
-                listing={listing}
-                onEdit={listing.sellerId === student?.id ? () => openEditForm(listing) : undefined}
-                onDelete={listing.sellerId === student?.id ? () => handleDelete(listing.id) : undefined}
-              />
-            ))}
-          </ListingGrid>
+          <>
+            <ListingGrid>
+              {feedState.listings.map((listing) => (
+                <ListingCard
+                  key={listing.id}
+                  listing={listing}
+                  onEdit={listing.sellerId === student?.id ? () => openEditForm(listing) : undefined}
+                  onDelete={listing.sellerId === student?.id ? () => handleDelete(listing.id) : undefined}
+                />
+              ))}
+            </ListingGrid>
+            <Pagination currentPage={feedState.meta.currentPage} totalPages={feedState.meta.totalPages} totalItems={feedState.meta.totalItems} onPageChange={handlePageChange} />
+          </>
         )}
       </main>
     </div>

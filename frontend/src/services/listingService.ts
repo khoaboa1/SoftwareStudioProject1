@@ -32,6 +32,7 @@ export type SearchListingsParams = {
   maxPrice?: number
   sortBy?: 'createdAt' | 'price' | 'itemName'
   sortOrder?: 'asc' | 'desc'
+  page?: number
   limit?: number
 }
 
@@ -43,6 +44,7 @@ export function searchListings(params: SearchListingsParams): Promise<ListingPag
   if (params.maxPrice !== undefined) query.set('maxPrice', String(params.maxPrice))
   if (params.sortBy !== undefined) query.set('sortBy', params.sortBy)
   if (params.sortOrder !== undefined) query.set('sortOrder', params.sortOrder)
+  if (params.page !== undefined) query.set('page', String(params.page))
   if (params.limit !== undefined) query.set('limit', String(params.limit))
   return request<ListingPage>(`/api/listings?${query}`)
 }
