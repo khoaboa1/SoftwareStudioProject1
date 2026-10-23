@@ -27,6 +27,13 @@ describe('ListingsEmptyState', () => {
     expect(screen.queryByRole('button', { name: 'Clear Filters' })).not.toBeInTheDocument()
   })
 
+  it('does not treat the page number as a filter', () => {
+    renderEmptyState('/feed?page=2')
+
+    expect(screen.getByText('No listings yet. Be the first to post one!')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Clear Filters' })).not.toBeInTheDocument()
+  })
+
   it('shows Clear Filters when filters are in the URL', () => {
     renderEmptyState('/feed?q=lamp&category=DECOR')
 

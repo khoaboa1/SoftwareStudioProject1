@@ -4,7 +4,8 @@ import { Button } from './ui/Button'
 
 export function ListingsEmptyState() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const hasFilters = searchParams.size > 0
+  // The page number alone isn't a filter, so it shouldn't offer "Clear Filters".
+  const hasFilters = [...searchParams.keys()].some((key) => key !== 'page')
   const Icon = hasFilters ? MagnifyingGlass : Package
 
   return (
