@@ -15,6 +15,23 @@ export type Listing = {
   createdAt: string
 }
 
+export type ListingPage = {
+  items: Listing[]
+  meta: {
+    totalItems: number
+    currentPage: number
+    totalPages: number
+    pageSize: number
+  }
+}
+
+export function searchListings(params: { q?: string; limit?: number }): Promise<ListingPage> {
+  const query = new URLSearchParams()
+  if (params.q !== undefined) query.set('q', params.q)
+  if (params.limit !== undefined) query.set('limit', String(params.limit))
+  return request<ListingPage>(`/api/listings?${query}`)
+}
+
 export function getListings(): Promise<Listing[]> {
   return request<Listing[]>('/listings')
 }
