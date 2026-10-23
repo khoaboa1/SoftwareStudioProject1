@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AppHeader } from '../components/AppHeader'
 import { Button } from '../components/ui/Button'
@@ -9,6 +9,8 @@ import { ListingGridSkeleton } from '../components/ListingCardSkeleton'
 import { ListingsEmptyState } from '../components/ListingsEmptyState'
 import { ListingForm } from '../components/ListingForm'
 import { SearchBar } from '../components/SearchBar'
+import { FilterBar } from '../components/FilterBar'
+import { isBrowseActive, parseBrowseParams, toSearchParams } from '../lib/browseParams'
 import { useAuth } from '../lib/auth-context'
 import { ApiError } from '../services/authService'
 import {
@@ -41,8 +43,10 @@ type FeedState =
 export function FeedPage() {
   const { student } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
-  const query = (searchParams.get('q') ?? '').trim()
+  const filters = useMemo(() => parseBrowseParams(searchParams), [searchParams])
+  const filtersKey = JSON.stringify(filters)
   const [feedState, setFeedState] = useState<FeedState>({ status: 'loading' })
+  const [clearVersion, setClearVersion] = useState(0)
   const [categoryOptions, setCategoryOptions] = useState<Category[]>([])
   const [actionError, setActionError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -67,10 +71,10 @@ export function FeedPage() {
 
   useEffect(() => {
     let cancelled = false
-    // oxlint-disable-next-line react/set-state-in-effect -- A new query must show the loading skeleton immediately.
+    // oxlint-disable-next-line react/set-state-in-effect -- New filters must show the loading skeleton immediately.
     setFeedState({ status: 'loading' })
-    const listingsRequest = query
-      ? searchListings({ q: query, limit: 100 }).then((page) => page.items)
+    const listingsRequest = isBrowseActive(filters)
+      ? searchListings(toSearchParams(filters)).then((page) => page.items)
       : getListings()
 
     listingsRequest
@@ -82,15 +86,27 @@ export function FeedPage() {
       })
 
     return () => { cancelled = true }
-  }, [query])
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- The serialized parsed filters are the request key.
+  }, [filtersKey])
 
-  function handleSearch(term: string) {
+  function updateParams(patch: Record<string, string | null>) {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev)
-      if (term) next.set('q', term)
-      else next.delete('q')
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === null) next.delete(key)
+        else next.set(key, value)
+      }
       return next
     }, { replace: true })
+  }
+
+  function handleSearch(term: string) {
+    updateParams({ q: term || null })
+  }
+
+  function handleClearAll() {
+    setClearVersion((version) => version + 1)
+    setSearchParams({}, { replace: true })
   }
 
   function toggleCreateForm() {
@@ -195,7 +211,8 @@ export function FeedPage() {
           </Button>
         </div>
 
-        <SearchBar value={query} onSearch={handleSearch} />
+        <SearchBar key={`search-${clearVersion}`} value={filters.q} onSearch={handleSearch} />
+        <FilterBar key={`filter-${clearVersion}`} filters={filters} onChange={updateParams} onClear={handleClearAll} />
 
         {showForm && (
           <ListingForm

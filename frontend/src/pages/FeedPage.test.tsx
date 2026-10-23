@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -107,7 +107,7 @@ describe('FeedPage', () => {
     renderFeed('/feed?q=lamp')
 
     expect(await screen.findByText('Desk Lamp')).toBeInTheDocument()
-    expect(searchListings).toHaveBeenCalledWith({ q: 'lamp', limit: 100 })
+    expect(searchListings).toHaveBeenCalledWith({ q: 'lamp', sortBy: 'createdAt', sortOrder: 'desc', limit: 100 })
     expect(getListings).not.toHaveBeenCalled()
     expect(screen.getByRole('searchbox', { name: 'Search listings' })).toHaveValue('lamp')
   })
@@ -128,7 +128,7 @@ describe('FeedPage', () => {
     await userEvent.setup().type(screen.getByRole('searchbox', { name: 'Search listings' }), 'chair')
 
     expect(await screen.findByText('/feed?q=chair', { selector: 'span' }, { timeout: 1000 })).toBeInTheDocument()
-    expect(searchListings).toHaveBeenCalledWith({ q: 'chair', limit: 100 })
+    expect(searchListings).toHaveBeenCalledWith({ q: 'chair', sortBy: 'createdAt', sortOrder: 'desc', limit: 100 })
   })
 
   it('keeps other query params when searching', async () => {
@@ -171,5 +171,87 @@ describe('FeedPage', () => {
     expect(await screen.findByText('Bookshelf')).toBeInTheDocument()
     await act(async () => { resolveFirst(page([listing(1, 'Old Result')])) })
     expect(screen.queryByText('Old Result')).not.toBeInTheDocument()
+  })
+
+  it('restores every control from the URL', async () => {
+    vi.mocked(searchListings).mockResolvedValue(page([]))
+    renderFeed('/feed?q=desk&category=furniture&minPrice=10&maxPrice=50&sort=price_asc')
+
+    expect(screen.getByRole('searchbox', { name: 'Search listings' })).toHaveValue('desk')
+    expect(screen.getByRole('combobox', { name: 'Category' })).toHaveValue('furniture')
+    expect(screen.getByRole('spinbutton', { name: 'Min price' })).toHaveValue(10)
+    expect(screen.getByRole('spinbutton', { name: 'Max price' })).toHaveValue(50)
+    expect(screen.getByRole('combobox', { name: 'Sort by' })).toHaveValue('price_asc')
+    await waitFor(() => expect(searchListings).toHaveBeenCalledWith({
+      q: 'desk', category: 'FURNITURE', minPrice: 10, maxPrice: 50,
+      sortBy: 'price', sortOrder: 'asc', limit: 100,
+    }))
+    expect(getListings).not.toHaveBeenCalled()
+  })
+
+  it('sorting keeps the keyword and category and reorders immediately', async () => {
+    const first = [listing(1, 'A'), listing(2, 'B')]
+    first[0].price = 30
+    vi.mocked(searchListings).mockResolvedValueOnce(page(first)).mockResolvedValueOnce(page([first[1], first[0]]))
+    renderFeed('/feed?q=lamp&category=decor')
+    expect(await screen.findByRole('link', { name: 'A' })).toBeInTheDocument()
+
+    await userEvent.setup().selectOptions(screen.getByRole('combobox', { name: 'Sort by' }), 'price_asc')
+    expect(screen.getByTestId('location')).toHaveTextContent('q=lamp')
+    expect(screen.getByTestId('location')).toHaveTextContent('category=decor')
+    expect(screen.getByTestId('location')).toHaveTextContent('sort=price_asc')
+    await waitFor(() => expect(searchListings).toHaveBeenLastCalledWith({
+      q: 'lamp', category: 'DECOR', sortBy: 'price', sortOrder: 'asc', limit: 100,
+    }))
+    await waitFor(() => expect(screen.getAllByRole('link', { name: /^[AB]$/ }).map((link) => link.textContent)).toEqual(['B', 'A']))
+  })
+
+  it('choosing a category alone uses the search API', async () => {
+    vi.mocked(getListings).mockResolvedValue([])
+    vi.mocked(searchListings).mockResolvedValue(page([]))
+    renderFeed()
+    await userEvent.setup().selectOptions(screen.getByRole('combobox', { name: 'Category' }), 'furniture')
+    expect(screen.getByTestId('location')).toHaveTextContent('/feed?category=furniture')
+    await waitFor(() => expect(searchListings).toHaveBeenCalledWith({
+      category: 'FURNITURE', sortBy: 'createdAt', sortOrder: 'desc', limit: 100,
+    }))
+  })
+
+  it('ignores garbage params', async () => {
+    vi.mocked(getListings).mockResolvedValue([])
+    renderFeed('/feed?category=banana&minPrice=abc&sort=xyz')
+    await waitFor(() => expect(getListings).toHaveBeenCalled())
+    expect(searchListings).not.toHaveBeenCalled()
+    expect(screen.getByRole('combobox', { name: 'Category' })).toHaveValue('')
+  })
+
+  it('Clear filters resets everything including the search box', async () => {
+    vi.mocked(searchListings).mockResolvedValue(page([]))
+    vi.mocked(getListings).mockResolvedValue([])
+    renderFeed('/feed?q=desk&category=furniture&sort=price_desc')
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/feed')
+    expect(screen.getByRole('searchbox', { name: 'Search listings' })).toHaveValue('')
+    expect(screen.getByRole('combobox', { name: 'Category' })).toHaveValue('')
+    expect(screen.getByRole('combobox', { name: 'Sort by' })).toHaveValue('newest')
+  })
+
+  it('Clear filters cancels pending keyword and price changes', async () => {
+    vi.mocked(searchListings).mockResolvedValue(page([]))
+    vi.mocked(getListings).mockResolvedValue([])
+    renderFeed('/feed?category=decor')
+    await screen.findByText('No listings match your filters')
+    vi.useFakeTimers()
+    try {
+      fireEvent.change(screen.getByRole('searchbox', { name: 'Search listings' }), { target: { value: 'lamp' } })
+      fireEvent.change(screen.getByRole('spinbutton', { name: 'Min price' }), { target: { value: '15' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+      act(() => vi.advanceTimersByTime(400))
+      expect(screen.getByTestId('location')).toHaveTextContent('/feed')
+      expect(screen.getByRole('searchbox', { name: 'Search listings' })).toHaveValue('')
+      expect(screen.getByRole('spinbutton', { name: 'Min price' })).toHaveValue(null)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
