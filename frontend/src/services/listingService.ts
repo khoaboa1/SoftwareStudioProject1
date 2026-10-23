@@ -25,9 +25,24 @@ export type ListingPage = {
   }
 }
 
-export function searchListings(params: { q?: string; limit?: number }): Promise<ListingPage> {
+export type SearchListingsParams = {
+  q?: string
+  category?: Category
+  minPrice?: number
+  maxPrice?: number
+  sortBy?: 'createdAt' | 'price' | 'itemName'
+  sortOrder?: 'asc' | 'desc'
+  limit?: number
+}
+
+export function searchListings(params: SearchListingsParams): Promise<ListingPage> {
   const query = new URLSearchParams()
   if (params.q !== undefined) query.set('q', params.q)
+  if (params.category !== undefined) query.set('category', params.category)
+  if (params.minPrice !== undefined) query.set('minPrice', String(params.minPrice))
+  if (params.maxPrice !== undefined) query.set('maxPrice', String(params.maxPrice))
+  if (params.sortBy !== undefined) query.set('sortBy', params.sortBy)
+  if (params.sortOrder !== undefined) query.set('sortOrder', params.sortOrder)
   if (params.limit !== undefined) query.set('limit', String(params.limit))
   return request<ListingPage>(`/api/listings?${query}`)
 }
