@@ -4,19 +4,20 @@ import com.Handoff.backend.model.Category;
 import com.Handoff.backend.model.Condition;
 import com.Handoff.backend.model.Listing;
 import com.Handoff.backend.model.Student;
+import com.Handoff.backend.dto.CreateListingRequest;
 import com.Handoff.backend.dto.ListingBrowseRequest;
 import com.Handoff.backend.dto.ListingPageResponse;
 import com.Handoff.backend.dto.ListingResponse;
 import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.ListingSpecifications;
 import com.Handoff.backend.repository.ProfileRepository;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 @Service
@@ -68,44 +69,43 @@ public class ListingService {
         .orElseThrow(ListingNotFoundException::new);
   }
 
-  public Listing createListing(Student seller, String itemName, String description,
-                                BigDecimal price, String conditionRaw, String categoryRaw) {
-    if (itemName == null || itemName.isBlank()) {
+  // Validate item to create list.
+  private void validateListing(CreateListingRequest request) {
+    if (request.itemName() == null || request.itemName().isBlank()) {
       throw new InvalidListingException("Item name is required");
     }
-    if (description == null || description.isBlank()) {
+    if (request.description() == null || request.description().isBlank()) {
       throw new InvalidListingException("Description is required");
     }
-    if (price == null || price.signum() <= 0) {
+    if (request.price() == null || request.price().signum() <= 0) {
       throw new InvalidListingException("Price must be greater than zero");
     }
-    Condition condition = parseEnum(Condition.class, conditionRaw, "condition");
-    Category category = parseEnum(Category.class, categoryRaw, "category");
-
-    return listingRepository.save(new Listing(itemName, description, price, condition, category, seller));
   }
 
-  public Listing updateListing(Long listingId, Student requester, String itemName, String description,
-                                BigDecimal price, String conditionRaw, String categoryRaw) {
+  public Listing createListing(Student seller, CreateListingRequest request) {
+    validateListing(request);
+
+    Condition condition = parseEnum(Condition.class, request.condition(), "condition");
+    Category category = parseEnum(Category.class, request.category(), "category");
+
+    Listing newListing = new Listing(request.itemName(), request.description(), request.price(), condition, category, seller);
+
+    return listingRepository.save(newListing);
+  }
+
+  public Listing updateListing(Long listingId, Student requester, CreateListingRequest request) {
     Listing listing = getOwnedListing(listingId, requester);
+    validateListing(request);
 
-    if (itemName == null || itemName.isBlank()) {
-      throw new InvalidListingException("Item name is required");
-    }
-    if (description == null || description.isBlank()) {
-      throw new InvalidListingException("Description is required");
-    }
-    if (price == null || price.signum() <= 0) {
-      throw new InvalidListingException("Price must be greater than zero");
-    }
-    Condition condition = parseEnum(Condition.class, conditionRaw, "condition");
-    Category category = parseEnum(Category.class, categoryRaw, "category");
+    Condition condition = parseEnum(Condition.class, request.condition(), "condition");
+    Category category = parseEnum(Category.class, request.category(), "category");
 
-    listing.setItemName(itemName);
-    listing.setDescription(description);
-    listing.setPrice(price);
+    listing.setItemName(request.itemName());
+    listing.setDescription(request.description());
+    listing.setPrice(request.price());
     listing.setCondition(condition);
     listing.setCategory(category);
+
     return listingRepository.save(listing);
   }
 
