@@ -1,18 +1,18 @@
 import { type FormEvent, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AuthCard } from '../components/AuthCard'
+import { PinVerificationStep } from '../components/PinVerificationStep'
 import { Button } from '../components/ui/Button'
 import { FormAlert } from '../components/ui/FormAlert'
 import { TextField } from '../components/ui/TextField'
 import { validateEmail, validatePassword } from '../lib/validation'
-import { ApiError, resendPin } from '../services/authService'
+import { ApiError } from '../services/authService'
 import { createAuthFacade } from '../services/authFacade'
 import { useAuth } from '../lib/auth-context'
 
 type FieldErrors = {
   email?: string
   password?: string
-  pin?: string
 }
 
 export function LoginPage() {
@@ -21,12 +21,10 @@ export function LoginPage() {
   const auth = createAuthFacade(setStudent)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [pin, setPin] = useState('')
 
   const [step, setStep] = useState<'form' | 'verify_pin'>('form')
   const [errors, setErrors] = useState<FieldErrors>({})
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
-  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent'>('idle')
   const [serverError, setServerError] = useState<string | null>(null)
   const [promptMessage, setPromptMessage] = useState<string | null>(null)
 
@@ -61,51 +59,19 @@ export function LoginPage() {
     }
   }
 
-  async function handleVerifyPin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-
-    if (!pin.trim() || pin.trim().length !== 6) {
-      setErrors({ pin: 'Enter the 6-digit PIN' })
-      return
-    }
-
-    setStatus('submitting')
-    setServerError(null)
-
-    try {
-      await auth.verifySignIn({
-        email,
-        pin: pin.trim(),
-      })
-      navigate('/feed')
-    } catch (error) {
-      setServerError(
-        error instanceof ApiError ? error.message : 'Invalid verification PIN.',
-      )
-      setStatus('error')
-    }
-  }
-
-  async function handleResendPin() {
-    setResendStatus('sending')
-    setServerError(null)
-    try {
-      await resendPin({ email })
-      setResendStatus('sent')
-      setTimeout(() => setResendStatus('idle'), 4000)
-    } catch (error) {
-      setServerError(
-        error instanceof ApiError ? error.message : 'Failed to resend PIN.',
-      )
-      setResendStatus('idle')
-    }
-  }
-
   if (step === 'verify_pin') {
     return (
-      <AuthCard
+      <PinVerificationStep
+        email={email}
         title="New device verification"
         subtitle={promptMessage || `Enter the 6-digit PIN sent to ${email}`}
+        helperText="Check your school email (or backend console during dev/demo)"
+        submitLabel="Verify PIN & Trust Device"
+        verifyErrorFallback="Invalid verification PIN."
+        onVerify={async (pin) => {
+          await auth.verifySignIn({ email, pin })
+          navigate('/feed')
+        }}
         footer={
           <>
             Not your account?{' '}
@@ -123,45 +89,7 @@ export function LoginPage() {
             </button>
           </>
         }
-      >
-        {serverError && <FormAlert kind="error">{serverError}</FormAlert>}
-        {resendStatus === 'sent' && (
-          <FormAlert kind="success">A new 6-digit PIN has been generated!</FormAlert>
-        )}
-
-        <form onSubmit={handleVerifyPin} noValidate className="flex flex-col gap-5">
-          <TextField
-            label="6-Digit Verification PIN"
-            type="text"
-            inputMode="numeric"
-            maxLength={6}
-            placeholder="123456"
-            helperText="Check your school email (or backend console during dev/demo)"
-            error={errors.pin}
-            value={pin}
-            onChange={(e) => {
-              setPin(e.target.value.replace(/\D/g, ''))
-              if (errors.pin) setErrors({})
-            }}
-          />
-
-          <Button type="submit" loading={status === 'submitting'}>
-            Verify PIN & Trust Device
-          </Button>
-
-          <div className="flex items-center justify-between text-xs text-zinc-500 pt-2">
-            <span>Didn't receive it?</span>
-            <button
-              type="button"
-              onClick={handleResendPin}
-              disabled={resendStatus === 'sending'}
-              className="font-medium text-accent-700 hover:text-accent-800 underline disabled:opacity-50"
-            >
-              {resendStatus === 'sending' ? 'Sending...' : 'Resend PIN'}
-            </button>
-          </div>
-        </form>
-      </AuthCard>
+      />
     )
   }
 
