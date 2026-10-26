@@ -4,11 +4,24 @@ import { AuthProvider, useAuth } from './lib/auth-context'
 import { LoginPage } from './pages/LoginPage'
 import { SignupPage } from './pages/SignupPage'
 import { FeedPage } from './pages/FeedPage'
+import { ListingDetailPage } from './pages/ListingDetailPage'
+import { ProfileSetupPage } from './pages/ProfileSetupPage'
+import { ProfilePage } from './pages/ProfilePage'
 
 function RequireAuth({ children }: { children: ReactElement }) {
-  const { student, loading } = useAuth()
+  const { student, hasProfile, loading } = useAuth()
   if (loading) return null
   if (!student) return <Navigate to="/login" replace />
+  if (hasProfile === null) return null
+  if (hasProfile === false) return <Navigate to="/profile-setup" replace />
+  return children
+}
+
+function RequireAuthNoProfile({ children }: { children: ReactElement }) {
+  const { student, hasProfile, loading } = useAuth()
+  if (loading) return null
+  if (!student) return <Navigate to="/login" replace />
+  if (hasProfile === true) return <Navigate to="/feed" replace />
   return children
 }
 
@@ -46,6 +59,30 @@ function App() {
             <RequireAuth>
               <FeedPage />
             </RequireAuth>
+          }
+        />
+        <Route
+          path="/listings/:id"
+          element={
+            <RequireAuth>
+              <ListingDetailPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <RequireAuth>
+              <ProfilePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/profile-setup"
+          element={
+            <RequireAuthNoProfile>
+              <ProfileSetupPage />
+            </RequireAuthNoProfile>
           }
         />
       </Routes>

@@ -5,8 +5,8 @@ import { Button } from '../components/ui/Button'
 import { FormAlert } from '../components/ui/FormAlert'
 import { TextField } from '../components/ui/TextField'
 import { validateEmail, validatePassword } from '../lib/validation'
-import { ApiError, login, resendPin, verifyPin } from '../services/authService'
-import { getOrCreateDeviceId } from '../lib/device'
+import { ApiError, resendPin } from '../services/authService'
+import { createAuthFacade } from '../services/authFacade'
 import { useAuth } from '../lib/auth-context'
 
 type FieldErrors = {
@@ -18,6 +18,7 @@ type FieldErrors = {
 export function LoginPage() {
   const navigate = useNavigate()
   const { setStudent } = useAuth()
+  const auth = createAuthFacade(setStudent)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [pin, setPin] = useState('')
@@ -43,27 +44,13 @@ export function LoginPage() {
     setServerError(null)
 
     try {
-      const res = await login({
-        email,
-        password,
-        deviceId: getOrCreateDeviceId(),
-      })
+      const res = await auth.signIn({ email, password })
 
       if (res.requiresPin) {
         setStep('verify_pin')
         setPromptMessage(res.message || 'New device detected. Enter your 6-digit PIN.')
         setStatus('idle')
       } else {
-        if (res.id && res.studentName && res.email) {
-          setStudent({
-            id: res.id,
-            studentName: res.studentName,
-            email: res.email,
-            emailVerified: res.emailVerified ?? true,
-            sellingItems: res.sellingItems ?? null,
-            dormLocation: res.dormLocation ?? null,
-          })
-        }
         navigate('/feed')
       }
     } catch (error) {
@@ -86,12 +73,10 @@ export function LoginPage() {
     setServerError(null)
 
     try {
-      const student = await verifyPin({
+      await auth.verifySignIn({
         email,
         pin: pin.trim(),
-        deviceId: getOrCreateDeviceId(),
       })
-      setStudent(student)
       navigate('/feed')
     } catch (error) {
       setServerError(

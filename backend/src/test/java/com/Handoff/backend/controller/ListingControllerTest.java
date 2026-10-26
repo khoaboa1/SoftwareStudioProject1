@@ -7,6 +7,8 @@ import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.StudentRepository;
 import com.Handoff.backend.dto.VerificationRequest;
 import com.Handoff.backend.model.Student;
+import com.Handoff.backend.model.Profile;
+import com.Handoff.backend.repository.ProfileRepository;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,8 +22,10 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -39,11 +43,16 @@ class ListingControllerTest {
   private ListingRepository listingRepository;
 
   @Autowired
+  private ProfileRepository profileRepository;
+
+  @Autowired
   private ObjectMapper objectMapper;
 
   @BeforeEach
   void cleanDatabase() {
     listingRepository.deleteAll();
+    // Profiles reference students, so remove them before resetting student fixtures.
+    profileRepository.deleteAll();
     studentRepository.deleteAll();
   }
 
@@ -69,6 +78,10 @@ class ListingControllerTest {
   void createListing_thenFeed_returnsItNewestFirst() throws Exception {
     MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
 
+    // Reading the feed now requires a profile with a server-owned school domain.
+    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
+
     String body = objectMapper.writeValueAsString(
         new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
 
@@ -77,7 +90,7 @@ class ListingControllerTest {
         .andExpect(jsonPath("$.itemName").value("Desk Lamp"))
         .andExpect(jsonPath("$.sellerName").value("Jane Doe"));
 
-    mockMvc.perform(get("/listings"))
+    mockMvc.perform(get("/listings").session(session))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].itemName").value("Desk Lamp"));
   }
@@ -111,5 +124,131 @@ class ListingControllerTest {
 
     mockMvc.perform(post("/listings").session(session).contentType("application/json").content(body))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void updateListing_owner_updatesFields() throws Exception {
+    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
+    String createBody = objectMapper.writeValueAsString(
+        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+    MvcResult createResult = mockMvc.perform(post("/listings").session(session)
+            .contentType("application/json").content(createBody))
+        .andExpect(status().isCreated())
+        .andReturn();
+    Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
+
+    String updateBody = objectMapper.writeValueAsString(
+        new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
+
+    mockMvc.perform(put("/listings/" + listingId).session(session)
+            .contentType("application/json").content(updateBody))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.itemName").value("Mini Fridge"))
+        .andExpect(jsonPath("$.price").value(40.00));
+
+    mockMvc.perform(get("/listings/" + listingId).session(session))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.itemName").value("Mini Fridge"))
+        .andExpect(jsonPath("$.description").value("Barely used"))
+        .andExpect(jsonPath("$.price").value(40.00))
+        .andExpect(jsonPath("$.condition").value("LIKE_NEW"))
+        .andExpect(jsonPath("$.category").value("KITCHEN"));
+  }
+
+  @Test
+  void updateListing_notOwner_returnsForbidden() throws Exception {
+    MockHttpSession ownerSession = loginAsNewStudent("jane@tulane.edu");
+    String createBody = objectMapper.writeValueAsString(
+        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+    MvcResult createResult = mockMvc.perform(post("/listings").session(ownerSession)
+            .contentType("application/json").content(createBody))
+        .andExpect(status().isCreated())
+        .andReturn();
+    Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
+
+    MockHttpSession otherSession = loginAsNewStudent("bob@tulane.edu");
+    String updateBody = objectMapper.writeValueAsString(
+        new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
+
+    mockMvc.perform(put("/listings/" + listingId).session(otherSession)
+            .contentType("application/json").content(updateBody))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void updateListing_listingDoesNotExist_returnsNotFound() throws Exception {
+    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    String updateBody = objectMapper.writeValueAsString(
+        new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
+
+    mockMvc.perform(put("/listings/999999").session(session)
+            .contentType("application/json").content(updateBody))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void updateListing_rejectsWhenNotLoggedIn() throws Exception {
+    String updateBody = objectMapper.writeValueAsString(
+        new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
+
+    mockMvc.perform(put("/listings/1").contentType("application/json").content(updateBody))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void deleteListing_owner_removesListing() throws Exception {
+    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    // Keep deletion verification within the owner's authenticated school feed.
+    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
+    String createBody = objectMapper.writeValueAsString(
+        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+    MvcResult createResult = mockMvc.perform(post("/listings").session(session)
+            .contentType("application/json").content(createBody))
+        .andExpect(status().isCreated())
+        .andReturn();
+    Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
+
+    mockMvc.perform(delete("/listings/" + listingId).session(session))
+        .andExpect(status().isNoContent());
+
+    mockMvc.perform(get("/listings").session(session))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$").isArray())
+        .andExpect(jsonPath("$.length()").value(0));
+  }
+
+  @Test
+  void deleteListing_notOwner_returnsForbidden() throws Exception {
+    MockHttpSession ownerSession = loginAsNewStudent("jane@tulane.edu");
+    String createBody = objectMapper.writeValueAsString(
+        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+    MvcResult createResult = mockMvc.perform(post("/listings").session(ownerSession)
+            .contentType("application/json").content(createBody))
+        .andExpect(status().isCreated())
+        .andReturn();
+    Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
+
+    MockHttpSession otherSession = loginAsNewStudent("bob@tulane.edu");
+    mockMvc.perform(delete("/listings/" + listingId).session(otherSession))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void deleteListing_listingDoesNotExist_returnsNotFound() throws Exception {
+    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+
+    mockMvc.perform(delete("/listings/999999").session(session))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void getCategories_returnsAllCategoryValues() throws Exception {
+    mockMvc.perform(get("/listings/categories"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$", org.hamcrest.Matchers.containsInAnyOrder(
+            "FURNITURE", "ELECTRONICS", "KITCHEN", "DECOR", "CLOTHING", "OTHER")));
   }
 }

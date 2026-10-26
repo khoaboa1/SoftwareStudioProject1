@@ -33,6 +33,10 @@ public class Listing {
   @Enumerated(EnumType.STRING)
   private Category category;
 
+  // New listings are immediately browseable unless a future workflow changes their lifecycle.
+  @Enumerated(EnumType.STRING)
+  private ListingStatus status = ListingStatus.ACTIVE;
+
   @ManyToOne
   @JoinColumn(name = "seller_id", nullable = false)
   private Student seller;
@@ -49,6 +53,7 @@ public class Listing {
     this.price = price;
     this.condition = condition;
     this.category = category;
+    this.status = ListingStatus.ACTIVE;
     this.seller = seller;
     this.createdAt = Instant.now();
   }
@@ -77,6 +82,10 @@ public class Listing {
     return category;
   }
 
+  public ListingStatus getStatus() {
+    return status;
+  }
+
   public Student getSeller() {
     return seller;
   }
@@ -87,5 +96,33 @@ public class Listing {
 
   public void setCreatedAt(Instant createdAt) {
     this.createdAt = createdAt;
+  }
+
+  public void setId(Long id) {
+    this.id = id;
+  }
+
+  public void setItemName(String itemName) {
+    this.itemName = itemName;
+  }
+
+  public void setDescription(String description) {
+    this.description = description;
+  }
+
+  public void setPrice(BigDecimal price) {
+    this.price = price;
+  }
+
+  public void setCondition(Condition condition) {
+    this.condition = condition;
+  }
+
+  public void setCategory(Category category) {
+    this.category = category;
+  }
+
+  public void setStatus(ListingStatus status) {
+    this.status = status;
   }
 }

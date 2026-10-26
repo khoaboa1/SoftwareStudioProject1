@@ -30,10 +30,13 @@ public class AuthController {
 
   private final AuthService authService;
   private final VerificationService verificationService;
+  private final CurrentStudentResolver currentStudentResolver;
 
-  public AuthController(AuthService authService, VerificationService verificationService) {
+  public AuthController(AuthService authService, VerificationService verificationService,
+                        CurrentStudentResolver currentStudentResolver) {
     this.authService = authService;
     this.verificationService = verificationService;
+    this.currentStudentResolver = currentStudentResolver;
   }
 
   @PostMapping("/signup")
@@ -77,12 +80,7 @@ public class AuthController {
 
   @GetMapping("/me")
   public ResponseEntity<Student> me(HttpServletRequest httpRequest) {
-    HttpSession session = httpRequest.getSession(false);
-    Long studentId = session != null ? (Long) session.getAttribute(SessionKeys.STUDENT_ID) : null;
-    if (studentId == null) {
-      return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-    }
-    return authService.findById(studentId)
+    return currentStudentResolver.find(httpRequest)
         .map(ResponseEntity::ok)
         .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
   }
