@@ -10,28 +10,27 @@ import org.springframework.stereotype.Service;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.regex.Pattern;
 
 @Service
 public class VerificationService {
 
   private static final Logger logger = LoggerFactory.getLogger(VerificationService.class);
 
-  private static final Pattern EDU_EMAIL_PATTERN =
-      Pattern.compile("^[^\\s@]+@[^\\s@]+\\.edu$", Pattern.CASE_INSENSITIVE);
-
   private final StudentRepository studentRepository;
   private final List<EmailSender> emailSenders;
+  private final UniversityEmailValidator universityEmailValidator;
   private final SecureRandom secureRandom = new SecureRandom();
 
   /** Spring injects every EmailSender bean, sorted by {@code @Order}. */
-  public VerificationService(StudentRepository studentRepository, List<EmailSender> emailSenders) {
+  public VerificationService(StudentRepository studentRepository, List<EmailSender> emailSenders,
+                             UniversityEmailValidator universityEmailValidator) {
     this.studentRepository = studentRepository;
     this.emailSenders = emailSenders;
+    this.universityEmailValidator = universityEmailValidator;
   }
 
   public String generateAndSendPin(Student student) {
-    if (student.getEmail() == null || !EDU_EMAIL_PATTERN.matcher(student.getEmail()).matches()) {
+    if (!universityEmailValidator.isValid(student.getEmail())) {
       throw new InvalidSignupException("Only .edu school emails can receive a verification PIN");
     }
 
@@ -57,7 +56,7 @@ public class VerificationService {
   }
 
   public Student verifyPin(String email, String pin, String deviceId) {
-    if (email == null || !EDU_EMAIL_PATTERN.matcher(email).matches()) {
+    if (!universityEmailValidator.isValid(email)) {
       throw new InvalidVerificationPinException("Use a valid .edu school email");
     }
     if (pin == null || pin.isBlank()) {
@@ -92,7 +91,7 @@ public class VerificationService {
   }
 
   public void resendPin(String email) {
-    if (email == null || !EDU_EMAIL_PATTERN.matcher(email).matches()) {
+    if (!universityEmailValidator.isValid(email)) {
       throw new InvalidSignupException("Use a valid .edu school email");
     }
 
