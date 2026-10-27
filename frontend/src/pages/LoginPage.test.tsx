@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, login, verifyPin } from '../services/authService'
+import { ApiError, login, resendPin, verifyPin } from '../services/authService'
 import { LoginPage } from './LoginPage'
 
 const { setStudent } = vi.hoisted(() => ({ setStudent: vi.fn() }))
@@ -19,6 +19,7 @@ vi.mock('../services/authService', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/authService')>()),
   login: vi.fn(),
   verifyPin: vi.fn(),
+  resendPin: vi.fn(),
 }))
 
 async function submitLogin() {
@@ -42,6 +43,7 @@ describe('LoginPage authentication behavior', () => {
     vi.clearAllMocks()
     vi.mocked(login).mockReset()
     vi.mocked(verifyPin).mockReset()
+    vi.mocked(resendPin).mockReset()
   })
 
   it('keeps password-login defaults, device identity, auth update, and navigation', async () => {
@@ -105,5 +107,48 @@ describe('LoginPage authentication behavior', () => {
     expect(await screen.findByText('Incorrect verification PIN')).toBeInTheDocument()
     expect(setStudent).not.toHaveBeenCalled()
     expect(screen.queryByText('Marketplace destination')).not.toBeInTheDocument()
+  })
+
+  it('rejects a short PIN before verification', async () => {
+    vi.mocked(login).mockResolvedValue({ requiresPin: true, message: 'Check your email' })
+
+    const user = await submitLogin()
+    await user.type(await screen.findByLabelText('6-Digit Verification PIN'), '12345')
+    await user.click(screen.getByRole('button', { name: 'Verify PIN & Trust Device' }))
+
+    expect(screen.getByText('Enter the 6-digit PIN')).toBeInTheDocument()
+    expect(verifyPin).not.toHaveBeenCalled()
+  })
+
+  it('resends the PIN and shows confirmation', async () => {
+    vi.mocked(login).mockResolvedValue({ requiresPin: true, message: 'Check your email' })
+    vi.mocked(resendPin).mockResolvedValue()
+
+    const user = await submitLogin()
+    await user.click(await screen.findByRole('button', { name: 'Resend PIN' }))
+
+    expect(resendPin).toHaveBeenCalledWith({ email: 'jane@tulane.edu' })
+    expect(await screen.findByText('A new 6-digit PIN has been generated!')).toBeInTheDocument()
+  })
+
+  it('shows the fallback for an unexpected verification failure', async () => {
+    vi.mocked(login).mockResolvedValue({ requiresPin: true, message: 'Check your email' })
+    vi.mocked(verifyPin).mockRejectedValue(new Error('Network failed'))
+
+    const user = await submitLogin()
+    await user.type(await screen.findByLabelText('6-Digit Verification PIN'), '123456')
+    await user.click(screen.getByRole('button', { name: 'Verify PIN & Trust Device' }))
+
+    expect(await screen.findByText('Invalid verification PIN.')).toBeInTheDocument()
+  })
+
+  it('returns to login with the password cleared', async () => {
+    vi.mocked(login).mockResolvedValue({ requiresPin: true, message: 'Check your email' })
+
+    const user = await submitLogin()
+    await user.click(await screen.findByRole('button', { name: 'Back to login' }))
+
+    expect(screen.getByRole('heading', { name: 'Log in to Handoff' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Password')).toHaveValue('')
   })
 })
