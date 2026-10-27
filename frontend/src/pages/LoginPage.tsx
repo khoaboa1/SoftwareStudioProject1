@@ -6,7 +6,7 @@ import { Button } from '../components/ui/Button'
 import { FormAlert } from '../components/ui/FormAlert'
 import { TextField } from '../components/ui/TextField'
 import { validateEmail, validatePassword } from '../lib/validation'
-import { ApiError } from '../services/authService'
+import { getErrorMessage } from '../lib/apiError'
 import { createAuthFacade } from '../services/authFacade'
 import { useAuth } from '../lib/auth-context'
 
@@ -53,7 +53,7 @@ export function LoginPage() {
       }
     } catch (error) {
       setServerError(
-        error instanceof ApiError ? error.message : 'Something went wrong. Please try again.',
+        getErrorMessage(error, 'Something went wrong. Please try again.'),
       )
       setStatus('error')
     }

@@ -1,4 +1,5 @@
 import { ApiError, request } from './httpClient'
+import { hasApiStatus } from '../lib/apiError'
 
 export { ApiError }
 
@@ -20,7 +21,7 @@ export async function getMyProfileOrNull(): Promise<Profile | null> {
   try {
     return await getMyProfile()
   } catch (error) {
-    if (error instanceof ApiError && error.status === 404) {
+    if (hasApiStatus(error, 404)) {
       return null
     }
     throw error
