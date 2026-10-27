@@ -64,8 +64,7 @@ public class ListingController {
   public ResponseEntity<ListingResponse> createListing(@RequestBody CreateListingRequest request,
                                                          HttpServletRequest httpRequest) {
     Student seller = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED_TO_POST);
-    Listing listing = listingService.createListing(seller, request.itemName(), request.description(),
-        request.price(), request.condition(), request.category());
+    Listing listing = listingService.createListing(seller, request);
     return ResponseEntity.status(HttpStatus.CREATED).body(ListingResponse.from(listing));
   }
 
@@ -74,8 +73,7 @@ public class ListingController {
                                                         @RequestBody CreateListingRequest request,
                                                         HttpServletRequest httpRequest) {
     Student requester = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED_TO_POST);
-    Listing listing = listingService.updateListing(id, requester, request.itemName(), request.description(),
-        request.price(), request.condition(), request.category());
+    Listing listing = listingService.updateListing(id, requester, request);
     return ResponseEntity.ok(ListingResponse.from(listing));
   }
 

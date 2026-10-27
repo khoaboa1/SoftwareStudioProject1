@@ -6,6 +6,7 @@ import com.Handoff.backend.model.Listing;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.ProfileRepository;
+import com.Handoff.backend.dto.CreateListingRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -54,8 +55,8 @@ class ListingServiceTest {
     ListingService service = new ListingService(listingRepository, profileRepository);
 
     // Act
-    Listing updated = service.updateListing(10L, owner, "Mini Fridge", "Barely used",
-        new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN");
+    Listing updated = service.updateListing(existing.getId(), owner, new CreateListingRequest("Mini Fridge", "Barely used",
+        new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
 
     // Assert
     assertThat(updated.getItemName()).isEqualTo("Mini Fridge");
@@ -73,8 +74,8 @@ class ListingServiceTest {
     ListingService service = new ListingService(listingRepository, profileRepository);
 
     // Act & Assert
-    assertThatThrownBy(() -> service.updateListing(99L, requester, "Desk Lamp", "Works great",
-        new BigDecimal("10.00"), "GOOD", "FURNITURE"))
+    assertThatThrownBy(() -> service.updateListing(99L, requester, new CreateListingRequest("Desk Lamp", "Works great",
+        new BigDecimal("10.00"), "GOOD", "FURNITURE")))
         .isInstanceOf(ListingNotFoundException.class);
   }
 
@@ -88,8 +89,8 @@ class ListingServiceTest {
     ListingService service = new ListingService(listingRepository, profileRepository);
 
     // Act & Assert
-    assertThatThrownBy(() -> service.updateListing(10L, otherStudent, "Mini Fridge", "Barely used",
-        new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"))
+    assertThatThrownBy(() -> service.updateListing(existing.getId(), otherStudent, new CreateListingRequest("Mini Fridge", "Barely used",
+        new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN")))
         .isInstanceOf(ForbiddenListingActionException.class);
   }
 
@@ -102,8 +103,8 @@ class ListingServiceTest {
     ListingService service = new ListingService(listingRepository, profileRepository);
 
     // Act & Assert
-    assertThatThrownBy(() -> service.updateListing(10L, owner, "Desk Lamp", "Works great",
-        new BigDecimal("0"), "GOOD", "FURNITURE"))
+    assertThatThrownBy(() -> service.updateListing(existing.getId(), owner, new CreateListingRequest("Desk Lamp", "Works great",
+        new BigDecimal("0"), "GOOD", "FURNITURE")))
         .isInstanceOf(InvalidListingException.class);
   }
 
