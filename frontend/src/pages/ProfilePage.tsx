@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '../components/AppHeader'
 import { ProfileEditForm } from '../components/ProfileEditForm'
@@ -7,17 +7,12 @@ import { ProfileView } from '../components/ProfileView'
 import { FormAlert } from '../components/ui/FormAlert'
 import { useAuth } from '../lib/auth-context'
 import { getErrorMessage, hasApiStatus } from '../lib/apiError'
-import { getMyProfile, updateProfile, type Profile, type ProfileUpdate } from '../services/profileService'
-
-type ProfileState =
-  | { status: 'loading' }
-  | { status: 'error'; error: string }
-  | { status: 'ready'; profile: Profile }
+import { useAsyncResource } from '../lib/useAsyncResource'
+import { getMyProfile, updateProfile, type ProfileUpdate } from '../services/profileService'
 
 export function ProfilePage() {
   const navigate = useNavigate()
   const { setStudent, markProfileMissing } = useAuth()
-  const [state, setState] = useState<ProfileState>({ status: 'loading' })
   const [editing, setEditing] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -40,25 +35,7 @@ export function ProfilePage() {
     return false
   }
 
-  useEffect(() => {
-    let cancelled = false
-    getMyProfile()
-      .then((profile) => {
-        if (!cancelled) setState({ status: 'ready', profile })
-      })
-      .catch((error: unknown) => {
-        if (cancelled || redirectOnAuthError(error)) return
-        setState({
-          status: 'error',
-          error: getErrorMessage(error, 'Could not load your profile.'),
-        })
-      })
-    return () => {
-      cancelled = true
-    }
-    // Fetch once on mount; the auth-context callbacks aren't memoized, so listing them would refetch every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const { state, setData } = useAsyncResource(getMyProfile, [], { onError: redirectOnAuthError })
 
   function openEditor() {
     setSaved(false)
@@ -72,7 +49,7 @@ export function ProfilePage() {
     setSaveError(null)
     try {
       const updated = await updateProfile(profileId, input)
-      setState({ status: 'ready', profile: updated })
+      setData(updated)
       setEditing(false)
       setSaveStatus('idle')
       setSaved(true)
@@ -91,18 +68,20 @@ export function ProfilePage() {
         {saved && <FormAlert kind="success">Profile updated.</FormAlert>}
         {state.status === 'ready' && editing ? (
           <ProfileEditForm
-            profile={state.profile}
+            profile={state.data}
             status={saveStatus}
             error={saveError}
-            onSubmit={(input) => handleSave(state.profile.id, input)}
+            onSubmit={(input) => handleSave(state.data.id, input)}
             onCancel={() => setEditing(false)}
           />
         ) : state.status === 'ready' ? (
-          <ProfileView status="ready" profile={state.profile} onEdit={openEditor} />
+          <ProfileView status="ready" profile={state.data} onEdit={openEditor} />
+        ) : state.status === 'error' ? (
+          <ProfileView status="error" error={getErrorMessage(state.error, 'Could not load your profile.')} />
         ) : (
-          <ProfileView {...state} />
+          <ProfileView status="loading" />
         )}
-        {state.status === 'ready' && <MyListings sellerId={state.profile.studentId} />}
+        {state.status === 'ready' && <MyListings sellerId={state.data.studentId} />}
       </main>
     </div>
   )

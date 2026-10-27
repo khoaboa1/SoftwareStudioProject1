@@ -1,16 +1,11 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ListingCard } from './ListingCard'
 import { ListingGrid } from './ListingGrid'
 import { ListingGridSkeleton } from './ListingCardSkeleton'
 import { FormAlert } from './ui/FormAlert'
 import { getErrorMessage } from '../lib/apiError'
-import { getListings, type Listing } from '../services/listingService'
-
-type ListingsState =
-  | { status: 'loading' }
-  | { status: 'error'; error: string }
-  | { status: 'ready'; listings: Listing[] }
+import { useAsyncResource } from '../lib/useAsyncResource'
+import { getListings } from '../services/listingService'
 
 /**
  * There's no per-seller endpoint, so this filters the school feed. The feed only
@@ -18,40 +13,22 @@ type ListingsState =
  * requester, so none of their listings can be missing.
  */
 export function MyListings({ sellerId }: { sellerId: number }) {
-  const [state, setState] = useState<ListingsState>({ status: 'loading' })
-
-  useEffect(() => {
-    let cancelled = false
-    getListings()
-      .then((listings) => {
-        if (!cancelled) {
-          setState({ status: 'ready', listings: listings.filter((listing) => listing.sellerId === sellerId) })
-        }
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          setState({
-            status: 'error',
-            error: getErrorMessage(error, 'Could not load your listings.'),
-          })
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [sellerId])
+  const { state } = useAsyncResource(
+    () => getListings().then((listings) => listings.filter((listing) => listing.sellerId === sellerId)),
+    [sellerId],
+  )
 
   return (
     <section className="mt-8">
       <h2 className="mb-4 text-lg font-semibold text-zinc-900">
-        {state.status === 'ready' ? `My listings (${state.listings.length})` : 'My listings'}
+        {state.status === 'ready' ? `My listings (${state.data.length})` : 'My listings'}
       </h2>
 
       {state.status === 'loading' && <ListingGridSkeleton count={2} />}
 
-      {state.status === 'error' && <FormAlert kind="error">{state.error}</FormAlert>}
+      {state.status === 'error' && <FormAlert kind="error">{getErrorMessage(state.error, 'Could not load your listings.')}</FormAlert>}
 
-      {state.status === 'ready' && state.listings.length === 0 && (
+      {state.status === 'ready' && state.data.length === 0 && (
         <p className="text-sm text-zinc-500">
           You haven't posted any listings yet.{' '}
           <Link to="/feed" className="font-medium text-accent-700 hover:text-accent-800">
@@ -60,9 +37,9 @@ export function MyListings({ sellerId }: { sellerId: number }) {
         </p>
       )}
 
-      {state.status === 'ready' && state.listings.length > 0 && (
+      {state.status === 'ready' && state.data.length > 0 && (
         <ListingGrid>
-          {state.listings.map((listing) => (
+          {state.data.map((listing) => (
             <ListingCard key={listing.id} listing={listing} />
           ))}
         </ListingGrid>
