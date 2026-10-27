@@ -1,6 +1,8 @@
 package com.Handoff.backend.repository;
 
 import com.Handoff.backend.model.Profile;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -35,4 +37,11 @@ public interface ProfileRepository extends JpaRepository<Profile, Long> {
    * @return an Optional containing the Profile if found
    */
   Optional<Profile> findByStudent_Id(Long studentId);
+
+  /**
+   * Spring Data derives a query that combines all three predicates with AND:
+   * same school, not the requester, and a case-insensitive partial name match.
+   */
+  Page<Profile> findBySchoolDomainAndStudent_IdNotAndNameContainingIgnoreCase(
+      String schoolDomain, Long requesterId, String name, Pageable pageable);
 }
