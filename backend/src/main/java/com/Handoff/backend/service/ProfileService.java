@@ -1,10 +1,18 @@
 package com.Handoff.backend.service;
 
+import com.Handoff.backend.dto.ProfileSearchItem;
+import com.Handoff.backend.dto.ProfileSearchPageResponse;
+import com.Handoff.backend.dto.ProfileSearchRequest;
 import com.Handoff.backend.model.Profile;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ProfileRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 /**
  * Service managing student profile creation, retrieval, and domain extraction.
@@ -145,6 +153,36 @@ public class ProfileService {
     }
 
     return profileRepository.save(profile);
+  }
+
+  /**
+   * Searches public profile cards within the requester's school tenant.
+   * The service owns tenant resolution, persistence access, and response mapping;
+   * callers cannot supply or override a school domain.
+   */
+  @Transactional(readOnly = true)
+  public ProfileSearchPageResponse searchProfiles(Student requester, ProfileSearchRequest request) {
+    if (requester == null) {
+      throw new NotAuthenticatedException("User must be authenticated to search profiles.");
+    }
+
+    Profile requesterProfile = profileRepository.findByStudent_Id(requester.getId())
+        .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
+
+    Sort sort = Sort.by(Sort.Direction.ASC, "name")
+        .and(Sort.by(Sort.Direction.ASC, "id"));
+    PageRequest pageRequest = PageRequest.of(
+        request.page() - 1, request.limit(), sort);
+    Page<Profile> result = profileRepository
+        .findBySchoolDomainAndStudent_IdNotAndNameContainingIgnoreCase(
+            requesterProfile.getSchoolDomain(), requester.getId(),
+            request.query(), pageRequest);
+
+    List<ProfileSearchItem> items = result.getContent().stream()
+        .map(ProfileSearchItem::from)
+        .toList();
+    return new ProfileSearchPageResponse(items, new ProfileSearchPageResponse.Meta(
+        result.getTotalElements(), request.page(), result.getTotalPages(), request.limit()));
   }
 
 }

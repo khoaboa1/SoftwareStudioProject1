@@ -7,7 +7,6 @@ import com.Handoff.backend.dto.ProfileSearchPageResponse;
 import com.Handoff.backend.dto.ProfileSearchRequest;
 import com.Handoff.backend.model.Profile;
 import com.Handoff.backend.model.Student;
-import com.Handoff.backend.repository.ProfileRepository;
 import com.Handoff.backend.service.DuplicateProfileException;
 import com.Handoff.backend.service.InvalidProfileSearchException;
 import com.Handoff.backend.service.ProfileAccessDeniedException;
@@ -17,9 +16,6 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,8 +26,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 /**
  * Controller exposing REST endpoints for student profile management.
@@ -44,13 +38,10 @@ public class ProfileController {
   private static final String SEARCH_NOT_AUTHENTICATED = "User must be authenticated to search profiles.";
 
   private final ProfileService profileService;
-  private final ProfileRepository profileRepository;
   private final CurrentStudentResolver currentStudentResolver;
 
-  public ProfileController(ProfileService profileService, ProfileRepository profileRepository,
-                           CurrentStudentResolver currentStudentResolver) {
+  public ProfileController(ProfileService profileService, CurrentStudentResolver currentStudentResolver) {
     this.profileService = profileService;
-    this.profileRepository = profileRepository;
     this.currentStudentResolver = currentStudentResolver;
   }
 
@@ -76,24 +67,7 @@ public class ProfileController {
       HttpServletRequest httpRequest) {
     Student requester = currentStudentResolver.require(httpRequest, SEARCH_NOT_AUTHENTICATED);
     ProfileSearchRequest searchRequest = ProfileSearchRequest.parse(q, page, limit);
-    Profile requesterProfile = profileRepository.findByStudent_Id(requester.getId())
-        .orElseThrow(() -> new com.Handoff.backend.service.ProfileNotFoundException("Profile not found"));
-
-    Sort sort = Sort.by(Sort.Direction.ASC, "name")
-        .and(Sort.by(Sort.Direction.ASC, "id"));
-    PageRequest pageRequest = PageRequest.of(
-        searchRequest.page() - 1, searchRequest.limit(), sort);
-    Page<Profile> result = profileRepository
-        .findBySchoolDomainAndStudent_IdNotAndNameContainingIgnoreCase(
-            requesterProfile.getSchoolDomain(), requester.getId(),
-            searchRequest.query(), pageRequest);
-
-    List<com.Handoff.backend.dto.ProfileSearchItem> items = result.getContent().stream()
-        .map(com.Handoff.backend.dto.ProfileSearchItem::from)
-        .toList();
-    return new ProfileSearchPageResponse(items, new ProfileSearchPageResponse.Meta(
-        result.getTotalElements(), searchRequest.page(),
-        result.getTotalPages(), searchRequest.limit()));
+    return profileService.searchProfiles(requester, searchRequest);
   }
 
   /**
