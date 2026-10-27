@@ -51,7 +51,7 @@ class VerificationServicePinDispatchTest {
     VerificationService service = new VerificationService(studentRepository, List.of(
         new RecordingSender("webhook", false, calls),
         new RecordingSender("resend", true, calls),
-        new RecordingSender("smtp", true, calls)));
+        new RecordingSender("smtp", true, calls)), new UniversityEmailValidator());
     Student student = student();
 
     String pin = service.generateAndSendPin(student);
@@ -66,7 +66,7 @@ class VerificationServicePinDispatchTest {
     List<String> calls = new ArrayList<>();
     VerificationService service = new VerificationService(studentRepository, List.of(
         new RecordingSender("webhook", false, calls),
-        new RecordingSender("smtp", false, calls)));
+        new RecordingSender("smtp", false, calls)), new UniversityEmailValidator());
     Student student = student();
 
     String pin = service.generateAndSendPin(student);
@@ -80,7 +80,7 @@ class VerificationServicePinDispatchTest {
 
   @Test
   void generateAndSendPin_worksWithNoSendersConfigured() {
-    VerificationService service = new VerificationService(studentRepository, List.of());
+    VerificationService service = new VerificationService(studentRepository, List.of(), new UniversityEmailValidator());
 
     assertThat(service.generateAndSendPin(student())).matches("\\d{6}");
   }
@@ -89,7 +89,7 @@ class VerificationServicePinDispatchTest {
   void generateAndSendPin_rejectsNonEduEmailBeforeSending() {
     List<String> calls = new ArrayList<>();
     VerificationService service = new VerificationService(studentRepository, List.of(
-        new RecordingSender("webhook", true, calls)));
+        new RecordingSender("webhook", true, calls)), new UniversityEmailValidator());
     Student student = new Student("Bob", "bob@gmail.com", "hashed", null, null);
 
     assertThatThrownBy(() -> service.generateAndSendPin(student))

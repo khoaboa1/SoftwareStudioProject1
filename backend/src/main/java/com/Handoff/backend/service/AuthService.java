@@ -8,31 +8,30 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
-import java.util.regex.Pattern;
 
 @Service
 public class AuthService {
 
-  private static final Pattern EDU_EMAIL_PATTERN =
-      Pattern.compile("^[^\\s@]+@[^\\s@]+\\.edu$", Pattern.CASE_INSENSITIVE);
-
   private final StudentRepository studentRepository;
   private final PasswordEncoder passwordEncoder;
   private final VerificationService verificationService;
+  private final UniversityEmailValidator universityEmailValidator;
 
   public AuthService(StudentRepository studentRepository,
                      PasswordEncoder passwordEncoder,
-                     VerificationService verificationService) {
+                     VerificationService verificationService,
+                     UniversityEmailValidator universityEmailValidator) {
     this.studentRepository = studentRepository;
     this.passwordEncoder = passwordEncoder;
     this.verificationService = verificationService;
+    this.universityEmailValidator = universityEmailValidator;
   }
 
   public Student signup(String studentName, String email, String password) {
     if (studentName == null || studentName.isBlank()) {
       throw new InvalidSignupException("Full name is required");
     }
-    if (email == null || !EDU_EMAIL_PATTERN.matcher(email).matches()) {
+    if (!universityEmailValidator.isValid(email)) {
       throw new InvalidSignupException("Use a valid .edu school email");
     }
     if (password == null || password.length() < 8) {
