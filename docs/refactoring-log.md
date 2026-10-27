@@ -271,7 +271,7 @@ The API-error-to-message check `error instanceof ApiError ? error.message : '<fa
 
 **Extract Function** came first: `frontend/src/lib/apiError.ts`.
 - `getErrorMessage(error, fallback)` replaces all 11 copies, with every fallback string unchanged.
-- `hasApiStatus(error, status)` replaces the 404/401 status checks.
+- `hasApiStatus(error, status)` replaces the 404/401 status checks in the pages and in `getMyProfileOrNull` / `getCurrentStudent`.
 
 **Extract Hook** came next: `frontend/src/lib/useAsyncResource.ts`. It owns:
 - the loading → ready/error transitions
@@ -382,6 +382,16 @@ The 4 views lost 141 lines and gained 56.
 
 **One accepted difference:** if the route id changes while `ListingDetailPage` stays mounted, the page now shows the loading skeleton until the new listing arrives. Before, it kept showing the previous listing. The feed already behaved this way, and no test or requirement relied on the old behavior.
 
-**Out of scope:** `auth-context.tsx` keeps its own cancellation guard, because it bootstraps the session rather than loading page data.
+**Out of scope:**
+- `auth-context.tsx` keeps its own cancellation guard, because it bootstraps the session rather than loading page data.
+- **Remaining smell, left for a follow-up ticket:** form *submit* state is still duplicated. The `'idle' | 'submitting' | 'error'` union and its `submitting → try → error` transitions appear in six places:
+  - `LoginPage`
+  - `SignupPage`
+  - `ProfileSetupPage`
+  - the `ProfilePage` save
+  - the `FeedPage` listing form
+  - `PinVerificationStep`
+
+  These now share `getErrorMessage`, but their state handling is still copied. This ticket covers load-on-mount requests only; a `useSubmitState` hook would be the matching extraction for submits.
 
 ---
