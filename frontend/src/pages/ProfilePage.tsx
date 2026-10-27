@@ -6,7 +6,8 @@ import { MyListings } from '../components/MyListings'
 import { ProfileView } from '../components/ProfileView'
 import { FormAlert } from '../components/ui/FormAlert'
 import { useAuth } from '../lib/auth-context'
-import { ApiError, getMyProfile, updateProfile, type Profile, type ProfileUpdate } from '../services/profileService'
+import { getErrorMessage, hasApiStatus } from '../lib/apiError'
+import { getMyProfile, updateProfile, type Profile, type ProfileUpdate } from '../services/profileService'
 
 type ProfileState =
   | { status: 'loading' }
@@ -24,13 +25,13 @@ export function ProfilePage() {
 
   /** Routes away on 401/404 and returns true; returns false for errors the page should show. */
   function redirectOnAuthError(error: unknown): boolean {
-    if (error instanceof ApiError && error.status === 401) {
+    if (hasApiStatus(error, 401)) {
       // Clear auth state first, otherwise /login's guard bounces back to /feed.
       setStudent(null)
       navigate('/login', { replace: true })
       return true
     }
-    if (error instanceof ApiError && error.status === 404) {
+    if (hasApiStatus(error, 404)) {
       // Same for /profile-setup, which only admits students without a profile.
       markProfileMissing()
       navigate('/profile-setup', { replace: true })
@@ -49,7 +50,7 @@ export function ProfilePage() {
         if (cancelled || redirectOnAuthError(error)) return
         setState({
           status: 'error',
-          error: error instanceof ApiError ? error.message : 'Could not load your profile.',
+          error: getErrorMessage(error, 'Could not load your profile.'),
         })
       })
     return () => {
@@ -77,7 +78,7 @@ export function ProfilePage() {
       setSaved(true)
     } catch (error) {
       if (redirectOnAuthError(error)) return
-      setSaveError(error instanceof ApiError ? error.message : 'Could not save your profile.')
+      setSaveError(getErrorMessage(error, 'Could not save your profile.'))
       setSaveStatus('error')
     }
   }

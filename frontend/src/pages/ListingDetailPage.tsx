@@ -4,7 +4,7 @@ import { AppHeader } from '../components/AppHeader'
 import { ListingThumbnail } from '../components/ListingThumbnail'
 import { FormAlert } from '../components/ui/FormAlert'
 import { CATEGORY_LABELS, CONDITION_LABELS } from '../lib/listingOptions'
-import { ApiError } from '../services/httpClient'
+import { getErrorMessage, hasApiStatus } from '../lib/apiError'
 import { getListing, type Listing } from '../services/listingService'
 
 type DetailState =
@@ -28,9 +28,9 @@ export function ListingDetailPage() {
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          setState(error instanceof ApiError && error.status === 404
+          setState(hasApiStatus(error, 404)
             ? { status: 'notFound' }
-            : { status: 'error', error: error instanceof ApiError ? error.message : 'Could not load this listing.' })
+            : { status: 'error', error: getErrorMessage(error, 'Could not load this listing.') })
         }
       })
     return () => {

@@ -4,7 +4,7 @@ import { ListingCard } from './ListingCard'
 import { ListingGrid } from './ListingGrid'
 import { ListingGridSkeleton } from './ListingCardSkeleton'
 import { FormAlert } from './ui/FormAlert'
-import { ApiError } from '../services/httpClient'
+import { getErrorMessage } from '../lib/apiError'
 import { getListings, type Listing } from '../services/listingService'
 
 type ListingsState =
@@ -32,7 +32,7 @@ export function MyListings({ sellerId }: { sellerId: number }) {
         if (!cancelled) {
           setState({
             status: 'error',
-            error: error instanceof ApiError ? error.message : 'Could not load your listings.',
+            error: getErrorMessage(error, 'Could not load your listings.'),
           })
         }
       })

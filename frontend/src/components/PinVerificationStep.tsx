@@ -1,5 +1,6 @@
 import { type FormEvent, type ReactNode, useState } from 'react'
-import { ApiError, resendPin } from '../services/authService'
+import { resendPin } from '../services/authService'
+import { getErrorMessage } from '../lib/apiError'
 import { AuthCard } from './AuthCard'
 import { Button } from './ui/Button'
 import { FormAlert } from './ui/FormAlert'
@@ -40,7 +41,7 @@ export function PinVerificationStep({
       await onVerify(pin.trim())
     } catch (error) {
       setServerError(
-        error instanceof ApiError ? error.message : verifyErrorFallback,
+        getErrorMessage(error, verifyErrorFallback),
       )
       setStatus('error')
     }
@@ -55,7 +56,7 @@ export function PinVerificationStep({
       setTimeout(() => setResendStatus('idle'), 4000)
     } catch (error) {
       setServerError(
-        error instanceof ApiError ? error.message : 'Failed to resend PIN.',
+        getErrorMessage(error, 'Failed to resend PIN.'),
       )
       setResendStatus('idle')
     }

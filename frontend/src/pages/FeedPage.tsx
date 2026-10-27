@@ -14,7 +14,7 @@ import { SearchBar } from '../components/SearchBar'
 import { FilterBar } from '../components/FilterBar'
 import { parseBrowseParams, toSearchParams } from '../lib/browseParams'
 import { useAuth } from '../lib/auth-context'
-import { ApiError } from '../services/authService'
+import { getErrorMessage } from '../lib/apiError'
 import {
   createListing,
   deleteListing,
@@ -184,7 +184,7 @@ export function FeedPage() {
       setCategory(defaults.category)
       setFormStatus('idle')
     } catch (error) {
-      setFormError(error instanceof ApiError ? error.message : 'Something went wrong. Please try again.')
+      setFormError(getErrorMessage(error, 'Something went wrong. Please try again.'))
       setFormStatus('error')
     }
   }
@@ -193,7 +193,7 @@ export function FeedPage() {
     deleteListing(id)
       .then(() => setReloadToken((t) => t + 1))
       .catch((error: unknown) => {
-        setActionError(error instanceof ApiError ? error.message : 'Could not delete the listing.')
+        setActionError(getErrorMessage(error, 'Could not delete the listing.'))
       })
   }
 
