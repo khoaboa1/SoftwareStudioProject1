@@ -350,6 +350,64 @@ Strict Insecure Direct Object Reference (IDOR) protection has been implemented f
 
 ---
 
+## Handoff Note: SSP1-102 Add Seller Verification Status to Listing API Responses
+
+### Feature Summary
+Supports User Story 2 — Show Verified Student Status. Adds a `sellerVerified` boolean to the safe `ListingResponse` DTO and populates it from the seller account for every listing response path. The field is derived server-side from `listing.getSeller().isVerified()` and cannot be supplied or overridden by clients. No password, PIN, trusted-device identifier, or other private account data is exposed.
+
+### API Endpoints
+- `GET /listings` — feed items include `sellerVerified`
+- `GET /listings/{id}` — detail response includes `sellerVerified`
+- `POST /listings` (create) — response includes `sellerVerified`
+- `PUT /listings/{id}` (update) — response includes `sellerVerified`
+- `GET /api/listings` — `items[].sellerVerified` included in each browse item
+
+### Request Shape
+No new request parameters. `CreateListingRequest` has no `sellerVerified` field; clients cannot supply or override it.
+
+### Response Shape
+Adds `sellerVerified: boolean` to `ListingResponse`:
+```json
+{
+  "id": 1,
+  "itemName": "Desk Lamp",
+  "description": "Works great",
+  "price": 10.00,
+  "condition": "GOOD",
+  "category": "FURNITURE",
+  "sellerId": 1,
+  "sellerName": "Jane Doe",
+  "sellerVerified": true,
+  "createdAt": "2026-09-22T00:00:00.000000"
+}
+```
+
+### Auth & Session Needs
+- Same as existing listing endpoints: requires an active `JSESSIONID` cookie resolved via `CurrentStudentResolver`.
+- School-domain scoping unchanged; only sellers in the requester's school domain are returned.
+
+### Validation Rules
+- `sellerVerified` is derived purely server-side from the seller's `verified` boolean; no client input is accepted.
+
+### Success and Error States
+- `200 OK`: Response includes `sellerVerified` derived from the seller account.
+- `201 Created` (create): Response includes `sellerVerified`.
+- `401 Unauthorized`: No or stale session.
+- `403 Forbidden`: Requester is not the listing owner (for update/delete).
+- `404 Not Found`: Listing or requester profile not found.
+
+### UI Constraints or Assumptions
+- Frontend should render a "Verified" badge/indicator when `sellerVerified` is `true`.
+- No sensitive student account data (password, PIN, trusted devices, email verification state) is exposed in listing responses.
+
+### Tests
+- `ListingResponseContractTest`: unit tests for verified/unverified mapping and sensitive field exclusion.
+- `ListingControllerTest`: MockMvc contract tests for feed, detail, create, update serialization.
+- `ListingBrowseControllerTest`: MockMvc contract test for `/api/listings` items serialization.
+- Jacoco coverage: 100% line coverage on `ListingResponse`, `ListingController`, `ListingBrowseController`.
+
+---
+
 ## Handoff Note: SSP1-103 Verified Status API Contract
 
 ### Field Definition
