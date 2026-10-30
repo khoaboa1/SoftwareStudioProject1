@@ -348,3 +348,27 @@ Strict Insecure Direct Object Reference (IDOR) protection has been implemented f
 - When viewing or editing profile settings, the frontend should handle `403 Forbidden` by displaying an unauthorized access warning or navigating back to the student's own profile (`/api/profiles/me`).
 - If `404 Not Found` occurs on edit, prompt the student to create their profile.
 
+---
+
+## Handoff Note: SSP1-103 Verified Status API Contract
+
+### Field Definition
+- `sellerVerified: boolean` — server-derived from the seller's `verified` status. Read-only; clients cannot supply or override it.
+
+### Affected Endpoints
+- `GET /listings` — feed items include `sellerVerified`
+- `GET /listings/{id}` — detail response includes `sellerVerified`
+- `POST /listings` (create) — response includes `sellerVerified`
+- `PUT /listings/{id}` (update) — response includes `sellerVerified`
+- `GET /api/listings` — `items[].sellerVerified` included in each browse item
+
+### Compatibility Notes
+- Additive field only; no existing response fields changed or removed.
+- No new request parameters; `CreateListingRequest` has no `sellerVerified` field.
+- School-domain scoping and existing authentication behavior unchanged.
+
+### Frontend Display Assumptions
+- When `sellerVerified` is `true`, display a "Verified" badge/indicator next to the seller name.
+- When `false`, show no badge (or an "Unverified" label if desired).
+- Do not display any sensitive student account data (password, PIN, trusted devices, etc.) — these are never included in listing responses.
+

@@ -24,6 +24,10 @@ import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
+import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -385,5 +389,43 @@ class ListingControllerTest {
     mockMvc.perform(get("/api/listings").session(session))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.items[0].sellerVerified").value(true));
+  }
+
+  @Test
+  void response_excludesSensitiveStudentFields() throws Exception {
+    // jane is a verified requester with a profile who can read the listing.
+    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Student jane = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    profileRepository.save(new Profile(jane, "Jane Doe", "CS", null, "tulane.edu"));
+
+    // bob is an unverified seller with sensitive account fields populated.
+    Student bob = new Student("Bob Smith", "bob@tulane.edu", "hashed-password", null, null);
+    bob.setOauthProvider("google");
+    bob.setVerificationPin("123456");
+    bob.setVerificationPinExpiry(java.time.LocalDateTime.now().plusMinutes(30));
+    bob.setTrustedDeviceIds(Set.of("device-1"));
+    studentRepository.save(bob);
+    profileRepository.save(new Profile(bob, "Bob Smith", "CS", null, "tulane.edu"));
+    Listing bobListing = new Listing("Desk Lamp", "Works great", new BigDecimal("10.00"),
+        Condition.GOOD, Category.FURNITURE, bob);
+    bobListing = listingRepository.save(bobListing);
+
+    MvcResult result = mockMvc.perform(get("/listings/" + bobListing.getId()).session(session))
+        .andExpect(status().isOk())
+        .andReturn();
+
+    String body = result.getResponse().getContentAsString();
+
+    assertFalse(body.contains("passwordHash"), "passwordHash must not appear in listing JSON");
+    assertFalse(body.contains("verificationPin"), "verificationPin must not appear in listing JSON");
+    assertFalse(body.contains("verificationPinExpiry"),
+        "verificationPinExpiry must not appear in listing JSON");
+    assertFalse(body.contains("trustedDeviceIds"),
+        "trustedDeviceIds must not appear in listing JSON");
+    assertFalse(body.contains("oauthProvider"), "oauthProvider must not appear in listing JSON");
+    assertFalse(body.contains("email_verified"), "email_verified must not appear in listing JSON");
+
+    assertTrue(body.contains("sellerVerified"), "sellerVerified must be present in listing JSON");
+    assertTrue(body.contains("Bob Smith"), "seller name must be present in listing JSON");
   }
 }
