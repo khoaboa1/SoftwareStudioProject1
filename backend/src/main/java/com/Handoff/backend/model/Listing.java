@@ -125,4 +125,8 @@ public class Listing {
   public void setStatus(ListingStatus status) {
     this.status = status;
   }
+
+  public void setSeller(Student student) {
+    this.seller = student;
+  }
 }

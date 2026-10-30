@@ -14,6 +14,7 @@ public record ListingResponse(
     String category,
     Long sellerId,
     String sellerName,
+    Boolean sellerVerified,
     Instant createdAt) {
 
   public static ListingResponse from(Listing listing) {
@@ -26,6 +27,7 @@ public record ListingResponse(
         listing.getCategory().name(),
         listing.getSeller().getId(),
         listing.getSeller().getStudentName(),
+        listing.getSeller().isVerified(),
         listing.getCreatedAt());
   }
 }
