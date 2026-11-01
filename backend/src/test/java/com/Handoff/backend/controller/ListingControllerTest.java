@@ -6,8 +6,11 @@ import com.Handoff.backend.dto.SignupRequest;
 import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.StudentRepository;
 import com.Handoff.backend.dto.VerificationRequest;
-import com.Handoff.backend.model.Student;
+import com.Handoff.backend.model.Category;
+import com.Handoff.backend.model.Condition;
+import com.Handoff.backend.model.Listing;
 import com.Handoff.backend.model.Profile;
+import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ProfileRepository;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.BeforeEach;
@@ -250,5 +253,137 @@ class ListingControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$", org.hamcrest.Matchers.containsInAnyOrder(
             "FURNITURE", "ELECTRONICS", "KITCHEN", "DECOR", "CLOTHING", "OTHER")));
+  }
+
+  @Test
+  void listVerifiedSeller_includesSellerVerifiedInFeed() throws Exception {
+    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
+    String createBody = objectMapper.writeValueAsString(
+        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+    mockMvc.perform(post("/listings").session(session)
+            .contentType("application/json").content(createBody))
+        .andExpect(status().isCreated());
+
+    mockMvc.perform(get("/listings").session(session))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].sellerVerified").value(true));
+  }
+
+  @Test
+  void listUnverifiedStudent_excludesSellerVerifiedInFeed() throws Exception {
+    // jane is a verified requester with a profile who can read the feed.
+    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Student jane = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    profileRepository.save(new Profile(jane, "Jane Doe", "CS", null, "tulane.edu"));
+
+    // bob is an unverified seller (no login session, no PIN verification).
+    Student bob = new Student("Bob Smith", "bob@tulane.edu", "hashed", null, null);
+    studentRepository.save(bob);
+    profileRepository.save(new Profile(bob, "Bob Smith", "CS", null, "tulane.edu"));
+    Listing bobListing = new Listing("Desk Lamp", "Works great", new BigDecimal("10.00"), Condition.GOOD, Category.FURNITURE, bob);
+    listingRepository.save(bobListing);
+
+    mockMvc.perform(get("/listings").session(session))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].sellerVerified").value(false));
+  }
+
+  @Test
+  void getListingById_withVerifiedSeller_returnsSellerVerified() throws Exception {
+    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
+    String createBody = objectMapper.writeValueAsString(
+        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+    mockMvc.perform(post("/listings").session(session)
+            .contentType("application/json").content(createBody))
+        .andExpect(status().isCreated());
+
+    MvcResult createResult = mockMvc.perform(post("/listings").session(session)
+            .contentType("application/json").content(createBody))
+        .andExpect(status().isCreated())
+        .andReturn();
+    Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
+
+    mockMvc.perform(get("/listings/" + listingId).session(session))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.sellerVerified").value(true));
+  }
+
+  @Test
+  void getListingById_withUnverifiedStudent_returnsSellerVerifiedFalse() throws Exception {
+    // jane is a verified requester with a profile who can read the listing.
+    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Student jane = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    profileRepository.save(new Profile(jane, "Jane Doe", "CS", null, "tulane.edu"));
+
+    // bob is an unverified seller (no login session, no PIN verification).
+    Student bob = new Student("Bob Smith", "bob@tulane.edu", "hashed", null, null);
+    studentRepository.save(bob);
+    profileRepository.save(new Profile(bob, "Bob Smith", "CS", null, "tulane.edu"));
+    Listing bobListing = new Listing("Desk Lamp", "Works great", new BigDecimal("10.00"), Condition.GOOD, Category.FURNITURE, bob);
+    bobListing = listingRepository.save(bobListing);
+
+    mockMvc.perform(get("/listings/" + bobListing.getId()).session(session))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.sellerVerified").value(false));
+  }
+
+  @Test
+  void createListing_setsSellerVerifiedInResponse() throws Exception {
+    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
+    
+    String createBody = objectMapper.writeValueAsString(
+        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+    
+    mockMvc.perform(post("/listings").session(session)
+            .contentType("application/json").content(createBody))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.sellerVerified").value(true));
+  }
+
+  @Test
+  void updateListing_preservesSellerVerified() throws Exception {
+    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
+    String createBody = objectMapper.writeValueAsString(
+        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+    mockMvc.perform(post("/listings").session(session)
+            .contentType("application/json").content(createBody))
+        .andExpect(status().isCreated());
+    Long listingId = objectMapper.readTree(
+        mockMvc.perform(post("/listings").session(session)
+                .contentType("application/json").content(createBody))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString())
+        .get("id").asLong();
+
+    String updateBody = objectMapper.writeValueAsString(
+        new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
+    mockMvc.perform(put("/listings/" + listingId).session(session)
+            .contentType("application/json").content(updateBody))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.sellerVerified").value(true));
+  }
+
+  @Test
+  void getApiListings_setsSellerVerified() throws Exception {
+    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
+    String createBody = objectMapper.writeValueAsString(
+        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+    mockMvc.perform(post("/listings").session(session)
+            .contentType("application/json").content(createBody))
+        .andExpect(status().isCreated());
+
+    mockMvc.perform(get("/api/listings").session(session))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items[0].sellerVerified").value(true));
   }
 }
