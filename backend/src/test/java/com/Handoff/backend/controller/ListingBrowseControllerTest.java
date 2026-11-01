@@ -180,6 +180,32 @@ class ListingBrowseControllerTest {
     return session;
   }
 
+  @Test
+  void browseResponse_serializesSellerVerifiedForVerifiedAndUnverifiedSellers() throws Exception {
+    Student viewer = student("Viewer", "viewer@tulane.edu", "tulane.edu");
+
+    // Verified seller (newer listing sorts first in the default createdAt desc order).
+    Student verifiedSeller = studentRepository.save(
+        new Student("Verified Seller", "verified@tulane.edu", "hashed", null, null));
+    verifiedSeller.setVerified(true);
+    profileRepository.save(new Profile(verifiedSeller, "Verified Seller", "CS", null, "tulane.edu"));
+    listing(verifiedSeller, "Verified Item", "desc", "10.00", Category.FURNITURE,
+        ListingStatus.ACTIVE, 2);
+
+    // Unverified seller.
+    Student unverifiedSeller = student("Unverified Seller", "unverified@tulane.edu", "tulane.edu");
+    listing(unverifiedSeller, "Unverified Item", "desc", "20.00", Category.FURNITURE,
+        ListingStatus.ACTIVE, 1);
+
+    mockMvc.perform(get("/api/listings").session(session(viewer)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items", hasSize(2)))
+        .andExpect(jsonPath("$.items[0].itemName").value("Verified Item"))
+        .andExpect(jsonPath("$.items[0].sellerVerified").value(true))
+        .andExpect(jsonPath("$.items[1].itemName").value("Unverified Item"))
+        .andExpect(jsonPath("$.items[1].sellerVerified").value(false));
+  }
+
   private Listing listing(Student seller, String name, String description, String price,
                           Category category, ListingStatus status, long seconds) {
     // Fixed timestamps make pagination and ordering assertions deterministic.
