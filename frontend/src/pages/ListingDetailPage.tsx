@@ -1,42 +1,17 @@
-import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AppHeader } from '../components/AppHeader'
 import { ListingThumbnail } from '../components/ListingThumbnail'
 import { FormAlert } from '../components/ui/FormAlert'
 import { CATEGORY_LABELS, CONDITION_LABELS } from '../lib/listingOptions'
-import { ApiError } from '../services/httpClient'
-import { getListing, type Listing } from '../services/listingService'
-
-type DetailState =
-  | { status: 'loading' }
-  | { status: 'notFound' }
-  | { status: 'error'; error: string }
-  | { status: 'ready'; listing: Listing }
+import { getErrorMessage, hasApiStatus } from '../lib/apiError'
+import { useAsyncResource } from '../lib/useAsyncResource'
+import { getListing } from '../services/listingService'
 
 export function ListingDetailPage() {
   const { id } = useParams()
   const listingId = Number(id)
   const validId = Number.isInteger(listingId) && listingId > 0
-  const [state, setState] = useState<DetailState>(validId ? { status: 'loading' } : { status: 'notFound' })
-
-  useEffect(() => {
-    if (!validId) return
-    let cancelled = false
-    getListing(listingId)
-      .then((listing) => {
-        if (!cancelled) setState({ status: 'ready', listing })
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          setState(error instanceof ApiError && error.status === 404
-            ? { status: 'notFound' }
-            : { status: 'error', error: error instanceof ApiError ? error.message : 'Could not load this listing.' })
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [listingId, validId])
+  const { state } = useAsyncResource(() => getListing(listingId), [listingId], { enabled: validId })
 
   return (
     <div className="min-h-dvh bg-zinc-50">
@@ -58,27 +33,27 @@ export function ListingDetailPage() {
           </div>
         )}
 
-        {state.status === 'notFound' && <h1 className="text-2xl font-semibold text-zinc-900">Listing not found</h1>}
-        {state.status === 'error' && <FormAlert kind="error">{state.error}</FormAlert>}
+        {(!validId || (state.status === 'error' && hasApiStatus(state.error, 404))) && <h1 className="text-2xl font-semibold text-zinc-900">Listing not found</h1>}
+        {state.status === 'error' && !hasApiStatus(state.error, 404) && <FormAlert kind="error">{getErrorMessage(state.error, 'Could not load this listing.')}</FormAlert>}
 
         {state.status === 'ready' && (
           <div className="grid gap-6 md:grid-cols-2">
-            <ListingThumbnail category={state.listing.category} className="overflow-hidden rounded-2xl" />
+            <ListingThumbnail category={state.data.category} className="overflow-hidden rounded-2xl" />
             <div>
-              <h1 className="text-2xl font-semibold text-zinc-900">{state.listing.itemName}</h1>
-              <p className="mt-2 text-xl font-semibold text-accent-700">${state.listing.price.toFixed(2)}</p>
+              <h1 className="text-2xl font-semibold text-zinc-900">{state.data.itemName}</h1>
+              <p className="mt-2 text-xl font-semibold text-accent-700">${state.data.price.toFixed(2)}</p>
               <div className="mt-4 flex flex-wrap gap-1.5">
                 <span className="rounded-full bg-accent-50 px-2.5 py-0.5 text-xs font-medium text-accent-800">
-                  {CATEGORY_LABELS[state.listing.category]}
+                  {CATEGORY_LABELS[state.data.category]}
                 </span>
                 <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700">
-                  {CONDITION_LABELS[state.listing.condition]}
+                  {CONDITION_LABELS[state.data.condition]}
                 </span>
               </div>
-              <p className="mt-6 whitespace-pre-line text-sm text-zinc-700">{state.listing.description}</p>
-              <p className="mt-6 text-sm text-zinc-500">Sold by {state.listing.sellerName}</p>
+              <p className="mt-6 whitespace-pre-line text-sm text-zinc-700">{state.data.description}</p>
+              <p className="mt-6 text-sm text-zinc-500">Sold by {state.data.sellerName}</p>
               <p className="mt-1 text-sm text-zinc-500">
-                Posted {new Date(state.listing.createdAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                Posted {new Date(state.data.createdAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
               </p>
             </div>
           </div>

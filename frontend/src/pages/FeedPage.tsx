@@ -14,7 +14,8 @@ import { SearchBar } from '../components/SearchBar'
 import { FilterBar } from '../components/FilterBar'
 import { parseBrowseParams, toSearchParams } from '../lib/browseParams'
 import { useAuth } from '../lib/auth-context'
-import { ApiError } from '../services/authService'
+import { getErrorMessage } from '../lib/apiError'
+import { useAsyncResource } from '../lib/useAsyncResource'
 import {
   createListing,
   deleteListing,
@@ -24,7 +25,6 @@ import {
   type Category,
   type Condition,
   type Listing,
-  type ListingPage,
 } from '../services/listingService'
 
 function resetFormDefaults() {
@@ -37,18 +37,23 @@ function resetFormDefaults() {
   }
 }
 
-type FeedState =
-  | { status: 'loading' }
-  | { status: 'error' }
-  | { status: 'ready'; listings: Listing[]; meta: ListingPage['meta'] }
-
 export function FeedPage() {
   const { student } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = useMemo(() => parseBrowseParams(searchParams), [searchParams])
   const filtersKey = JSON.stringify(filters)
-  const [feedState, setFeedState] = useState<FeedState>({ status: 'loading' })
-  const [reloadToken, setReloadToken] = useState(0)
+  const { state: feedState, reload } = useAsyncResource(
+    () => searchListings(toSearchParams(filters)),
+    [filtersKey],
+    {
+      onSuccess: ({ items, meta }) => {
+        if (items.length === 0 && meta.totalPages > 0 && filters.page > meta.totalPages) {
+          updateParams({ page: meta.totalPages > 1 ? String(meta.totalPages) : null })
+          return true
+        }
+      },
+    },
+  )
   const [clearVersion, setClearVersion] = useState(0)
   const [categoryOptions, setCategoryOptions] = useState<Category[]>([])
   const [actionError, setActionError] = useState<string | null>(null)
@@ -71,27 +76,6 @@ export function FeedPage() {
         // still works, it just has no options until this succeeds on retry.
       })
   }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    // oxlint-disable-next-line react/set-state-in-effect -- New filters must show the loading skeleton immediately.
-    setFeedState({ status: 'loading' })
-    searchListings(toSearchParams(filters))
-      .then(({ items, meta }) => {
-        if (cancelled) return
-        if (items.length === 0 && meta.totalPages > 0 && filters.page > meta.totalPages) {
-          updateParams({ page: meta.totalPages > 1 ? String(meta.totalPages) : null })
-          return
-        }
-        setFeedState({ status: 'ready', listings: items, meta })
-      })
-      .catch(() => {
-        if (!cancelled) setFeedState({ status: 'error' })
-      })
-
-    return () => { cancelled = true }
-  // oxlint-disable-next-line react-hooks/exhaustive-deps -- The serialized parsed filters are the request key.
-  }, [filtersKey, reloadToken])
 
   function updateParams(patch: Record<string, string | null>) {
     setSearchParams((prev) => {
@@ -173,7 +157,7 @@ export function FeedPage() {
       } else {
         await createListing(input)
       }
-      setReloadToken((t) => t + 1)
+      reload()
       setShowForm(false)
       setEditingListingId(null)
       const defaults = resetFormDefaults()
@@ -184,16 +168,16 @@ export function FeedPage() {
       setCategory(defaults.category)
       setFormStatus('idle')
     } catch (error) {
-      setFormError(error instanceof ApiError ? error.message : 'Something went wrong. Please try again.')
+      setFormError(getErrorMessage(error, 'Something went wrong. Please try again.'))
       setFormStatus('error')
     }
   }
 
   function handleDelete(id: number) {
     deleteListing(id)
-      .then(() => setReloadToken((t) => t + 1))
+      .then(() => reload())
       .catch((error: unknown) => {
-        setActionError(error instanceof ApiError ? error.message : 'Could not delete the listing.')
+        setActionError(getErrorMessage(error, 'Could not delete the listing.'))
       })
   }
 
@@ -240,12 +224,12 @@ export function FeedPage() {
         {actionError && <FormAlert kind="error">{actionError}</FormAlert>}
 
         {feedState.status === 'loading' && <ListingGridSkeleton />}
-        {feedState.status === 'error' && <FeedError onRetry={() => setReloadToken((t) => t + 1)} />}
-        {feedState.status === 'ready' && feedState.listings.length === 0 && <ListingsEmptyState />}
-        {feedState.status === 'ready' && feedState.listings.length > 0 && (
+        {feedState.status === 'error' && <FeedError onRetry={reload} />}
+        {feedState.status === 'ready' && feedState.data.items.length === 0 && <ListingsEmptyState />}
+        {feedState.status === 'ready' && feedState.data.items.length > 0 && (
           <>
             <ListingGrid>
-              {feedState.listings.map((listing) => (
+              {feedState.data.items.map((listing) => (
                 <ListingCard
                   key={listing.id}
                   listing={listing}
@@ -254,7 +238,7 @@ export function FeedPage() {
                 />
               ))}
             </ListingGrid>
-            <Pagination currentPage={feedState.meta.currentPage} totalPages={feedState.meta.totalPages} totalItems={feedState.meta.totalItems} onPageChange={handlePageChange} />
+            <Pagination currentPage={feedState.data.meta.currentPage} totalPages={feedState.data.meta.totalPages} totalItems={feedState.data.meta.totalItems} onPageChange={handlePageChange} />
           </>
         )}
       </main>

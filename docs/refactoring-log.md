@@ -238,3 +238,160 @@ From `backend/`, with `JAVA_HOME` pointing to JDK 21:
 ./mvnw -q -Dtest=UniversityEmailValidatorTest,AuthServiceEmailValidationTest,VerificationServiceEmailValidationTest,AuthEmailValidationControllerTest,VerificationServicePinDispatchTest,AuthControllerTest,VerificationServiceTest test
 ./mvnw -q test
 ```
+
+## SSP1-96 — Consolidate repeated async request state and error mapping
+
+**Commits:**
+- [`5dfdf0e`](https://github.com/khoaboa1/SoftwareStudioProject1/commit/5dfdf0e7e55b5b0852b7b4be65c9dce31a016708) migrates the four views onto the hook. This is the main refactoring commit.
+- [`d248121`](https://github.com/khoaboa1/SoftwareStudioProject1/commit/d2481218d668030b499fbbe8c8e06c3bb23b40b8) adds the `useAsyncResource` hook.
+- [`24630d1`](https://github.com/khoaboa1/SoftwareStudioProject1/commit/24630d1ebe8a4049830b17a4a0ecad4d97b9cc05) extracts `getErrorMessage` / `hasApiStatus`.
+
+### Code smell
+
+**Duplicated Code.** Four views that load data on mount each hand-rolled the same request lifecycle:
+- a local `'loading' | 'error' | 'ready'` state union
+- `setState` calls for each transition
+- a `let cancelled = false` guard against responses arriving after unmount or after a newer request
+
+| View (before, `develop` @ `0a8c11b`) | State union | Lifecycle effect |
+|---|---|---|
+| `components/MyListings.tsx` | lines 10–13 | lines 21–42 |
+| `pages/ListingDetailPage.tsx` | lines 10–14 | lines 20–39 |
+| `pages/ProfilePage.tsx` | lines 11–14 | lines 19, 42–60 |
+| `pages/FeedPage.tsx` | lines 40–43 | lines 50–51, 75–94 |
+
+The API-error-to-message check `error instanceof ApiError ? error.message : '<fallback>'` was copied **11 times across 8 files**:
+- the four views above
+- `LoginPage`, `SignupPage` and `ProfileSetupPage`
+- `PinVerificationStep`
+
+`ApiError` was also imported from three different modules.
+
+### Mechanic
+
+**Extract Function** came first: `frontend/src/lib/apiError.ts`.
+- `getErrorMessage(error, fallback)` replaces all 11 copies, with every fallback string unchanged.
+- `hasApiStatus(error, status)` replaces the 404/401 status checks in the pages and in `getMyProfileOrNull` / `getCurrentStudent`.
+
+**Extract Hook** came next: `frontend/src/lib/useAsyncResource.ts`. It owns:
+- the loading → ready/error transitions
+- ignoring stale and post-unmount responses
+- `reload()`
+- `setData()` for local updates
+
+Page-specific rules stay in the pages:
+- **ListingDetailPage** passes `enabled: validId`, so an invalid id never calls the API. At render time it maps a 404 to "Listing not found".
+- **ProfilePage** passes its existing `redirectOnAuthError` as `onError`. It returns `true` after navigating to `/login` (401) or `/profile-setup` (404), which leaves the state as loading.
+- **FeedPage** passes an `onSuccess` that jumps to the last page when the requested page is out of range, again leaving the state as loading so the empty state never flashes. Retry and post-delete refresh call `reload()` instead of bumping a local `reloadToken`.
+- **MyListings** keeps its seller filter inside `load`.
+
+The hook stores the raw error, and each view picks its own fallback message at render time.
+
+### Before
+
+`MyListings.tsx`. The other three views repeated this shape, with their own state union and fallback:
+
+```tsx
+type ListingsState =
+  | { status: 'loading' }
+  | { status: 'error'; error: string }
+  | { status: 'ready'; listings: Listing[] }
+
+const [state, setState] = useState<ListingsState>({ status: 'loading' })
+
+useEffect(() => {
+  let cancelled = false
+  getListings()
+    .then((listings) => {
+      if (!cancelled) {
+        setState({ status: 'ready', listings: listings.filter((listing) => listing.sellerId === sellerId) })
+      }
+    })
+    .catch((error: unknown) => {
+      if (!cancelled) {
+        setState({
+          status: 'error',
+          error: error instanceof ApiError ? error.message : 'Could not load your listings.',
+        })
+      }
+    })
+  return () => {
+    cancelled = true
+  }
+}, [sellerId])
+```
+
+### After
+
+```tsx
+const { state } = useAsyncResource(
+  () => getListings().then((listings) => listings.filter((listing) => listing.sellerId === sellerId)),
+  [sellerId],
+)
+// render: getErrorMessage(state.error, 'Could not load your listings.')
+```
+
+The shared hook signature is:
+
+```ts
+export function useAsyncResource<T>(
+  load: () => Promise<T>,
+  deps: DependencyList,
+  options?: {
+    enabled?: boolean
+    onSuccess?: (data: T) => boolean | void   // true = handled (e.g. navigated); stay loading
+    onError?: (error: unknown) => boolean | void
+  },
+): { state: AsyncState<T>; reload: () => void; setData: (data: T) => void }
+```
+
+The 4 views lost 141 lines and gained 56.
+
+### Behavior preserved: how it was verified
+
+1. **Existing tests unchanged.** No existing test file was edited; `git diff develop -- 'frontend/src/**/*.test.*'` lists only the two new test files. Every existing test passes against the refactored views, including:
+   - the profile 401/404 redirects
+   - the detail page's 404 and "invalid id without calling the API" cases
+   - the feed's out-of-range jump, Retry, and reload after delete
+   - MyListings' API and fallback errors
+2. **New focused tests.**
+   - `apiError.test.ts` (4 tests): API message, network-error fallback, non-Error fallback, status matching.
+   - `useAsyncResource.test.tsx` (12 tests):
+     - success
+     - API failure
+     - network failure
+     - a response after unmount is ignored
+     - a response from a superseded request is ignored
+     - loading on dependency change
+     - `reload`
+     - disabled (`enabled: false`)
+     - `onSuccess`/`onError` "handled" keeps loading
+     - the latest `onError` closure is used
+     - `setData`
+3. **Full suite.**
+   - Tests: 190/190 pass, up from 174.
+   - `tsc -b`: clean.
+   - `oxlint`: unchanged, one existing warning.
+   - `npm run build`: succeeds.
+4. **Browser run.** Headless Chromium drove the Vite dev server against the Spring Boot backend running on in-memory H2. All 15 checks passed, with no uncaught page errors:
+   - Feed: renders; `?q=` filters; `?page=99` jumps back to the last page.
+   - Feed with a failing search API: shows "We couldn't load listings" with Retry, and Retry loads the listings.
+   - Listing detail: renders; a missing id (404) and `/listings/abc` both show "Listing not found", and `/listings/abc` makes no API call.
+   - Profile: renders with "My listings (3)"; editing the major and saving shows the update.
+   - Logged out: `/profile` redirects to `/login`.
+
+**One accepted difference:** if the route id changes while `ListingDetailPage` stays mounted, the page now shows the loading skeleton until the new listing arrives. Before, it kept showing the previous listing. The feed already behaved this way, and no test or requirement relied on the old behavior.
+
+**Out of scope:**
+- `auth-context.tsx` keeps its own cancellation guard, because it bootstraps the session rather than loading page data.
+- **Remaining smell, left for a follow-up ticket:** form *submit* state is still duplicated. The `'idle' | 'submitting' | 'error'` union and its `submitting → try → error` transitions appear in six places:
+  - `LoginPage`
+  - `SignupPage`
+  - `ProfileSetupPage`
+  - the `ProfilePage` save
+  - the `FeedPage` listing form
+  - `PinVerificationStep`
+
+  These now share `getErrorMessage`, but their state handling is still copied. This ticket covers load-on-mount requests only; a `useSubmitState` hook would be the matching extraction for submits.
+
+---

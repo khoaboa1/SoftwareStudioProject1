@@ -1,4 +1,5 @@
 import { ApiError, request } from './httpClient'
+import { hasApiStatus } from '../lib/apiError'
 
 export { ApiError }
 
@@ -70,7 +71,7 @@ export async function getCurrentStudent(): Promise<Student | null> {
   try {
     return await request<Student>('/auth/me')
   } catch (error) {
-    if (error instanceof ApiError && error.status === 401) {
+    if (hasApiStatus(error, 401)) {
       return null
     }
     throw error

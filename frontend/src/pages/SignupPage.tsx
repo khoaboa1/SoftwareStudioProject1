@@ -11,7 +11,8 @@ import {
   validateName,
   validatePassword,
 } from '../lib/validation'
-import { ApiError, signup, verifyPin } from '../services/authService'
+import { signup, verifyPin } from '../services/authService'
+import { getErrorMessage } from '../lib/apiError'
 import { getOrCreateDeviceId } from '../lib/device'
 
 type FieldErrors = {
@@ -53,7 +54,7 @@ export function SignupPage() {
       setStep('verify_pin')
     } catch (error) {
       setServerError(
-        error instanceof ApiError ? error.message : 'Something went wrong. Please try again.',
+        getErrorMessage(error, 'Something went wrong. Please try again.'),
       )
       setStatus('error')
     }
