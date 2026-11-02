@@ -1,5 +1,15 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-105 User Name Search API
+
+- **Feature summary:** Backend support for searching other students by the editable public `Profile.name`.
+- **Endpoint:** `GET /api/profiles/search?q={name}&page={page}&limit={limit}`. `q` is required; `page` defaults to 1 and `limit` to 20 (maximum 100).
+- **Authentication:** Send the existing `JSESSIONID` cookie. The backend derives the requester's school from the saved profile; clients cannot supply or override it.
+- **Success (200):** `{ "items": [{ "id": 1, "studentId": 2, "name": "Jane Doe", "major": "Computer Science", "bio": "..." }], "meta": { "totalItems": 1, "currentPage": 1, "totalPages": 1, "pageSize": 20 } }`. No matches return an empty `items` array with valid metadata.
+- **Visibility:** Case-insensitive partial matching, limited to the same school domain, excluding the requester. Results are ordered by name and then profile ID.
+- **Errors:** `400 { "message": "..." }` for invalid query or pagination, `401` without an authenticated session, and `404 { "message": "Profile not found" }` when the requester has no profile.
+- **Frontend assumptions:** Render compact, non-clickable result cards. Public profile-detail navigation is outside this task.
+
 ## Handoff Note: SSP1-84 Listing Thumbnails (Frontend → Backend)
 
 - **Feature summary:** Browse cards and the listing detail page reserve a 4:3 thumbnail slot. For now, they show a category icon placeholder.

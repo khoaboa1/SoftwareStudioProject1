@@ -3,9 +3,12 @@ package com.Handoff.backend.controller;
 import com.Handoff.backend.dto.CreateProfileRequest;
 import com.Handoff.backend.dto.UpdateProfileRequest;
 import com.Handoff.backend.dto.ErrorResponse;
+import com.Handoff.backend.dto.ProfileSearchPageResponse;
+import com.Handoff.backend.dto.ProfileSearchRequest;
 import com.Handoff.backend.model.Profile;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.service.DuplicateProfileException;
+import com.Handoff.backend.service.InvalidProfileSearchException;
 import com.Handoff.backend.service.ProfileAccessDeniedException;
 import com.Handoff.backend.service.ProfileService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -31,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProfileController {
 
   private static final String NOT_AUTHENTICATED = "User must be authenticated to create a profile.";
+  private static final String SEARCH_NOT_AUTHENTICATED = "User must be authenticated to search profiles.";
 
   private final ProfileService profileService;
   private final CurrentStudentResolver currentStudentResolver;
@@ -51,6 +56,18 @@ public class ProfileController {
     Student student = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED);
     Profile profile = profileService.getMyProfile(student);
     return ResponseEntity.ok(profile);
+  }
+
+  /** Search other students' public profile cards by display name. */
+  @GetMapping("/search")
+  public ProfileSearchPageResponse searchProfiles(
+      @RequestParam(required = false) String q,
+      @RequestParam(required = false) String page,
+      @RequestParam(required = false) String limit,
+      HttpServletRequest httpRequest) {
+    Student requester = currentStudentResolver.require(httpRequest, SEARCH_NOT_AUTHENTICATED);
+    ProfileSearchRequest searchRequest = ProfileSearchRequest.parse(q, page, limit);
+    return profileService.searchProfiles(requester, searchRequest);
   }
 
   /**
@@ -142,5 +159,11 @@ public class ProfileController {
   @ExceptionHandler(HttpMessageNotReadableException.class)
   public ResponseEntity<ErrorResponse> handleMalformedRequest(HttpMessageNotReadableException ex) {
     return ResponseEntity.badRequest().body(new ErrorResponse("Request body is missing or malformed."));
+  }
+
+  /** Preserve the API's standard {"message":"..."} validation-error shape. */
+  @ExceptionHandler(InvalidProfileSearchException.class)
+  public ResponseEntity<ErrorResponse> handleInvalidProfileSearch(InvalidProfileSearchException ex) {
+    return ResponseEntity.badRequest().body(new ErrorResponse(ex.getMessage()));
   }
 }
