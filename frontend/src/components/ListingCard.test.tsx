@@ -22,10 +22,14 @@ function LocationProbe() {
   return <span data-testid="location">{location.pathname}</span>
 }
 
-function renderCard(onEdit?: () => void, onDelete?: () => void) {
+function renderCard(
+  onEdit?: () => void,
+  onDelete?: () => void,
+  overrides: Partial<Listing> = {},
+) {
   return render(
     <MemoryRouter initialEntries={['/feed']}>
-      <ListingCard listing={listing} onEdit={onEdit} onDelete={onDelete} />
+      <ListingCard listing={{ ...listing, ...overrides }} onEdit={onEdit} onDelete={onDelete} />
       <LocationProbe />
     </MemoryRouter>,
   )
@@ -76,5 +80,45 @@ describe('ListingCard', () => {
 
     expect(handleEdit).toHaveBeenCalledTimes(1)
     expect(screen.getByTestId('location')).toHaveTextContent('/feed')
+  })
+
+  describe('verified seller badge', () => {
+    it('shows the Verified Student badge beside the seller when sellerVerified is true', () => {
+      renderCard(undefined, undefined, { sellerVerified: true })
+
+      const badge = screen.getByText('Verified Student')
+      expect(screen.getByTestId('listing-seller')).toContainElement(badge)
+      expect(screen.getByTestId('listing-seller')).toHaveTextContent('Jane Doe')
+    })
+
+    it('does not show the badge when sellerVerified is false', () => {
+      renderCard(undefined, undefined, { sellerVerified: false })
+
+      expect(screen.queryByText('Verified Student')).not.toBeInTheDocument()
+    })
+
+    it('does not show the badge when sellerVerified is missing (legacy payload)', () => {
+      renderCard()
+
+      expect(screen.queryByText('Verified Student')).not.toBeInTheDocument()
+    })
+
+    it('does not show the badge when sellerVerified is null', () => {
+      renderCard(undefined, undefined, { sellerVerified: null })
+
+      expect(screen.queryByText('Verified Student')).not.toBeInTheDocument()
+    })
+
+    it('does not show the badge for a non-boolean truthy sellerVerified value', () => {
+      renderCard(undefined, undefined, { sellerVerified: 'true' as unknown as boolean })
+
+      expect(screen.queryByText('Verified Student')).not.toBeInTheDocument()
+    })
+
+    it('keeps the card link name unchanged when verified', () => {
+      renderCard(undefined, undefined, { sellerVerified: true })
+
+      expect(screen.getByRole('link', { name: 'Desk Lamp' })).toHaveAttribute('href', '/listings/1')
+    })
   })
 })

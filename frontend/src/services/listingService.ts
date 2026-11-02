@@ -12,6 +12,7 @@ export type Listing = {
   category: Category
   sellerId: number
   sellerName: string
+  sellerVerified?: boolean | null
   createdAt: string
 }
 

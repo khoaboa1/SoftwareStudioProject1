@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { CATEGORY_LABELS, CONDITION_LABELS } from '../lib/listingOptions'
 import type { Listing } from '../services/listingService'
 import { ListingThumbnail } from './ListingThumbnail'
+import { VerifiedBadge } from './VerifiedBadge'
 
 function formatPostedDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -38,9 +39,12 @@ export function ListingCard({ listing, onEdit, onDelete }: ListingCardProps) {
           </span>
         </div>
         <div className="mt-auto flex items-center justify-between gap-2">
-          <p className="text-xs text-zinc-400">
-            {listing.sellerName} · {formatPostedDate(listing.createdAt)}
-          </p>
+          <div data-testid="listing-seller" className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+            <p className="text-xs text-zinc-400">
+              {listing.sellerName} · {formatPostedDate(listing.createdAt)}
+            </p>
+            {listing.sellerVerified === true && <VerifiedBadge />}
+          </div>
           {(onEdit || onDelete) && (
             <div className="relative z-10 flex items-center gap-3">
               {onEdit && (
