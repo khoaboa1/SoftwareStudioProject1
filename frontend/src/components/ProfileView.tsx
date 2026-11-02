@@ -2,11 +2,12 @@ import { GraduationCap, Buildings } from '@phosphor-icons/react'
 import { Button } from './ui/Button'
 import { FormAlert } from './ui/FormAlert'
 import type { Profile } from '../services/profileService'
+import { VerifiedBadge } from './VerifiedBadge'
 
 type ProfileViewProps =
   | { status: 'loading' }
   | { status: 'error'; error?: string }
-  | { status: 'ready'; profile: Profile; onEdit?: () => void }
+  | { status: 'ready'; profile: Profile; verified?: boolean; onEdit?: () => void }
 
 function initialsOf(name: string): string {
   const words = name.trim().split(/\s+/)
@@ -40,7 +41,7 @@ export function ProfileView(props: ProfileViewProps) {
     return <FormAlert kind="error">{props.error ?? 'Something went wrong loading this profile.'}</FormAlert>
   }
 
-  const { profile, onEdit } = props
+  const { profile, verified, onEdit } = props
   const bio = profile.bio?.trim()
 
   return (
@@ -53,7 +54,10 @@ export function ProfileView(props: ProfileViewProps) {
           {initialsOf(profile.name)}
         </div>
         <div className="flex flex-col gap-1.5">
-          <h2 className="text-2xl font-semibold text-zinc-900">{profile.name}</h2>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h2 className="text-2xl font-semibold text-zinc-900">{profile.name}</h2>
+            {verified === true && <VerifiedBadge />}
+          </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-zinc-600">
             <span className="flex items-center gap-1.5">
               <GraduationCap className="h-4 w-4" aria-hidden="true" />

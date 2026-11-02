@@ -89,4 +89,27 @@ describe('ProfileView', () => {
 
     expect(handleEdit).toHaveBeenCalledTimes(1)
   })
+
+  describe('verified badge', () => {
+    it('shows the Verified Student badge beside the name when verified', () => {
+      render(<ProfileView status="ready" profile={profile} verified />)
+
+      expect(screen.getByText('Verified Student')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Jane Doe' }).parentElement).toContainElement(
+        screen.getByText('Verified Student'),
+      )
+    })
+
+    it('does not show the badge when not verified', () => {
+      render(<ProfileView status="ready" profile={profile} verified={false} />)
+
+      expect(screen.queryByText('Verified Student')).not.toBeInTheDocument()
+    })
+
+    it('does not show the badge when verification is unknown', () => {
+      render(<ProfileView status="ready" profile={profile} />)
+
+      expect(screen.queryByText('Verified Student')).not.toBeInTheDocument()
+    })
+  })
 })

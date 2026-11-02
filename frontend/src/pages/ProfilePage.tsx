@@ -12,7 +12,7 @@ import { getMyProfile, updateProfile, type ProfileUpdate } from '../services/pro
 
 export function ProfilePage() {
   const navigate = useNavigate()
-  const { setStudent, markProfileMissing } = useAuth()
+  const { student, setStudent, markProfileMissing } = useAuth()
   const [editing, setEditing] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -75,7 +75,7 @@ export function ProfilePage() {
             onCancel={() => setEditing(false)}
           />
         ) : state.status === 'ready' ? (
-          <ProfileView status="ready" profile={state.data} onEdit={openEditor} />
+          <ProfileView status="ready" profile={state.data} verified={student?.verified === true} onEdit={openEditor} />
         ) : state.status === 'error' ? (
           <ProfileView status="error" error={getErrorMessage(state.error, 'Could not load your profile.')} />
         ) : (
