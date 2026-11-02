@@ -8,10 +8,11 @@ import { getListings } from '../services/listingService'
 
 const setStudent = vi.fn()
 const markProfileMissing = vi.fn()
+let currentStudent: { id: number; studentName: string; email: string; verified?: boolean } | null
 
 vi.mock('../lib/auth-context', () => ({
   useAuth: () => ({
-    student: { id: 1, studentName: 'Jane Doe', email: 'jane@tulane.edu' },
+    student: currentStudent,
     setStudent,
     markProfileMissing,
   }),
@@ -56,6 +57,27 @@ describe('ProfilePage', () => {
     vi.mocked(getListings).mockReset().mockResolvedValue([])
     setStudent.mockClear()
     markProfileMissing.mockClear()
+    currentStudent = { id: 1, studentName: 'Jane Doe', email: 'jane@tulane.edu' }
+  })
+
+  it('shows the Verified Student badge for a verified account', async () => {
+    currentStudent = { id: 1, studentName: 'Jane Doe', email: 'jane@tulane.edu', verified: true }
+    vi.mocked(getMyProfile).mockResolvedValue(profile)
+
+    renderPage()
+
+    expect(await screen.findByRole('heading', { level: 2, name: 'Jane Doe' })).toBeInTheDocument()
+    expect(screen.getByText('Verified Student')).toBeInTheDocument()
+  })
+
+  it('never shows the Verified Student badge for an unverified account', async () => {
+    currentStudent = { id: 1, studentName: 'Jane Doe', email: 'jane@tulane.edu', verified: false }
+    vi.mocked(getMyProfile).mockResolvedValue(profile)
+
+    renderPage()
+
+    expect(await screen.findByRole('heading', { level: 2, name: 'Jane Doe' })).toBeInTheDocument()
+    expect(screen.queryByText('Verified Student')).not.toBeInTheDocument()
   })
 
   it('shows a loading state while the profile is being fetched', () => {

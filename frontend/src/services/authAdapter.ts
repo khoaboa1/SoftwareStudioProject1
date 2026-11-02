@@ -9,6 +9,7 @@ export function studentFromLogin(result: LoginResult): Student | null {
     studentName: result.studentName,
     email: result.email,
     emailVerified: result.emailVerified ?? true,
+    verified: result.verified,
     sellingItems: result.sellingItems ?? null,
     dormLocation: result.dormLocation ?? null,
   }

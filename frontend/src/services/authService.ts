@@ -8,6 +8,7 @@ export type Student = {
   studentName: string
   email: string
   emailVerified: boolean
+  verified?: boolean
   sellingItems: string[] | null
   dormLocation: string | null
 }
@@ -19,6 +20,7 @@ export type LoginResult = {
   studentName?: string
   email?: string
   emailVerified?: boolean
+  verified?: boolean
   sellingItems?: string[] | null
   dormLocation?: string | null
 }
