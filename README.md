@@ -21,6 +21,13 @@ The backend uses a hosted Supabase PostgreSQL database. Credentials are never co
 
 To load demo students and listings in development, run `cd backend && ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev`.
 
+### Listing photo storage
+
+Create a **public** Supabase Storage bucket named `listing-images`. Set `SUPABASE_URL` and
+`SUPABASE_SERVICE_KEY` in the gitignored `backend/.env` to enable authenticated photo uploads.
+The service key is used only by the backend. `SUPABASE_STORAGE_BUCKET` can override the bucket name.
+Without these settings, listing creation still works, but photo uploads return 503.
+
 Environment variables with the same names override `.env`.
 
 ## Jira workflow
