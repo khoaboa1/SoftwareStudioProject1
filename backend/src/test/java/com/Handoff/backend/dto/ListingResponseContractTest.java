@@ -76,7 +76,7 @@ class ListingResponseContractTest {
         .map(java.lang.reflect.RecordComponent::getName)
         .toList();
 
-    assertEquals(10, components.size());
+    assertEquals(11, components.size());
     assertTrue(components.contains("sellerVerified"));
     assertFalse(components.stream().anyMatch(name ->
         name.equals("passwordHash")
@@ -99,5 +99,27 @@ class ListingResponseContractTest {
     assertFalse(json.contains("email_verified"), "email_verified must not appear in listing JSON");
 
     assertTrue(json.contains("sellerVerified"), "sellerVerified must be present in listing JSON");
+  }
+
+  @Test
+  void from_includesImageUrl_whenSet() throws Exception {
+    Listing listing = new Listing("Mini Fridge", "Cold", new BigDecimal("75"),
+        Condition.GOOD, Category.ELECTRONICS, new Student());
+    listing.setImageUrl("https://images.unsplash.com/photo-1?w=800");
+
+    ListingResponse response = ListingResponse.from(listing);
+
+    assertEquals("https://images.unsplash.com/photo-1?w=800", response.imageUrl());
+    assertTrue(new ObjectMapper().writeValueAsString(response)
+        .contains("\"imageUrl\":\"https://images.unsplash.com/photo-1?w=800\""));
+  }
+
+  @Test
+  void from_imageUrlIsNull_whenNotSet() throws Exception {
+    Listing listing = new Listing("Desk Lamp", "Works", new BigDecimal("10"),
+        Condition.GOOD, Category.FURNITURE, new Student());
+
+    assertTrue(new ObjectMapper().writeValueAsString(ListingResponse.from(listing))
+        .contains("\"imageUrl\":null"));
   }
 }

@@ -1,6 +1,7 @@
 package com.Handoff.backend.model;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.Column;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
@@ -42,6 +43,9 @@ public class Listing {
   private Student seller;
 
   private Instant createdAt;
+
+  @Column(name = "image_url", length = 1000)
+  private String imageUrl;
 
   public Listing() {
   }
@@ -92,6 +96,14 @@ public class Listing {
 
   public Instant getCreatedAt() {
     return createdAt;
+  }
+
+  public String getImageUrl() {
+    return imageUrl;
+  }
+
+  public void setImageUrl(String imageUrl) {
+    this.imageUrl = imageUrl;
   }
 
   public void setCreatedAt(Instant createdAt) {
