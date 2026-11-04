@@ -1,5 +1,13 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-106 Demo Seed Data & Listing Images
+
+- **Feature summary:** Listings now carry an optional photo, and a dev-only seeder loads 10 verified demo students (6 Tulane, 2 USF, 2 UCF) with profiles and 20 photo listings (12 / 4 / 4).
+- **API:** Listing responses from `GET /listings`, `GET /listings/{id}` and `GET /api/listings` include `imageUrl: string | null`. `POST`/`PUT` listing requests accept an optional `imageUrl`; blank becomes `null`, anything not `https://` or longer than 1000 characters returns `400 { "message": "imageUrl must be an https URL of at most 1000 characters" }`.
+- **Database:** Flyway `V3__add_listing_image_url.sql` adds nullable `listings.image_url varchar(1000)`. Existing rows keep `null`.
+- **Seeding:** Run `cd backend && ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev`. The seeder skips any demo email that already exists, so re-running is safe. It never runs without the `dev` profile. All demo accounts use `Password123!`; data lives in `backend/src/main/java/com/Handoff/backend/config/DemoSeedData.java`.
+- **Frontend:** `ListingThumbnail` shows the photo in the existing 4:3 box on cards and the detail page, and falls back to the category icon when `imageUrl` is null or the image fails to load. There is no image upload or form field yet.
+
 ## Handoff Note: SSP1-105 User Name Search API
 
 - **Feature summary:** Backend support for searching other students by the editable public `Profile.name`.
