@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -30,6 +31,78 @@ class ListingServiceTest {
   private CreateListingRequest request(String imageUrl) {
     return new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"),
         "GOOD", "FURNITURE", imageUrl);
+  }
+
+  private CreateListingRequest photoRequest(List<String> imageUrls) {
+    return new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"),
+        "GOOD", "FURNITURE", null, imageUrls);
+  }
+
+  @Test
+  void createListing_storesImageUrlsInOrder_andCoverIsFirst() {
+    when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    Listing listing = new ListingService(listingRepository, profileRepository)
+        .createListing(newStudent(1L, "Jane"), photoRequest(List.of("https://a", "https://b", "https://c")));
+    assertThat(listing.getImageUrls()).containsExactly("https://a", "https://b", "https://c");
+    assertThat(listing.getImageUrl()).isEqualTo("https://a");
+  }
+
+  @Test
+  void createListing_rejectsMoreThanEightPhotos() {
+    assertThatThrownBy(() -> new ListingService(listingRepository, profileRepository)
+        .createListing(newStudent(1L, "Jane"), photoRequest(java.util.stream.IntStream.range(0, 9)
+            .mapToObj(i -> "https://photo/" + i).toList())))
+        .isInstanceOf(InvalidListingException.class).hasMessage("A listing can have at most 8 photos");
+  }
+
+  @Test
+  void createListing_rejectsNonHttpsEntryInImageUrls() {
+    assertThatThrownBy(() -> new ListingService(listingRepository, profileRepository)
+        .createListing(newStudent(1L, "Jane"), photoRequest(List.of("https://a", "http://b"))))
+        .isInstanceOf(InvalidListingException.class)
+        .hasMessage("imageUrl must be an https URL of at most 1000 characters");
+  }
+
+  @Test
+  void createListing_dropsBlankEntries() {
+    when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    Listing listing = new ListingService(listingRepository, profileRepository)
+        .createListing(newStudent(1L, "Jane"), photoRequest(List.of("https://a", "  ", "https://b")));
+    assertThat(listing.getImageUrls()).containsExactly("https://a", "https://b");
+  }
+
+  @Test
+  void createListing_legacyImageUrlBecomesSinglePhoto() {
+    when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    Listing listing = new ListingService(listingRepository, profileRepository)
+        .createListing(newStudent(1L, "Jane"), request("https://a"));
+    assertThat(listing.getImageUrls()).containsExactly("https://a");
+  }
+
+  @Test
+  void updateListing_reordersAndRemovesPhotos() {
+    Student owner = newStudent(1L, "Jane");
+    Listing listing = newListing(10L, owner);
+    listing.replaceImages(List.of("https://a", "https://b", "https://c"));
+    when(listingRepository.findById(10L)).thenReturn(Optional.of(listing));
+    when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    Listing updated = new ListingService(listingRepository, profileRepository)
+        .updateListing(10L, owner, photoRequest(List.of("https://c", "https://a")));
+    assertThat(updated.getImageUrls()).containsExactly("https://c", "https://a");
+    assertThat(updated.getImageUrl()).isEqualTo("https://c");
+  }
+
+  @Test
+  void updateListing_withEmptyImageUrls_clearsPhotosAndCover() {
+    Student owner = newStudent(1L, "Jane");
+    Listing listing = newListing(10L, owner);
+    listing.replaceImages(List.of("https://a"));
+    when(listingRepository.findById(10L)).thenReturn(Optional.of(listing));
+    when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    Listing updated = new ListingService(listingRepository, profileRepository)
+        .updateListing(10L, owner, photoRequest(List.of()));
+    assertThat(updated.getImageUrls()).isEmpty();
+    assertThat(updated.getImageUrl()).isNull();
   }
 
   @Test
