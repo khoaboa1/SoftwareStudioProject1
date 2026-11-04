@@ -19,6 +19,8 @@ The backend uses a hosted Supabase PostgreSQL database. Credentials are never co
    (JDBC form, `?sslmode=require`), `DB_USERNAME` (`postgres.<project-ref>`) and `DB_PASSWORD`.
 3. Run the backend: `cd backend && ./mvnw spring-boot:run`. Flyway creates/updates the schema on startup.
 
+To load demo students and listings in development, run `cd backend && ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev`.
+
 Environment variables with the same names override `.env`.
 
 ## Jira workflow

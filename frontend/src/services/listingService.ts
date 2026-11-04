@@ -14,6 +14,7 @@ export type Listing = {
   sellerName: string
   sellerVerified?: boolean | null
   createdAt: string
+  imageUrl?: string | null
 }
 
 export type ListingPage = {

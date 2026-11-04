@@ -15,7 +15,8 @@ public record ListingResponse(
     Long sellerId,
     String sellerName,
     Boolean sellerVerified,
-    Instant createdAt) {
+    Instant createdAt,
+    String imageUrl) {
 
   public static ListingResponse from(Listing listing) {
     return new ListingResponse(
@@ -28,6 +29,7 @@ public record ListingResponse(
         listing.getSeller().getId(),
         listing.getSeller().getStudentName(),
         listing.getSeller().isVerified(),
-        listing.getCreatedAt());
+        listing.getCreatedAt(),
+        listing.getImageUrl());
   }
 }

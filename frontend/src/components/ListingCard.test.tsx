@@ -36,6 +36,11 @@ function renderCard(
 }
 
 describe('ListingCard', () => {
+  it('shows the listing photo when imageUrl is present', () => {
+    const url = 'https://images.unsplash.com/photo-1?w=800'
+    renderCard(undefined, undefined, { imageUrl: url })
+    expect(screen.getByRole('img', { name: 'Desk Lamp' })).toHaveAttribute('src', url)
+  })
   it('renders the listing details', () => {
     renderCard()
 

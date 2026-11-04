@@ -80,6 +80,18 @@ public class ListingService {
     if (request.price() == null || request.price().signum() <= 0) {
       throw new InvalidListingException("Price must be greater than zero");
     }
+    normalizeImageUrl(request.imageUrl());
+  }
+
+  private String normalizeImageUrl(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return null;
+    }
+    String imageUrl = raw.trim();
+    if (!imageUrl.startsWith("https://") || imageUrl.length() > 1000) {
+      throw new InvalidListingException("imageUrl must be an https URL of at most 1000 characters");
+    }
+    return imageUrl;
   }
 
   public Listing createListing(Student seller, CreateListingRequest request) {
@@ -89,6 +101,7 @@ public class ListingService {
     Category category = parseEnum(Category.class, request.category(), "category");
 
     Listing newListing = new Listing(request.itemName(), request.description(), request.price(), condition, category, seller);
+    newListing.setImageUrl(normalizeImageUrl(request.imageUrl()));
 
     return listingRepository.save(newListing);
   }
@@ -105,6 +118,7 @@ public class ListingService {
     listing.setPrice(request.price());
     listing.setCondition(condition);
     listing.setCategory(category);
+    listing.setImageUrl(normalizeImageUrl(request.imageUrl()));
 
     return listingRepository.save(listing);
   }

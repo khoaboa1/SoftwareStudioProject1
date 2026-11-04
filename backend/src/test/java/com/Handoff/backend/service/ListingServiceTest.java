@@ -8,6 +8,8 @@ import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.ProfileRepository;
 import com.Handoff.backend.dto.CreateListingRequest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -24,6 +26,57 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ListingServiceTest {
+
+  private CreateListingRequest request(String imageUrl) {
+    return new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"),
+        "GOOD", "FURNITURE", imageUrl);
+  }
+
+  @Test
+  void createListing_storesImageUrl() {
+    when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    Listing listing = new ListingService(listingRepository, profileRepository)
+        .createListing(newStudent(1L, "Jane"), request("https://images.unsplash.com/photo-1?w=800"));
+    assertThat(listing.getImageUrl()).isEqualTo("https://images.unsplash.com/photo-1?w=800");
+  }
+
+  @Test
+  void createListing_storesNullForBlankImageUrl() {
+    when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    Listing listing = new ListingService(listingRepository, profileRepository)
+        .createListing(newStudent(1L, "Jane"), request("   "));
+    assertThat(listing.getImageUrl()).isNull();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"http://x.com/a.jpg", "javascript:alert(1)", "ftp://x/a.jpg"})
+  void createListing_rejectsNonHttpsImageUrl(String imageUrl) {
+    assertThatThrownBy(() -> new ListingService(listingRepository, profileRepository)
+        .createListing(newStudent(1L, "Jane"), request(imageUrl)))
+        .isInstanceOf(InvalidListingException.class)
+        .hasMessage("imageUrl must be an https URL of at most 1000 characters");
+  }
+
+  @Test
+  void createListing_rejectsTooLongImageUrl() {
+    assertThatThrownBy(() -> new ListingService(listingRepository, profileRepository)
+        .createListing(newStudent(1L, "Jane"), request("https://" + "a".repeat(993))))
+        .isInstanceOf(InvalidListingException.class)
+        .hasMessage("imageUrl must be an https URL of at most 1000 characters");
+  }
+
+  @Test
+  void updateListing_replacesImageUrl() {
+    Student owner = newStudent(1L, "Jane");
+    Listing existing = newListing(10L, owner);
+    existing.setImageUrl("https://old.example/photo.jpg");
+    when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
+    when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    ListingService service = new ListingService(listingRepository, profileRepository);
+    assertThat(service.updateListing(10L, owner, request("https://new.example/photo.jpg"))
+        .getImageUrl()).isEqualTo("https://new.example/photo.jpg");
+    assertThat(service.updateListing(10L, owner, request(null)).getImageUrl()).isNull();
+  }
 
   @Mock
   private ListingRepository listingRepository;
