@@ -80,7 +80,18 @@ public class ListingService {
     if (request.price() == null || request.price().signum() <= 0) {
       throw new InvalidListingException("Price must be greater than zero");
     }
-    normalizeImageUrl(request.imageUrl());
+  }
+
+  private List<String> resolveImageUrls(CreateListingRequest request) {
+    if (request.imageUrls() != null) {
+      if (request.imageUrls().size() > 8) {
+        throw new InvalidListingException("A listing can have at most 8 photos");
+      }
+      return request.imageUrls().stream().map(this::normalizeImageUrl)
+          .filter(url -> url != null).toList();
+    }
+    String url = normalizeImageUrl(request.imageUrl());
+    return url == null ? List.of() : List.of(url);
   }
 
   private String normalizeImageUrl(String raw) {
@@ -99,9 +110,10 @@ public class ListingService {
 
     Condition condition = parseEnum(Condition.class, request.condition(), "condition");
     Category category = parseEnum(Category.class, request.category(), "category");
+    List<String> imageUrls = resolveImageUrls(request);
 
     Listing newListing = new Listing(request.itemName(), request.description(), request.price(), condition, category, seller);
-    newListing.setImageUrl(normalizeImageUrl(request.imageUrl()));
+    newListing.replaceImages(imageUrls);
 
     return listingRepository.save(newListing);
   }
@@ -112,13 +124,14 @@ public class ListingService {
 
     Condition condition = parseEnum(Condition.class, request.condition(), "condition");
     Category category = parseEnum(Category.class, request.category(), "category");
+    List<String> imageUrls = resolveImageUrls(request);
 
     listing.setItemName(request.itemName());
     listing.setDescription(request.description());
     listing.setPrice(request.price());
     listing.setCondition(condition);
     listing.setCategory(category);
-    listing.setImageUrl(normalizeImageUrl(request.imageUrl()));
+    listing.replaceImages(imageUrls);
 
     return listingRepository.save(listing);
   }

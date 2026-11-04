@@ -8,6 +8,7 @@ import com.Handoff.backend.model.Profile;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import jakarta.persistence.EntityManager;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -26,6 +27,28 @@ class ListingRepositoryTest {
 
   @Autowired
   private ProfileRepository profileRepository;
+
+  @Autowired
+  private EntityManager entityManager;
+
+  @Test
+  void replaceImages_persistsInOrder_andDeleteCascades() {
+    Student seller = studentRepository.save(new Student("Sarah", "sarah2@tulane.edu", "hashed", null, null));
+    Listing listing = new Listing("Lamp", "Works", BigDecimal.TEN, Condition.GOOD, Category.FURNITURE, seller);
+    listing.replaceImages(List.of("https://a", "https://b", "https://c"));
+    Long id = listingRepository.saveAndFlush(listing).getId();
+    entityManager.clear();
+    Listing loaded = listingRepository.findById(id).orElseThrow();
+    assertThat(loaded.getImageUrls()).containsExactly("https://a", "https://b", "https://c");
+    loaded.replaceImages(List.of("https://b"));
+    listingRepository.saveAndFlush(loaded);
+    entityManager.clear();
+    assertThat(listingRepository.findById(id).orElseThrow().getImageUrls()).containsExactly("https://b");
+    listingRepository.deleteById(id);
+    listingRepository.flush();
+    assertThat(entityManager.createNativeQuery("select count(*) from listing_images where listing_id = :id")
+        .setParameter("id", id).getSingleResult()).isEqualTo(0L);
+  }
 
   @Test
   void findBySchoolDomain_returnsMatchingSellersNewestFirst() {

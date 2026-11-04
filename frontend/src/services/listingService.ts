@@ -15,6 +15,7 @@ export type Listing = {
   sellerVerified?: boolean | null
   createdAt: string
   imageUrl?: string | null
+  imageUrls?: string[]
 }
 
 export type ListingPage = {
@@ -69,6 +70,7 @@ export function createListing(input: {
   price: number
   condition: Condition
   category: Category
+  imageUrls: string[]
 }): Promise<Listing> {
   return request<Listing>('/listings', {
     method: 'POST',
@@ -84,6 +86,7 @@ export function updateListing(
     price: number
     condition: Condition
     category: Category
+    imageUrls: string[]
   },
 ): Promise<Listing> {
   return request<Listing>(`/listings/${id}`, {
@@ -94,4 +97,10 @@ export function updateListing(
 
 export function deleteListing(id: number): Promise<void> {
   return request<void>(`/listings/${id}`, { method: 'DELETE' })
+}
+
+export function uploadListingImage(file: Blob): Promise<{ url: string }> {
+  const body = new FormData()
+  body.append('file', file, 'photo.jpg')
+  return request<{ url: string }>('/listings/images', { method: 'POST', body })
 }

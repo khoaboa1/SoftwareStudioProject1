@@ -5,6 +5,7 @@ import { SelectField } from './ui/SelectField'
 import { TextField } from './ui/TextField'
 import { CATEGORY_LABELS, CONDITION_OPTIONS } from '../lib/listingOptions'
 import type { Category, Condition } from '../services/listingService'
+import { ListingPhotoPicker, type ListingPhoto } from './ListingPhotoPicker'
 
 type ListingFormProps = {
   itemName: string
@@ -22,6 +23,8 @@ type ListingFormProps = {
   error: string | null
   submitLabel: string
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  photos: ListingPhoto[]
+  onPhotosChange: (update: (prev: ListingPhoto[]) => ListingPhoto[]) => void
 }
 
 export function ListingForm({
@@ -40,6 +43,8 @@ export function ListingForm({
   error,
   submitLabel,
   onSubmit,
+  photos,
+  onPhotosChange,
 }: ListingFormProps) {
   return (
     <form
@@ -93,7 +98,9 @@ export function ListingForm({
         onChange={(e) => onCategoryChange(e.target.value as Category)}
       />
 
-      <Button type="submit" loading={status === 'submitting'}>
+      <ListingPhotoPicker photos={photos} onPhotosChange={onPhotosChange} />
+
+      <Button type="submit" loading={status === 'submitting'} disabled={photos.some((photo) => photo.status === 'uploading')}>
         {submitLabel}
       </Button>
     </form>

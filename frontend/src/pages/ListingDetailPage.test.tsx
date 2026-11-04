@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ListingDetailPage } from './ListingDetailPage'
@@ -80,5 +81,35 @@ describe('ListingDetailPage', () => {
     renderPage()
 
     expect(screen.getByRole('link', { name: 'Back to marketplace' })).toHaveAttribute('href', '/feed')
+  })
+
+  it('shows the first photo by default', async () => {
+    vi.mocked(getListing).mockResolvedValue({ ...listing, imageUrls: ['https://a', 'https://b'] })
+    renderPage()
+    expect(await screen.findByRole('img', { name: 'Desk Lamp' })).toHaveAttribute('src', 'https://a')
+    expect(screen.getByRole('button', { name: 'Show photo 1' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('switches the main photo when a thumbnail is clicked', async () => {
+    vi.mocked(getListing).mockResolvedValue({ ...listing, imageUrls: ['https://a', 'https://b'] })
+    renderPage()
+    await screen.findByRole('img', { name: 'Desk Lamp' })
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Show photo 2' }))
+    expect(screen.getByRole('img', { name: 'Desk Lamp' })).toHaveAttribute('src', 'https://b')
+    expect(screen.getByRole('button', { name: 'Show photo 2' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('hides the thumbnail row with a single photo', async () => {
+    vi.mocked(getListing).mockResolvedValue({ ...listing, imageUrls: ['https://a'] })
+    renderPage()
+    expect(await screen.findByRole('img', { name: 'Desk Lamp' })).toHaveAttribute('src', 'https://a')
+    expect(screen.queryByRole('button', { name: 'Show photo 1' })).not.toBeInTheDocument()
+  })
+
+  it('shows the category placeholder with no photos', async () => {
+    vi.mocked(getListing).mockResolvedValue({ ...listing, imageUrls: [], imageUrl: null })
+    renderPage()
+    expect(await screen.findByRole('img', { name: 'Furniture listing' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Show photo/ })).not.toBeInTheDocument()
   })
 })

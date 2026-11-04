@@ -1,5 +1,15 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-118 Listing Photo Upload
+
+- **Feature summary:** Students attach up to 8 photos from their phone or computer when posting or editing a listing, and can remove and reorder them. The first photo is the cover on browse cards; the detail page shows a gallery.
+- **Upload endpoint:** `POST /listings/images` (multipart field `file`, `JSESSIONID` cookie). Success: `201 { "url": "<Supabase public URL>" }`. Errors: `401` not logged in; `400 { "message": "Photos must be JPEG, PNG or WebP and at most 5 MB" }` (type is checked from the file bytes); `503` when Supabase Storage isn't configured; `502` when storage fails.
+- **Listings API:** create/update accept `imageUrls: string[]` (ordered, max 8, each `https://`). Responses include `imageUrls` (ordered, `[]` when none) and `imageUrl`, which always equals the cover. Requests without `imageUrls` still work through the old single `imageUrl`.
+- **Database:** Flyway `V4__create_listing_images.sql` adds `listing_images (listing_id, url, position)` with cascade delete and backfills existing `image_url` values as one-photo listings.
+- **Setup:** `backend/.env` needs `SUPABASE_URL` (e.g. `https://<ref>.supabase.co`) and `SUPABASE_SERVICE_KEY` (secret key), plus a public Storage bucket `listing-images`. Without them the app still runs; only uploads return 503.
+- **Frontend:** photos are resized in the browser to at most 1600 px (JPEG) before upload. Reordering uses move-left/right buttons; drag-and-drop is not implemented.
+- **Known gaps:** removed or abandoned uploads stay in the bucket (cleanup is a follow-up), and the storage call has no explicit timeout.
+
 ## Handoff Note: SSP1-106 Demo Seed Data & Listing Images
 
 - **Feature summary:** Listings now carry an optional photo, and a dev-only seeder loads 10 verified demo students (6 Tulane, 2 USF, 2 UCF) with profiles and 20 photo listings (12 / 4 / 4).
