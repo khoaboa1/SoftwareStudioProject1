@@ -10,6 +10,17 @@ cd SoftwareStudioProject1
 
 `setup-dev.sh` points git at the repo's hooks and installs the commit-message template.
 
+### Database (Supabase)
+
+The backend uses a hosted Supabase PostgreSQL database. Credentials are never committed.
+
+1. Copy `backend/.env.example` to `backend/.env` (gitignored).
+2. In the Supabase dashboard, open **Connect → Session pooler** and fill in `DB_URL`
+   (JDBC form, `?sslmode=require`), `DB_USERNAME` (`postgres.<project-ref>`) and `DB_PASSWORD`.
+3. Run the backend: `cd backend && ./mvnw spring-boot:run`. Flyway creates/updates the schema on startup.
+
+Environment variables with the same names override `.env`.
+
 ## Jira workflow
 
 Every branch and commit is tied to a Jira issue so work shows up automatically on the
