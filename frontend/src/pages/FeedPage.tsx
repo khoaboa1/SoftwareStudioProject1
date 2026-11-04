@@ -8,6 +8,7 @@ import { ListingGrid } from '../components/ListingGrid'
 import { ListingGridSkeleton } from '../components/ListingCardSkeleton'
 import { ListingsEmptyState } from '../components/ListingsEmptyState'
 import { ListingForm } from '../components/ListingForm'
+import type { ListingPhoto } from '../components/ListingPhotoPicker'
 import { Pagination } from '../components/Pagination'
 import { FeedError } from '../components/FeedError'
 import { SearchBar } from '../components/SearchBar'
@@ -65,6 +66,7 @@ export function FeedPage() {
   const [price, setPrice] = useState('')
   const [condition, setCondition] = useState<Condition>('GOOD')
   const [category, setCategory] = useState<Category>('OTHER')
+  const [photos, setPhotos] = useState<ListingPhoto[]>([])
   const [formStatus, setFormStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -109,6 +111,7 @@ export function FeedPage() {
       setEditingListingId(null)
       setFormError(null)
       setFormStatus('idle')
+      setPhotos([])
       return
     }
 
@@ -119,6 +122,7 @@ export function FeedPage() {
     setPrice(defaults.price)
     setCondition(defaults.condition)
     setCategory(defaults.category)
+    setPhotos([])
     setFormError(null)
     setFormStatus('idle')
     setShowForm(true)
@@ -131,6 +135,9 @@ export function FeedPage() {
     setPrice(String(listing.price))
     setCondition(listing.condition)
     setCategory(listing.category)
+    setPhotos((listing.imageUrls ?? (listing.imageUrl ? [listing.imageUrl] : [])).map((url, index) => ({
+      id: `${listing.id}-${index}`, url, previewUrl: url, status: 'ready',
+    })))
     setFormError(null)
     setFormStatus('idle')
     setShowForm(true)
@@ -149,7 +156,8 @@ export function FeedPage() {
     setFormStatus('submitting')
     setFormError(null)
 
-    const input = { itemName, description, price: parsedPrice, condition, category }
+    const input = { itemName, description, price: parsedPrice, condition, category,
+      imageUrls: photos.filter((photo) => photo.status === 'ready').map((photo) => photo.url!) }
 
     try {
       if (editingListingId !== null) {
@@ -166,6 +174,7 @@ export function FeedPage() {
       setPrice(defaults.price)
       setCondition(defaults.condition)
       setCategory(defaults.category)
+      setPhotos([])
       setFormStatus('idle')
     } catch (error) {
       setFormError(getErrorMessage(error, 'Something went wrong. Please try again.'))
@@ -214,6 +223,8 @@ export function FeedPage() {
             category={category}
             onCategoryChange={setCategory}
             categoryOptions={categoryOptions}
+            photos={photos}
+            onPhotosChange={setPhotos}
             status={formStatus}
             error={formError}
             submitLabel={editingListingId !== null ? 'Save changes' : 'Post listing'}

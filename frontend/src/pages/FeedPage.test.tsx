@@ -4,7 +4,10 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FeedPage } from './FeedPage'
 import { ApiError } from '../services/httpClient'
-import { searchListings, deleteListing, type Listing, type ListingPage } from '../services/listingService'
+import { searchListings, deleteListing, updateListing, uploadListingImage, type Listing, type ListingPage } from '../services/listingService'
+import { resizeImage } from '../lib/resizeImage'
+
+vi.mock('../lib/resizeImage', () => ({ resizeImage: vi.fn() }))
 
 vi.mock('../lib/auth-context', () => ({
   useAuth: () => ({
@@ -18,6 +21,7 @@ vi.mock('../services/listingService', () => ({
   getCategories: vi.fn().mockResolvedValue([]),
   createListing: vi.fn(),
   updateListing: vi.fn(),
+  uploadListingImage: vi.fn(),
   deleteListing: vi.fn(),
 }))
 
@@ -317,5 +321,43 @@ describe('FeedPage', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(searchListings).toHaveBeenCalledTimes(2))
     expect(searchListings).toHaveBeenLastCalledWith({ sortBy: 'createdAt', sortOrder: 'desc', page: 2, limit: 24 })
+  })
+
+  it('editing a listing preloads its photos', async () => {
+    vi.mocked(searchListings).mockResolvedValue(page([{ ...listing(1, 'Lamp'), imageUrls: ['https://a', 'https://b'] }]))
+    renderFeed()
+    await screen.findByText('Lamp')
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Edit' }))
+    expect(screen.getAllByRole('button', { name: /Remove photo/ })).toHaveLength(2)
+  })
+
+  it('submits imageUrls in the current order', async () => {
+    vi.mocked(searchListings).mockResolvedValue(page([{ ...listing(1, 'Lamp'), imageUrls: ['https://a', 'https://b'] }]))
+    vi.mocked(updateListing).mockResolvedValue(listing(1, 'Lamp'))
+    renderFeed()
+    await screen.findByText('Lamp')
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Edit' }))
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Move photo 2 left' }))
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(updateListing).toHaveBeenCalledWith(1, expect.objectContaining({ imageUrls: ['https://b', 'https://a'] })))
+  })
+
+  it('failed upload shows an error and is not submitted', async () => {
+    vi.mocked(searchListings).mockResolvedValue(page([]))
+    vi.mocked(resizeImage).mockResolvedValue(new Blob(['jpg'], { type: 'image/jpeg' }))
+    vi.mocked(uploadListingImage).mockRejectedValue(new ApiError(502, 'Upload failed'))
+    vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn(() => 'blob:failed'), revokeObjectURL: vi.fn() })
+    const createListing = (await import('../services/listingService')).createListing
+    vi.mocked(createListing).mockResolvedValue(listing(1, 'Lamp'))
+    renderFeed()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Post a listing' }))
+    await userEvent.setup().type(screen.getByRole('textbox', { name: 'Item name' }), 'Lamp')
+    await userEvent.setup().type(screen.getByRole('textbox', { name: 'Description' }), 'Works')
+    await userEvent.setup().type(screen.getByRole('spinbutton', { name: 'Price (USD)' }), '10')
+    await userEvent.setup().upload(screen.getByLabelText('Add photos'), new File(['a'], 'a.png', { type: 'image/png' }))
+    expect(await screen.findByText('Upload failed')).toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Post listing' }))
+    await waitFor(() => expect(createListing).toHaveBeenCalledWith(expect.objectContaining({ imageUrls: [] })))
+    vi.unstubAllGlobals()
   })
 })
