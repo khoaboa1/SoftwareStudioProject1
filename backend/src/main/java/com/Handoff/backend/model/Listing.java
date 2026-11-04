@@ -9,10 +9,16 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "listings")
@@ -46,6 +52,11 @@ public class Listing {
 
   @Column(name = "image_url", length = 1000)
   private String imageUrl;
+
+  @OneToMany(mappedBy = "listing", cascade = CascadeType.ALL, orphanRemoval = true)
+  @OrderBy("position ASC")
+  @BatchSize(size = 50)
+  private List<ListingImage> images = new ArrayList<>();
 
   public Listing() {
   }
@@ -104,6 +115,22 @@ public class Listing {
 
   public void setImageUrl(String imageUrl) {
     this.imageUrl = imageUrl;
+  }
+
+  public List<String> getImageUrls() {
+    return images.stream().map(ListingImage::getUrl).toList();
+  }
+
+  public void replaceImages(List<String> urls) {
+    for (int index = 0; index < urls.size(); index++) {
+      if (index < images.size()) {
+        images.get(index).setUrl(urls.get(index));
+      } else {
+        images.add(new ListingImage(this, urls.get(index), index));
+      }
+    }
+    if (images.size() > urls.size()) images.subList(urls.size(), images.size()).clear();
+    imageUrl = urls.isEmpty() ? null : urls.get(0);
   }
 
   public void setCreatedAt(Instant createdAt) {

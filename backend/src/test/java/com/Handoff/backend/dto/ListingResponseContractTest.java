@@ -70,13 +70,13 @@ class ListingResponseContractTest {
 
     ListingResponse response = ListingResponse.from(listing);
 
-    // The record must carry only the 9 public listing fields; sellerVerified is the
+    // The record carries public listing fields only; sellerVerified is the
     // only verification-related field and no sensitive student field is present.
     List<String> components = java.util.Arrays.stream(ListingResponse.class.getRecordComponents())
         .map(java.lang.reflect.RecordComponent::getName)
         .toList();
 
-    assertEquals(11, components.size());
+    assertEquals(12, components.size());
     assertTrue(components.contains("sellerVerified"));
     assertFalse(components.stream().anyMatch(name ->
         name.equals("passwordHash")
@@ -121,5 +121,31 @@ class ListingResponseContractTest {
 
     assertTrue(new ObjectMapper().writeValueAsString(ListingResponse.from(listing))
         .contains("\"imageUrl\":null"));
+  }
+
+  @Test
+  void from_returnsImageUrlsInOrder() {
+    Listing listing = new Listing("Lamp", "Works", BigDecimal.TEN,
+        Condition.GOOD, Category.FURNITURE, new Student());
+    listing.replaceImages(List.of("https://a", "https://b", "https://c"));
+    ListingResponse response = ListingResponse.from(listing);
+    assertEquals(List.of("https://a", "https://b", "https://c"), response.imageUrls());
+    assertEquals("https://a", response.imageUrl());
+  }
+
+  @Test
+  void from_fallsBackToImageUrl_whenNoImageRows() {
+    Listing listing = new Listing("Lamp", "Works", BigDecimal.TEN,
+        Condition.GOOD, Category.FURNITURE, new Student());
+    listing.setImageUrl("https://a");
+    assertEquals(List.of("https://a"), ListingResponse.from(listing).imageUrls());
+  }
+
+  @Test
+  void from_returnsEmptyImageUrls_whenNoPhotos() throws Exception {
+    Listing listing = new Listing("Lamp", "Works", BigDecimal.TEN,
+        Condition.GOOD, Category.FURNITURE, new Student());
+    assertTrue(new ObjectMapper().writeValueAsString(ListingResponse.from(listing))
+        .contains("\"imageUrls\":[]"));
   }
 }

@@ -4,6 +4,7 @@ import com.Handoff.backend.model.Listing;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 public record ListingResponse(
     Long id,
@@ -16,7 +17,8 @@ public record ListingResponse(
     String sellerName,
     Boolean sellerVerified,
     Instant createdAt,
-    String imageUrl) {
+    String imageUrl,
+    List<String> imageUrls) {
 
   public static ListingResponse from(Listing listing) {
     return new ListingResponse(
@@ -30,6 +32,9 @@ public record ListingResponse(
         listing.getSeller().getStudentName(),
         listing.getSeller().isVerified(),
         listing.getCreatedAt(),
-        listing.getImageUrl());
+        listing.getImageUrl(),
+        listing.getImageUrls().isEmpty()
+            ? (listing.getImageUrl() == null ? List.of() : List.of(listing.getImageUrl()))
+            : listing.getImageUrls());
   }
 }
