@@ -38,7 +38,7 @@ export function ListingDetailPage() {
 
         {state.status === 'ready' && (
           <div className="grid gap-6 md:grid-cols-2">
-            <ListingThumbnail category={state.data.category} className="overflow-hidden rounded-2xl" />
+            <ListingThumbnail category={state.data.category} imageUrl={state.data.imageUrl} itemName={state.data.itemName} className="overflow-hidden rounded-2xl" />
             <div>
               <h1 className="text-2xl font-semibold text-zinc-900">{state.data.itemName}</h1>
               <p className="mt-2 text-xl font-semibold text-accent-700">${state.data.price.toFixed(2)}</p>

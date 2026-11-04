@@ -20,7 +20,7 @@ type ListingCardProps = {
 export function ListingCard({ listing, onEdit, onDelete }: ListingCardProps) {
   return (
     <article className="relative flex flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition hover:shadow-md focus-within:ring-2 focus-within:ring-accent-300">
-      <ListingThumbnail category={listing.category} />
+      <ListingThumbnail category={listing.category} imageUrl={listing.imageUrl} itemName={listing.itemName} />
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-base font-semibold text-zinc-900">
