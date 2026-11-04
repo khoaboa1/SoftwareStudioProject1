@@ -7,5 +7,10 @@ public record CreateListingRequest(
     String description,
     BigDecimal price,
     String condition,
-    String category) {
+    String category,
+    String imageUrl) {
+  public CreateListingRequest(String itemName, String description, BigDecimal price,
+                              String condition, String category) {
+    this(itemName, description, price, condition, category, null);
+  }
 }
