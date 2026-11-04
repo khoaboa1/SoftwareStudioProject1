@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AppHeader } from '../components/AppHeader'
 import { ListingThumbnail } from '../components/ListingThumbnail'
@@ -12,6 +13,11 @@ export function ListingDetailPage() {
   const listingId = Number(id)
   const validId = Number.isInteger(listingId) && listingId > 0
   const { state } = useAsyncResource(() => getListing(listingId), [listingId], { enabled: validId })
+  const [selection, setSelection] = useState({ listingId, index: 0 })
+  const selectedPhoto = selection.listingId === listingId ? selection.index : 0
+  const photoUrls = state.status === 'ready'
+    ? (state.data.imageUrls ?? (state.data.imageUrl ? [state.data.imageUrl] : []))
+    : []
 
   return (
     <div className="min-h-dvh bg-zinc-50">
@@ -38,7 +44,17 @@ export function ListingDetailPage() {
 
         {state.status === 'ready' && (
           <div className="grid gap-6 md:grid-cols-2">
-            <ListingThumbnail category={state.data.category} imageUrl={state.data.imageUrl} itemName={state.data.itemName} className="overflow-hidden rounded-2xl" />
+            <div>
+              <ListingThumbnail category={state.data.category} imageUrl={photoUrls[selectedPhoto] ?? null} itemName={state.data.itemName} className="overflow-hidden rounded-2xl" />
+              {photoUrls.length > 1 && <div className="mt-3 flex gap-2 overflow-x-auto">
+                {photoUrls.map((url, index) => <button key={`${url}-${index}`} type="button"
+                  aria-label={`Show photo ${index + 1}`} aria-pressed={selectedPhoto === index}
+                  onClick={() => setSelection({ listingId, index })}
+                  className={`w-20 shrink-0 overflow-hidden rounded-lg border-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500 ${selectedPhoto === index ? 'border-accent-700' : 'border-transparent'}`}>
+                  <img src={url} alt="" className="aspect-[4/3] w-full object-cover" />
+                </button>)}
+              </div>}
+            </div>
             <div>
               <h1 className="text-2xl font-semibold text-zinc-900">{state.data.itemName}</h1>
               <p className="mt-2 text-xl font-semibold text-accent-700">${state.data.price.toFixed(2)}</p>
