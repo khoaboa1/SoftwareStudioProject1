@@ -14,6 +14,8 @@ export type Listing = {
   sellerName: string
   sellerVerified?: boolean | null
   createdAt: string
+  /** Not sent by the backend yet; absent means the listing is treated as ACTIVE. */
+  status?: string | null
   imageUrl?: string | null
   imageUrls?: string[]
 }
