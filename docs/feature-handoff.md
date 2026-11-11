@@ -1,5 +1,15 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-123 Start Conversation API
+
+- **Feature summary:** A buyer can start or reopen one conversation with a listing's seller. Repeated requests return the same conversation.
+- **Endpoint:** `POST /listings/{id}/conversation`, with no request body. Send the existing `JSESSIONID` cookie; the backend resolves the buyer from the session.
+- **Response:** `{ "id": 1, "listingId": 2, "itemName": "Desk Lamp", "buyerId": 3, "buyerName": "Buyer", "sellerId": 4, "sellerName": "Seller", "createdAt": "2026-11-11T20:00:00Z" }`. A new conversation returns `201 Created`; an existing conversation returns `200 OK` with the same `id`.
+- **Errors:** `401 { "message": "You must be logged in to message a seller" }`; `404 { "message": "Profile not found" }` when the buyer has no profile; `404 { "message": "Listing not found" }` when the listing is missing or outside the buyer's school; `403 { "message": "You cannot message yourself about your own listing" }`; `409 { "message": "This item has already been sold" }` when starting a new conversation on a sold listing.
+- **Visibility rules:** Buyer and seller must have profiles in the same school. A seller cannot message their own listing. `PENDING` listings remain messageable. `SOLD` blocks new conversations, but a buyer can reopen one created earlier.
+- **Listing status:** `ListingStatus` now includes `PENDING` and `SOLD`; BE2 (SSP1-125) will add the endpoint that sets them.
+- **Known gaps:** Sending and reading messages, an inbox list, and realtime delivery are not included. The frontend will poll once message endpoints exist.
+
 ## Handoff Note: SSP1-124 Message Seller Button (Frontend → Backend)
 
 - **Feature summary:** The listing detail page shows a **Message seller** button on another student's available listing. It is hidden on the student's own listing (`sellerId === student.id`) and on any listing whose `status` is not `ACTIVE`. Clicking it will open the buyer–seller conversation, which is not built yet.
@@ -464,4 +474,3 @@ Adds `sellerVerified: boolean` to `ListingResponse`:
 - When `sellerVerified` is `true`, display a "Verified" badge/indicator next to the seller name.
 - When `false`, show no badge (or an "Unverified" label if desired).
 - Do not display any sensitive student account data (password, PIN, trusted devices, etc.) — these are never included in listing responses.
-
