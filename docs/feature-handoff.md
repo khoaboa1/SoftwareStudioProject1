@@ -1,5 +1,12 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-124 Message Seller Button (Frontend → Backend)
+
+- **Feature summary:** The listing detail page shows a **Message seller** button on another student's available listing. It is hidden on the student's own listing (`sellerId === student.id`) and on any listing whose `status` is not `ACTIVE`. Clicking it will open the buyer–seller conversation, which is not built yet.
+- **Auth assumptions:** No new checks on the frontend. `/listings/:id` already requires login and a profile, and `GET /listings/{id}` already returns `404` across schools.
+- **Request — listing status:** Add `status` (`ACTIVE`, or a non-active value once the item is sold) to listing responses, at least from `GET /listings/{id}`. The frontend treats a missing or `null` `status` as `ACTIVE`, so nothing breaks before this ships.
+- **Request — messaging:** No messaging backend exists yet. The conversation/inbox endpoints will be specified in the follow-up messaging ticket. The backend must enforce the same-school and not-own-listing rules itself.
+
 ## Handoff Note: SSP1-118 Listing Photo Upload
 
 - **Feature summary:** Students attach up to 8 photos from their phone or computer when posting or editing a listing, and can remove and reorder them. The first photo is the cover on browse cards; the detail page shows a gallery.
