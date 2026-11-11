@@ -112,4 +112,40 @@ describe('ListingDetailPage', () => {
     expect(await screen.findByRole('img', { name: 'Furniture listing' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Show photo/ })).not.toBeInTheDocument()
   })
+
+  describe('Message seller button', () => {
+    it('shows Message seller on another student’s listing', async () => {
+      vi.mocked(getListing).mockResolvedValue(listing)
+      renderPage()
+      expect(await screen.findByRole('button', { name: 'Message seller' })).toBeEnabled()
+    })
+
+    it('shows Message seller on an ACTIVE listing', async () => {
+      vi.mocked(getListing).mockResolvedValue({ ...listing, status: 'ACTIVE' })
+      renderPage()
+      expect(await screen.findByRole('button', { name: 'Message seller' })).toBeInTheDocument()
+    })
+
+    it('hides Message seller on the student’s own listing', async () => {
+      vi.mocked(getListing).mockResolvedValue({ ...listing, sellerId: 1 })
+      renderPage()
+      await screen.findByRole('heading', { name: 'Desk Lamp' })
+      expect(screen.queryByRole('button', { name: 'Message seller' })).not.toBeInTheDocument()
+    })
+
+    it.each(['INACTIVE', 'SOLD'])('hides Message seller when the listing is %s', async (status) => {
+      vi.mocked(getListing).mockResolvedValue({ ...listing, status })
+      renderPage()
+      await screen.findByRole('heading', { name: 'Desk Lamp' })
+      expect(screen.queryByRole('button', { name: 'Message seller' })).not.toBeInTheDocument()
+    })
+
+    it('hides Message seller while loading and on errors', async () => {
+      vi.mocked(getListing).mockRejectedValue(new ApiError(500, 'Server down'))
+      renderPage()
+      expect(screen.queryByRole('button', { name: 'Message seller' })).not.toBeInTheDocument()
+      await screen.findByText('Server down')
+      expect(screen.queryByRole('button', { name: 'Message seller' })).not.toBeInTheDocument()
+    })
+  })
 })

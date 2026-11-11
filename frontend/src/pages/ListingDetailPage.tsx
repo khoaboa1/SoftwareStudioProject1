@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AppHeader } from '../components/AppHeader'
 import { ListingThumbnail } from '../components/ListingThumbnail'
+import { Button } from '../components/ui/Button'
 import { FormAlert } from '../components/ui/FormAlert'
+import { useAuth } from '../lib/auth-context'
 import { CATEGORY_LABELS, CONDITION_LABELS } from '../lib/listingOptions'
 import { getErrorMessage, hasApiStatus } from '../lib/apiError'
 import { useAsyncResource } from '../lib/useAsyncResource'
@@ -12,12 +14,17 @@ export function ListingDetailPage() {
   const { id } = useParams()
   const listingId = Number(id)
   const validId = Number.isInteger(listingId) && listingId > 0
+  const { student } = useAuth()
   const { state } = useAsyncResource(() => getListing(listingId), [listingId], { enabled: validId })
   const [selection, setSelection] = useState({ listingId, index: 0 })
   const selectedPhoto = selection.listingId === listingId ? selection.index : 0
   const photoUrls = state.status === 'ready'
     ? (state.data.imageUrls ?? (state.data.imageUrl ? [state.data.imageUrl] : []))
     : []
+  // Login and same-school access are enforced by RequireAuth and the backend's 404.
+  const canMessage = state.status === 'ready'
+    && state.data.sellerId !== student?.id
+    && (state.data.status == null || state.data.status === 'ACTIVE')
 
   return (
     <div className="min-h-dvh bg-zinc-50">
@@ -71,6 +78,7 @@ export function ListingDetailPage() {
               <p className="mt-1 text-sm text-zinc-500">
                 Posted {new Date(state.data.createdAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
               </p>
+              {canMessage && <Button type="button" className="mt-6">Message seller</Button>}
             </div>
           </div>
         )}
