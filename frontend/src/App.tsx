@@ -7,6 +7,8 @@ import { FeedPage } from './pages/FeedPage'
 import { ListingDetailPage } from './pages/ListingDetailPage'
 import { ProfileSetupPage } from './pages/ProfileSetupPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { InboxPage } from './pages/InboxPage'
+import { ConversationPage } from './pages/ConversationPage'
 
 function RequireAuth({ children }: { children: ReactElement }) {
   const { student, hasProfile, loading } = useAuth()
@@ -83,6 +85,22 @@ function App() {
             <RequireAuthNoProfile>
               <ProfileSetupPage />
             </RequireAuthNoProfile>
+          }
+        />
+        <Route
+          path="/inbox"
+          element={
+            <RequireAuth>
+              <InboxPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/conversations/:id"
+          element={
+            <RequireAuth>
+              <ConversationPage />
+            </RequireAuth>
           }
         />
       </Routes>
