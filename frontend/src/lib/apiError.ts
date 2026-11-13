@@ -6,6 +6,6 @@ export function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 /** Checks whether a failure is an API error with the given status. */
-export function hasApiStatus(error: unknown, status: number): boolean {
+export function hasApiStatus(error: unknown, status: number): error is ApiError {
   return error instanceof ApiError && error.status === status
 }
