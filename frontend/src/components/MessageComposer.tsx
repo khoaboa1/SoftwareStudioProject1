@@ -3,6 +3,8 @@ import { useCallback, useRef, useState } from 'react'
 interface MessageComposerProps {
   onSend: (content: string) => void
   sending: boolean
+  value?: string
+  onChange?: (text: string) => void
 }
 
 const MAX_LENGTH = 1000
@@ -15,58 +17,66 @@ const MAX_LENGTH = 1000
  *
  * Accessibility:
  * - textarea labelled "Message" via aria-label.
- * - Send button disabled when empty/only-spaces or while sending.
+ * - Send button disabled when empty/only-spaces or while sending. The textarea
+ *   itself stays enabled so focus is never stolen while a message is in flight.
  * - Enter sends; Shift+Enter starts a new line.
+ *
+ * When `value`/`onChange` are supplied the composer is controlled (the page owns
+ * the text, which lets it survive a rejected send). Otherwise it manages its own
+ * state.
  */
-export function MessageComposer({ onSend, sending }: MessageComposerProps) {
-  const [value, setValue] = useState('')
+export function MessageComposer({ onSend, sending, value, onChange }: MessageComposerProps) {
+  const [internalValue, setInternalValue] = useState('')
   const boxRef = useRef<HTMLTextAreaElement>(null)
 
-  const maxExceeded = value.length > MAX_LENGTH
+  const isControlled = value !== undefined
+  const displayValue = isControlled ? value : internalValue
+  const maxExceeded = displayValue.length > MAX_LENGTH
 
   const handleChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setValue(event.target.value)
-  }, [])
+    const next = event.target.value
+    if (!isControlled) setInternalValue(next)
+    onChange?.(next)
+  }, [isControlled, onChange])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault()
-        const trimmed = value.trim()
+        const trimmed = displayValue.trim()
         if (trimmed && !maxExceeded && !sending) {
           onSend(trimmed)
-          setValue('')
-          boxRef.current?.focus()
+          if (!isControlled) setInternalValue('')
+          onChange?.('')
         }
       }
     },
-    [value, maxExceeded, sending, onSend],
+    [displayValue, maxExceeded, sending, onSend, isControlled, onChange],
   )
 
   const handleSubmit = useCallback(
     (event: React.FormEvent) => {
       event.preventDefault()
-      const trimmed = value.trim()
+      const trimmed = displayValue.trim()
       if (trimmed && !maxExceeded && !sending) {
         onSend(trimmed)
-        setValue('')
-        boxRef.current?.focus()
+        if (!isControlled) setInternalValue('')
+        onChange?.('')
       }
     },
-    [value, maxExceeded, sending, onSend],
+    [displayValue, maxExceeded, sending, onSend, isControlled, onChange],
   )
 
-  const disabled = !value.trim() || maxExceeded || sending
+  const disabled = !displayValue.trim() || maxExceeded || sending
 
   return (
     <form onSubmit={handleSubmit} className="flex items-end gap-2 rounded-lg border border-zinc-200 bg-white p-3">
       <textarea
         ref={boxRef}
         id="message"
-        value={value}
+        value={displayValue}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        disabled={sending}
         aria-label="Message"
         className="flex-1 min-h-[44px] resize-none border-none bg-transparent text-sm text-zinc-900 focus-visible:outline-none"
         placeholder="Write a message…"
