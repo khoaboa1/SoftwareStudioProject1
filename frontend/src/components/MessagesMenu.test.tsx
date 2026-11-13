@@ -88,4 +88,18 @@ describe('MessagesMenu', () => {
 
     expect(screen.queryByRole('region', { name: 'Messages' })).not.toBeInTheDocument()
   })
+
+  it('shows the last message of each conversation and orders by last activity', async () => {
+    vi.mocked(getConversations).mockResolvedValue([
+      conversation(1, '2026-11-05T00:00:00Z'),
+      conversation(2, '2026-11-01T00:00:00Z', { lastMessage: { content: 'See you at 5', senderId: 1, createdAt: '2026-11-09T00:00:00Z' } }),
+    ])
+    renderMenu()
+    await userEvent.setup().click(screen.getByRole('button', { name: /message/i }))
+
+    const rows = await screen.findAllByRole('link', { name: /Conversation with/ })
+    expect(rows.map((row) => row.getAttribute('href'))).toEqual(['/conversations/2', '/conversations/1'])
+    expect(rows[0]).toHaveTextContent('You: See you at 5')
+    expect(rows[1]).toHaveTextContent('No messages yet')
+  })
 })

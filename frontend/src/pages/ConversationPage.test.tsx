@@ -129,7 +129,7 @@ describe('ConversationPage', () => {
       renderChat()
 
       await screen.findByText('Hi')
-      expect(scrollIntoView).toHaveBeenCalled()
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
     })
 
     it('shows an empty state when there are no messages', async () => {
@@ -304,7 +304,7 @@ describe('ConversationPage', () => {
       await screen.findByText('Latest')
 
       const latest = within(messageList()).getAllByRole('listitem')[1]
-      expect(scrollIntoView.mock.contexts).toContain(latest)
+      await waitFor(() => expect(scrollIntoView.mock.contexts).toContain(latest))
     })
 
     it('keeps the typed text and shows the reason when the backend rejects a message', async () => {

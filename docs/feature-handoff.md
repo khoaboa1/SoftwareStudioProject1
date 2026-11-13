@@ -6,10 +6,11 @@
 - **Request — list endpoint:** `GET /api/conversations`, no parameters. Send the existing `JSESSIONID` cookie; the backend resolves the student from the session.
 - **Response (200):** a JSON array of the same objects `POST /listings/{id}/conversation` returns, for every conversation where the student is the buyer **or** the seller: `[{ "id": 1, "listingId": 2, "itemName": "Desk Lamp", "buyerId": 3, "buyerName": "Buyer", "sellerId": 4, "sellerName": "Seller", "createdAt": "2026-11-11T20:00:00Z", "listingStatus": "ACTIVE" }]`. No conversations returns `[]`, not an error.
 - **Request — `listingStatus`:** add `listingStatus` (`ACTIVE`, `PENDING` or `SOLD`) to `ConversationResponse`. The frontend shows a "Sold" badge when it is `SOLD`, and treats a missing or `null` value as not sold, so nothing breaks before this ships.
-- **Ordering:** the frontend sorts by `createdAt` descending itself, so any order works. Returning newest first is still preferred. If a last-message time is added later, the frontend will switch to it.
+- **Request — `lastMessage`:** add `lastMessage` to each `ConversationResponse` in the list: `{ "content": "Is it still available?", "senderId": 3, "createdAt": "2026-11-11T20:05:00Z" }`, or `null` when no message has been sent. The dropdown and inbox show it as "You: ..." when `senderId` is the student, otherwise "{first name}: ...". A missing value is treated as `null`, so nothing breaks before this ships.
+- **Ordering:** the frontend sorts by last activity (`lastMessage.createdAt`, else `createdAt`) descending itself, so any order works. Returning that order is still preferred.
 - **Errors:** `401` when not logged in (frontend redirects to `/login`); `404 { "message": "Profile not found" }` when the student has no profile (frontend redirects to `/profile-setup`). Other failures show an error message with a Retry button.
 - **Visibility rules:** return only the requester's own conversations. A sold listing's conversation is still returned, because reopening is supported.
-- **Known gaps:** no pagination (the dropdown and inbox fetch the whole list), no unread counts, and no last-message preview until message endpoints exist.
+- **Known gaps:** no pagination (the dropdown and inbox fetch the whole list), and no unread counts or indicator.
 
 - **Chat endpoints (SSP1-141):** The chat page at `/conversations/{id}` fetches and posts messages:
   - `GET /api/conversations/{id}` — header info for the conversation, including `listingStatus`. Errors: `401` → `/login`; `404 "Profile not found"` → `/profile-setup`; `403` or any other `404` → "Conversation not found".

@@ -1,5 +1,12 @@
 import { request } from './httpClient'
 
+/** The latest message of a conversation, as sent in the list response. */
+export type LastMessage = {
+  content: string
+  senderId: number
+  createdAt: string
+}
+
 export type Conversation = {
   id: number
   listingId: number
@@ -11,6 +18,8 @@ export type Conversation = {
   createdAt: string
   /** Optional until the backend exposes it; missing or null means not sold. */
   listingStatus?: string | null
+  /** Optional until the backend exposes it; missing or null means no messages yet. */
+  lastMessage?: LastMessage | null
 }
 
 export type Message = {
@@ -29,8 +38,11 @@ export type ConversationSummary = {
   itemName: string
   otherPartyName: string
   otherPartyId: number
-  createdAt: string
+  /** When the conversation last had activity: its last message, else when it was started. */
+  activityAt: string
   sold: boolean
+  /** Preview of the last message; `sender` is "You" or the other party's first name. */
+  lastMessage: { sender: string; text: string } | null
 }
 
 export function getConversations(): Promise<Conversation[]> {
@@ -68,12 +80,24 @@ export function toSummary(conversation: Conversation, currentStudentId: number):
     itemName: conversation.itemName,
     otherPartyId: isBuyer ? conversation.sellerId : conversation.buyerId,
     otherPartyName: isBuyer ? conversation.sellerName : conversation.buyerName,
-    createdAt: conversation.createdAt,
+    activityAt: activityAt(conversation),
     sold: conversation.listingStatus === 'SOLD',
+    lastMessage: conversation.lastMessage
+      ? {
+          sender: conversation.lastMessage.senderId === currentStudentId
+            ? 'You'
+            : (isBuyer ? conversation.sellerName : conversation.buyerName).split(' ')[0],
+          text: conversation.lastMessage.content,
+        }
+      : null,
   }
 }
 
-/** Newest conversations first, without mutating the input. */
+function activityAt(conversation: Conversation): string {
+  return conversation.lastMessage?.createdAt ?? conversation.createdAt
+}
+
+/** Most recent activity first (last message, else creation time), without mutating the input. */
 export function sortNewestFirst(conversations: Conversation[]): Conversation[] {
-  return [...conversations].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+  return [...conversations].sort((a, b) => Date.parse(activityAt(b)) - Date.parse(activityAt(a)))
 }

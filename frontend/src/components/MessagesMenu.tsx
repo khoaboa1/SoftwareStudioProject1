@@ -53,7 +53,7 @@ export function MessagesMenu() {
         <div
           role="region"
           aria-label="Messages"
-          className="absolute right-0 z-20 mt-2 w-80 max-w-[calc(100vw-2rem)] space-y-2 rounded-2xl border border-zinc-200 bg-white p-3 shadow-lg"
+          className="absolute right-0 z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] space-y-2 rounded-2xl border border-zinc-200 bg-white p-3 shadow-lg"
         >
           <Link
             to="/inbox"
