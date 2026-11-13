@@ -1,7 +1,9 @@
 package com.Handoff.backend.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -95,7 +97,9 @@ class ConversationControllerTest {
         .andExpect(jsonPath("$.buyerName").value("Buyer"))
         .andExpect(jsonPath("$.sellerId").value(seller.getId()))
         .andExpect(jsonPath("$.sellerName").value("Seller"))
-        .andExpect(jsonPath("$.createdAt").exists());
+        .andExpect(jsonPath("$.createdAt").exists())
+        .andExpect(jsonPath("$.listingStatus").value("ACTIVE"))
+        .andExpect(jsonPath("$.lastMessage").value(nullValue()));
   }
 
   private MockHttpSession loginSession(String email) {
@@ -185,5 +189,190 @@ class ConversationControllerTest {
     mockMvc.perform(delete("/listings/{id}", listing.getId())
             .session(loginSession("seller@tulane.edu"))).andExpect(status().isNoContent());
     assertThat(conversationRepository.count()).isZero();
+  }
+
+  // ---- /api/conversations (SSP1-142) ----
+
+  private static final String LOGIN_MESSAGE = "You must be logged in to view conversations";
+
+  private org.springframework.test.web.servlet.ResultActions postApi(String body, MockHttpSession session)
+      throws Exception {
+    var request = post("/api/conversations").contentType("application/json").content(body);
+    return mockMvc.perform(session == null ? request : request.session(session));
+  }
+
+  private long startViaApi(long listingId, String email) throws Exception {
+    MvcResult result = postApi("{\"listingId\":" + listingId + "}", loginSession(email))
+        .andExpect(status().isCreated()).andReturn();
+    return objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asLong();
+  }
+
+  @Test
+  void apiStart_firstTime_returns201() throws Exception {
+    Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
+    Student buyer = student("Buyer", "buyer@tulane.edu", "tulane.edu");
+    Listing listing = listing(seller);
+    postApi("{\"listingId\":" + listing.getId() + "}", loginSession("buyer@tulane.edu"))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.id").isNumber())
+        .andExpect(jsonPath("$.listingId").value(listing.getId()))
+        .andExpect(jsonPath("$.buyerId").value(buyer.getId()))
+        .andExpect(jsonPath("$.sellerId").value(seller.getId()))
+        .andExpect(jsonPath("$.listingStatus").value("ACTIVE"))
+        .andExpect(jsonPath("$.lastMessage").value(nullValue()));
+  }
+
+  @Test
+  void apiStart_secondTime_returns200SameId() throws Exception {
+    Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
+    student("Buyer", "buyer@tulane.edu", "tulane.edu");
+    Listing listing = listing(seller);
+    long id = startViaApi(listing.getId(), "buyer@tulane.edu");
+    postApi("{\"listingId\":" + listing.getId() + "}", loginSession("buyer@tulane.edu"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(id));
+    assertThat(conversationRepository.count()).isEqualTo(1);
+  }
+
+  @Test
+  void apiStart_missingListingId_returns400() throws Exception {
+    student("Buyer", "buyer@tulane.edu", "tulane.edu");
+    postApi("{}", loginSession("buyer@tulane.edu"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.message").value("listingId is required"));
+    assertThat(conversationRepository.count()).isZero();
+  }
+
+  @Test
+  void apiStart_ownListing_returns403() throws Exception {
+    Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
+    Listing listing = listing(seller);
+    postApi("{\"listingId\":" + listing.getId() + "}", loginSession("seller@tulane.edu"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.message").value("You cannot message yourself about your own listing"));
+  }
+
+  @Test
+  void apiStart_notLoggedIn_returns401() throws Exception {
+    postApi("{\"listingId\":1}", null)
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.message").value(LOGIN_MESSAGE));
+  }
+
+  @Test
+  void apiStart_withoutProfile_returns404ProfileNotFound() throws Exception {
+    MockHttpSession session = loginAsNewStudent("buyer@tulane.edu");
+    postApi("{\"listingId\":999999}", session)
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.message").value("Profile not found"));
+  }
+
+  @Test
+  void list_returnsConversationsForBuyerAndSeller() throws Exception {
+    Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
+    student("Buyer", "buyer@tulane.edu", "tulane.edu");
+    long id = startViaApi(listing(seller).getId(), "buyer@tulane.edu");
+
+    mockMvc.perform(get("/api/conversations").session(loginSession("buyer@tulane.edu")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(1))
+        .andExpect(jsonPath("$[0].id").value(id))
+        .andExpect(jsonPath("$[0].listingStatus").value("ACTIVE"));
+    mockMvc.perform(get("/api/conversations").session(loginSession("seller@tulane.edu")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(1))
+        .andExpect(jsonPath("$[0].id").value(id))
+        .andExpect(jsonPath("$[0].buyerName").value("Buyer"));
+  }
+
+  @Test
+  void list_otherStudent_returnsEmptyArray() throws Exception {
+    Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
+    student("Buyer", "buyer@tulane.edu", "tulane.edu");
+    student("Other", "other@tulane.edu", "tulane.edu");
+    startViaApi(listing(seller).getId(), "buyer@tulane.edu");
+
+    mockMvc.perform(get("/api/conversations").session(loginSession("other@tulane.edu")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(0));
+  }
+
+  @Test
+  void list_notLoggedIn_returns401() throws Exception {
+    mockMvc.perform(get("/api/conversations"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.message").value(LOGIN_MESSAGE));
+  }
+
+  @Test
+  void list_withoutProfile_returns404ProfileNotFound() throws Exception {
+    MockHttpSession session = loginAsNewStudent("buyer@tulane.edu");
+    mockMvc.perform(get("/api/conversations").session(session))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.message").value("Profile not found"));
+  }
+
+  @Test
+  void get_participant_returns200() throws Exception {
+    Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
+    student("Buyer", "buyer@tulane.edu", "tulane.edu");
+    long id = startViaApi(listing(seller).getId(), "buyer@tulane.edu");
+
+    for (String email : new String[] {"buyer@tulane.edu", "seller@tulane.edu"}) {
+      mockMvc.perform(get("/api/conversations/{id}", id).session(loginSession(email)))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.id").value(id))
+          .andExpect(jsonPath("$.itemName").value("Desk Lamp"))
+          .andExpect(jsonPath("$.listingStatus").value("ACTIVE"));
+    }
+  }
+
+  @Test
+  void get_soldListing_stillReturned() throws Exception {
+    Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
+    student("Buyer", "buyer@tulane.edu", "tulane.edu");
+    Listing listing = listing(seller);
+    long id = startViaApi(listing.getId(), "buyer@tulane.edu");
+    listing.setStatus(ListingStatus.SOLD);
+    listingRepository.save(listing);
+
+    mockMvc.perform(get("/api/conversations/{id}", id).session(loginSession("buyer@tulane.edu")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.listingStatus").value("SOLD"));
+  }
+
+  @Test
+  void get_nonParticipant_returns403() throws Exception {
+    Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
+    student("Buyer", "buyer@tulane.edu", "tulane.edu");
+    student("Other", "other@tulane.edu", "tulane.edu");
+    long id = startViaApi(listing(seller).getId(), "buyer@tulane.edu");
+
+    mockMvc.perform(get("/api/conversations/{id}", id).session(loginSession("other@tulane.edu")))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.message").value("You do not have access to this conversation"));
+  }
+
+  @Test
+  void get_unknownId_returns404() throws Exception {
+    student("Buyer", "buyer@tulane.edu", "tulane.edu");
+    mockMvc.perform(get("/api/conversations/999999").session(loginSession("buyer@tulane.edu")))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.message").value("Conversation not found"));
+  }
+
+  @Test
+  void get_notLoggedIn_returns401() throws Exception {
+    mockMvc.perform(get("/api/conversations/1"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.message").value(LOGIN_MESSAGE));
+  }
+
+  @Test
+  void get_withoutProfile_returns404ProfileNotFound() throws Exception {
+    MockHttpSession session = loginAsNewStudent("buyer@tulane.edu");
+    mockMvc.perform(get("/api/conversations/1").session(session))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.message").value("Profile not found"));
   }
 }

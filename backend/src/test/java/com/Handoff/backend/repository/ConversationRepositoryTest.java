@@ -44,4 +44,44 @@ class ConversationRepositoryTest {
     assertThatThrownBy(() -> conversationRepository.saveAndFlush(new Conversation(listing, buyer)))
         .isInstanceOf(DataIntegrityViolationException.class);
   }
+
+  private Student student(String name, String email) {
+    return studentRepository.save(new Student(name, email, "hash", null, null));
+  }
+
+  private Listing listing(String itemName, Student seller) {
+    return listingRepository.save(new Listing(itemName, "Works", BigDecimal.TEN,
+        Condition.GOOD, Category.FURNITURE, seller));
+  }
+
+  @Test
+  void findAllForStudent_returnsBuyerAndSellerSides_only() {
+    Student seller = student("Seller", "seller3@tulane.edu");
+    Student buyer = student("Buyer", "buyer3@tulane.edu");
+    Student other = student("Other", "other3@tulane.edu");
+    Student nobody = student("Nobody", "nobody3@tulane.edu");
+    Listing sellersLamp = listing("Lamp", seller);
+    Listing buyersDesk = listing("Desk", buyer);
+    Conversation buyerAsks = conversationRepository.saveAndFlush(new Conversation(sellersLamp, buyer));
+    Conversation otherAsks = conversationRepository.saveAndFlush(new Conversation(buyersDesk, other));
+
+    assertThat(conversationRepository.findAllForStudent(buyer.getId()))
+        .containsExactlyInAnyOrder(buyerAsks, otherAsks);
+    assertThat(conversationRepository.findAllForStudent(seller.getId())).containsExactly(buyerAsks);
+    assertThat(conversationRepository.findAllForStudent(other.getId())).containsExactly(otherAsks);
+    assertThat(conversationRepository.findAllForStudent(nobody.getId())).isEmpty();
+  }
+
+  @Test
+  void findWithParticipantsById_returnsConversationWithListingAndBuyer() {
+    Student seller = student("Seller", "seller4@tulane.edu");
+    Student buyer = student("Buyer", "buyer4@tulane.edu");
+    Conversation saved = conversationRepository.saveAndFlush(new Conversation(listing("Lamp", seller), buyer));
+
+    var found = conversationRepository.findWithParticipantsById(saved.getId());
+    assertThat(found).isPresent();
+    assertThat(found.get().getListing().getSeller().getId()).isEqualTo(seller.getId());
+    assertThat(found.get().getBuyer().getId()).isEqualTo(buyer.getId());
+    assertThat(conversationRepository.findWithParticipantsById(999999L)).isEmpty();
+  }
 }
