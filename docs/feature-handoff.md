@@ -1,5 +1,12 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-142 Conversation API (Backend → Frontend)
+
+- **Shipped:** `POST /api/conversations` body `{ "listingId": 2 }` (201 created, 200 existing; 400 `listingId is required`; 403 own listing; 404 listing not found; 409 sold), `GET /api/conversations` (buyer and seller side, newest first, `[]` when none), `GET /api/conversations/{id}` (403 `You do not have access to this conversation` for non-participants, 404 `Conversation not found`).
+- **All three:** 401 when not logged in; `404 { "message": "Profile not found" }` when the student has no profile. `POST /listings/{id}/conversation` still works unchanged.
+- **Response fields:** `ConversationResponse` now includes `listingStatus` (`ACTIVE`, `PENDING`, `SOLD`) and `lastMessage`, which is always `null` until the Message API (SSP1-135) ships.
+- **Sold listings:** existing conversations stay readable after a listing is sold.
+
 ## Handoff Note: SSP1-136 Inbox Page & Messages Menu (Frontend → Backend)
 
 - **Feature summary:** The header has a **Message** button that opens a dropdown with an **All messages** link (`/inbox`) and the 3 latest conversations. `/inbox` lists all of the student's conversations, newest first. Rows link to `/conversations/{id}` (the chat view, SSP1-141, is not built yet).
