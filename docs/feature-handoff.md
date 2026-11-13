@@ -1,5 +1,23 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-136 Inbox Page & Messages Menu (Frontend → Backend)
+
+- **Feature summary:** The header has a **Message** button that opens a dropdown with an **All messages** link (`/inbox`) and the 3 latest conversations. `/inbox` lists all of the student's conversations, newest first. Rows link to `/conversations/{id}` (the chat view, SSP1-141, is not built yet).
+- **Request — list endpoint:** `GET /api/conversations`, no parameters. Send the existing `JSESSIONID` cookie; the backend resolves the student from the session.
+- **Response (200):** a JSON array of the same objects `POST /listings/{id}/conversation` returns, for every conversation where the student is the buyer **or** the seller: `[{ "id": 1, "listingId": 2, "itemName": "Desk Lamp", "buyerId": 3, "buyerName": "Buyer", "sellerId": 4, "sellerName": "Seller", "createdAt": "2026-11-11T20:00:00Z", "listingStatus": "ACTIVE" }]`. No conversations returns `[]`, not an error.
+- **Request — `listingStatus`:** add `listingStatus` (`ACTIVE`, `PENDING` or `SOLD`) to `ConversationResponse`. The frontend shows a "Sold" badge when it is `SOLD`, and treats a missing or `null` value as not sold, so nothing breaks before this ships.
+- **Ordering:** the frontend sorts by `createdAt` descending itself, so any order works. Returning newest first is still preferred. If a last-message time is added later, the frontend will switch to it.
+- **Errors:** `401` when not logged in (frontend redirects to `/login`); `404 { "message": "Profile not found" }` when the student has no profile (frontend redirects to `/profile-setup`). Other failures show an error message with a Retry button.
+- **Visibility rules:** return only the requester's own conversations. A sold listing's conversation is still returned, because reopening is supported.
+- **Known gaps:** no pagination (the dropdown and inbox fetch the whole list), no unread counts, and no last-message preview until message endpoints exist.
+
+- **Chat endpoints (SSP1-141):** The chat page at `/conversations/{id}` fetches and posts messages:
+  - `GET /api/conversations/{id}` — header info for the conversation, including `listingStatus`. Errors: `401` → `/login`; `404 "Profile not found"` → `/profile-setup`; `403` or any other `404` → "Conversation not found".
+  - `GET /api/conversations/{id}/messages?after={messageId}` — message history, oldest first. `after` is used when polling for new messages. Response: `[{ "id", "conversationId", "senderId", "senderName", "content", "createdAt" }]`.
+  - `POST /api/conversations/{id}/messages` body `{ "content": "..." }` — send a message. `201` with the saved message. `400` when content is empty or over 1000 characters (frontend shows the backend message inline).
+  - **Polling:** the frontend fetches new messages every 5 seconds (paused when the tab is hidden). Real-time delivery is out of scope.
+  - All endpoints send the existing `JSESSIONID` cookie.
+
 ## Handoff Note: SSP1-123 Start Conversation API
 
 - **Feature summary:** A buyer can start or reopen one conversation with a listing's seller. Repeated requests return the same conversation.
