@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppHeader } from '../components/AppHeader'
 import { ListingThumbnail } from '../components/ListingThumbnail'
 import { Button } from '../components/ui/Button'
@@ -9,14 +9,18 @@ import { CATEGORY_LABELS, CONDITION_LABELS } from '../lib/listingOptions'
 import { getErrorMessage, hasApiStatus } from '../lib/apiError'
 import { useAsyncResource } from '../lib/useAsyncResource'
 import { getListing } from '../services/listingService'
+import { startConversation } from '../services/conversationService'
 
 export function ListingDetailPage() {
   const { id } = useParams()
   const listingId = Number(id)
   const validId = Number.isInteger(listingId) && listingId > 0
   const { student } = useAuth()
+  const navigate = useNavigate()
   const { state } = useAsyncResource(() => getListing(listingId), [listingId], { enabled: validId })
   const [selection, setSelection] = useState({ listingId, index: 0 })
+  const [starting, setStarting] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
   const selectedPhoto = selection.listingId === listingId ? selection.index : 0
   const photoUrls = state.status === 'ready'
     ? (state.data.imageUrls ?? (state.data.imageUrl ? [state.data.imageUrl] : []))
@@ -25,6 +29,19 @@ export function ListingDetailPage() {
   const canMessage = state.status === 'ready'
     && state.data.sellerId !== student?.id
     && (state.data.status == null || state.data.status === 'ACTIVE')
+
+  async function handleMessageSeller() {
+    setStartError(null)
+    setStarting(true)
+    try {
+      const conversation = await startConversation(listingId)
+      navigate(`/conversations/${conversation.id}`)
+    } catch (error) {
+      setStartError(getErrorMessage(error, 'Could not start conversation.'))
+    } finally {
+      setStarting(false)
+    }
+  }
 
   return (
     <div className="min-h-dvh bg-zinc-50">
@@ -78,7 +95,19 @@ export function ListingDetailPage() {
               <p className="mt-1 text-sm text-zinc-500">
                 Posted {new Date(state.data.createdAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
               </p>
-              {canMessage && <Button type="button" className="mt-6">Message seller</Button>}
+              {canMessage && (
+                <>
+                  <Button
+                    type="button"
+                    className="mt-6"
+                    onClick={handleMessageSeller}
+                    loading={starting}
+                  >
+                    Message seller
+                  </Button>
+                  {startError && <FormAlert kind="error">{startError}</FormAlert>}
+                </>
+              )}
             </div>
           </div>
         )}
