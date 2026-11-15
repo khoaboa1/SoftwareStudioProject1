@@ -6,8 +6,11 @@ import com.Handoff.backend.service.email.EmailSender;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -15,17 +18,28 @@ public class VerificationService {
 
     private static final Logger logger = LoggerFactory.getLogger(VerificationService.class);
 
+    private static final int MAX_PIN_ATTEMPTS = 5;
+
     private final StudentRepository studentRepository;
     private final List<EmailSender> emailSenders;
     private final UniversityEmailValidator universityEmailValidator;
     private final SecureRandom secureRandom = new SecureRandom();
+    private final boolean logPin;
+    private final ConcurrentHashMap<String, Integer> failedAttempts = new ConcurrentHashMap<>();
 
     /** Spring injects every EmailSender bean, sorted by {@code @Order}. */
     public VerificationService(StudentRepository studentRepository, List<EmailSender> emailSenders,
             UniversityEmailValidator universityEmailValidator) {
+        this(studentRepository, emailSenders, universityEmailValidator, false);
+    }
+
+    @Autowired
+    public VerificationService(StudentRepository studentRepository, List<EmailSender> emailSenders,
+            UniversityEmailValidator universityEmailValidator, @Value("${auth.log-pin:false}") boolean logPin) {
         this.studentRepository = studentRepository;
         this.emailSenders = emailSenders;
         this.universityEmailValidator = universityEmailValidator;
+        this.logPin = logPin;
     }
 
     public String generateAndSendPin(Student student) {
@@ -37,10 +51,9 @@ public class VerificationService {
         student.setVerificationPin(pin);
         student.setVerificationPinExpiry(LocalDateTime.now().plusMinutes(15));
         studentRepository.save(student);
+        failedAttempts.remove(student.getEmail().toLowerCase());
 
-        logger.info("\n=======================================================\n"
-                + "  [EMAIL VERIFICATION PIN] Sent to: {}\n" + "  PIN: {}\n" + "  Expires in: 15 minutes\n"
-                + "=======================================================", student.getEmail(), pin);
+        logger.info("{}", pinLogMessage(student.getEmail(), pin));
 
         // Try each configured sender in order (webhook -> Resend -> SMTP) until one succeeds.
         for (EmailSender sender : emailSenders) {
@@ -72,8 +85,18 @@ public class VerificationService {
         }
 
         if (!pin.trim().equals(student.getVerificationPin())) {
+            String key = email.toLowerCase();
+            int attempts = failedAttempts.merge(key, 1, Integer::sum);
+            if (attempts >= MAX_PIN_ATTEMPTS) {
+                failedAttempts.remove(key);
+                student.setVerificationPin(null);
+                student.setVerificationPinExpiry(null);
+                studentRepository.save(student);
+                throw new InvalidVerificationPinException("Too many incorrect attempts. Please request a new PIN.");
+            }
             throw new InvalidVerificationPinException("Incorrect verification PIN");
         }
+        failedAttempts.remove(email.toLowerCase());
 
         student.setVerified(true);
         student.setEmailVerified(true);
@@ -96,5 +119,12 @@ public class VerificationService {
                 .orElseThrow(() -> new InvalidSignupException("Account not found with this email"));
 
         generateAndSendPin(student);
+    }
+
+    String pinLogMessage(String email, String pin) {
+        String shownPin = logPin ? "  PIN: " + pin + "\n" : "";
+        return "\n=======================================================\n" + "  [EMAIL VERIFICATION PIN] Sent to: "
+                + email + "\n" + shownPin + "  Expires in: 15 minutes\n"
+                + "=======================================================";
     }
 }
