@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ListingDetailPage } from './ListingDetailPage'
 import { ApiError } from '../services/httpClient'
 import { getListing, type Listing } from '../services/listingService'
+import { startConversation } from '../services/conversationService'
 
 vi.mock('../lib/auth-context', () => ({
   useAuth: () => ({
@@ -15,6 +16,12 @@ vi.mock('../lib/auth-context', () => ({
 
 vi.mock('../services/listingService', () => ({
   getListing: vi.fn(),
+}))
+
+vi.mock('../services/conversationService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/conversationService')>()),
+  getConversations: vi.fn().mockResolvedValue([]),
+  startConversation: vi.fn(),
 }))
 
 const listing: Listing = {
@@ -34,6 +41,7 @@ function renderPage(path = '/listings/1') {
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/listings/:id" element={<ListingDetailPage />} />
+        <Route path="/conversations/:id" element={<p>Chat screen</p>} />
       </Routes>
     </MemoryRouter>,
   )
@@ -42,6 +50,7 @@ function renderPage(path = '/listings/1') {
 describe('ListingDetailPage', () => {
   beforeEach(() => {
     vi.mocked(getListing).mockReset()
+    vi.mocked(startConversation).mockReset()
   })
 
   it('renders the listing details', async () => {
@@ -146,6 +155,47 @@ describe('ListingDetailPage', () => {
       expect(screen.queryByRole('button', { name: 'Message seller' })).not.toBeInTheDocument()
       await screen.findByText('Server down')
       expect(screen.queryByRole('button', { name: 'Message seller' })).not.toBeInTheDocument()
+    })
+
+    it('starts the conversation and opens the chat page', async () => {
+      vi.mocked(getListing).mockResolvedValue(listing)
+      vi.mocked(startConversation).mockResolvedValue({
+        id: 42, listingId: 1, itemName: 'Desk Lamp', buyerId: 1, buyerName: 'Jane Doe',
+        sellerId: 7, sellerName: 'Sam Seller', createdAt: '2026-11-13T10:00:00Z',
+      })
+      renderPage()
+
+      await userEvent.setup().click(await screen.findByRole('button', { name: 'Message seller' }))
+
+      expect(startConversation).toHaveBeenCalledWith(1)
+      expect(await screen.findByText('Chat screen')).toBeInTheDocument()
+    })
+
+    it('disables the button while the conversation is starting', async () => {
+      vi.mocked(getListing).mockResolvedValue(listing)
+      vi.mocked(startConversation).mockReturnValue(new Promise(() => {}))
+      renderPage()
+
+      const button = await screen.findByRole('button', { name: 'Message seller' })
+      await userEvent.setup().click(button)
+
+      expect(button).toBeDisabled()
+      expect(startConversation).toHaveBeenCalledTimes(1)
+    })
+
+    it.each([
+      [409, 'This item has already been sold'],
+      [403, 'You cannot message yourself about your own listing'],
+    ])('shows the backend message inline on %i and stays on the page', async (status, apiMessage) => {
+      vi.mocked(getListing).mockResolvedValue(listing)
+      vi.mocked(startConversation).mockRejectedValue(new ApiError(status, apiMessage))
+      renderPage()
+
+      await userEvent.setup().click(await screen.findByRole('button', { name: 'Message seller' }))
+
+      expect(await screen.findByText(apiMessage)).toBeInTheDocument()
+      expect(screen.queryByText('Chat screen')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Message seller' })).toBeEnabled()
     })
   })
 })
