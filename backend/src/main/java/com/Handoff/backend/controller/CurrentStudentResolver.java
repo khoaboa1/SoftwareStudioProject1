@@ -4,14 +4,16 @@ import com.Handoff.backend.model.Student;
 import com.Handoff.backend.service.AuthService;
 import com.Handoff.backend.service.NotAuthenticatedException;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
+import java.util.UUID;
 
 /**
- * Resolves the logged-in student from the server-side session, so controllers
- * only handle HTTP routing and never read the session themselves.
+ * Resolves the logged-in student from the verified Supabase JWT (read from the sb-access cookie by Spring Security), so controllers only handle HTTP routing.
  */
 @Component
 public class CurrentStudentResolver {
@@ -23,13 +25,22 @@ public class CurrentStudentResolver {
   }
 
   /**
-   * Returns the session's student, if the session still refers to a real one.
-   * Never creates a new session.
+   * Returns the token's student, if the token's subject still matches a real one.
    */
   public Optional<Student> find(HttpServletRequest request) {
-    HttpSession session = request.getSession(false);
-    Long studentId = session != null ? (Long) session.getAttribute(SessionKeys.STUDENT_ID) : null;
-    return studentId != null ? authService.findById(studentId) : Optional.empty();
+    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    if (!(authentication instanceof JwtAuthenticationToken jwtAuthentication)) {
+      return Optional.empty();
+    }
+    String subject = jwtAuthentication.getToken().getSubject();
+    if (subject == null) {
+      return Optional.empty();
+    }
+    try {
+      return authService.findBySupabaseUserId(UUID.fromString(subject));
+    } catch (IllegalArgumentException ex) {
+      return Optional.empty();
+    }
   }
 
   /**

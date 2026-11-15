@@ -13,6 +13,9 @@ public class DataSeeder implements CommandLineRunner {
 
   static final String SEED_PASSWORD = "Password123!";
 
+  static final List<String> SEED_EMAILS =
+      List.of("sarah@tulane.edu", "alex@tulane.edu", "chloe@tulane.edu", "brian@tulane.edu");
+
   private final StudentRepository studentRepository;
   private final PasswordEncoder passwordEncoder;
 

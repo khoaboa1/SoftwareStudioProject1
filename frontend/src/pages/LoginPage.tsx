@@ -6,7 +6,7 @@ import { Button } from '../components/ui/Button'
 import { FormAlert } from '../components/ui/FormAlert'
 import { TextField } from '../components/ui/TextField'
 import { validateEmail, validatePassword } from '../lib/validation'
-import { getErrorMessage } from '../lib/apiError'
+import { getErrorMessage, isNetworkError } from '../lib/apiError'
 import { createAuthFacade } from '../services/authFacade'
 import { useAuth } from '../lib/auth-context'
 
@@ -27,19 +27,12 @@ export function LoginPage() {
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
   const [serverError, setServerError] = useState<string | null>(null)
   const [promptMessage, setPromptMessage] = useState<string | null>(null)
+  const [canRetry, setCanRetry] = useState(false)
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-
-    const nextErrors: FieldErrors = {
-      email: validateEmail(email),
-      password: validatePassword(password),
-    }
-    setErrors(nextErrors)
-    if (nextErrors.email || nextErrors.password) return
-
+  async function submitLogin() {
     setStatus('submitting')
     setServerError(null)
+    setCanRetry(false)
 
     try {
       const res = await auth.signIn({ email, password })
@@ -55,15 +48,29 @@ export function LoginPage() {
       setServerError(
         getErrorMessage(error, 'Something went wrong. Please try again.'),
       )
+      setCanRetry(isNetworkError(error))
       setStatus('error')
     }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    const nextErrors: FieldErrors = {
+      email: validateEmail(email),
+      password: validatePassword(password),
+    }
+    setErrors(nextErrors)
+    if (nextErrors.email || nextErrors.password) return
+
+    void submitLogin()
   }
 
   if (step === 'verify_pin') {
     return (
       <PinVerificationStep
         email={email}
-        title="New device verification"
+        title="Verify it's you"
         subtitle={promptMessage || `Enter the 6-digit PIN sent to ${email}`}
         helperText="Check your school email (or backend console during dev/demo)"
         submitLabel="Verify PIN & Trust Device"
@@ -109,7 +116,14 @@ export function LoginPage() {
         </>
       }
     >
-      {status === 'error' && serverError && <FormAlert kind="error">{serverError}</FormAlert>}
+      {status === 'error' && serverError && (
+        <FormAlert
+          kind="error"
+          action={canRetry ? { label: 'Try again', onClick: () => void submitLogin() } : undefined}
+        >
+          {serverError}
+        </FormAlert>
+      )}
 
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
         <TextField

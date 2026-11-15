@@ -7,6 +7,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -33,5 +34,17 @@ class StudentRepositoryTest {
     Optional<Student> found = studentRepository.findByEmail("nobody@tulane.edu");
 
     assertThat(found).isEmpty();
+  }
+
+  @Test
+  void findBySupabaseUserId_returnsLinkedStudent() {
+    UUID supabaseUserId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    Student student = new Student("Sarah", "sarah@tulane.edu", null, null, null);
+    student.setSupabaseUserId(supabaseUserId);
+    studentRepository.save(student);
+
+    assertThat(studentRepository.findBySupabaseUserId(supabaseUserId))
+        .get().extracting(Student::getEmail).isEqualTo("sarah@tulane.edu");
+    assertThat(studentRepository.findBySupabaseUserId(UUID.randomUUID())).isEmpty();
   }
 }

@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 @Entity
 @Table(name = "students")
@@ -36,6 +37,11 @@ public class Student {
   private String passwordHash;
 
   private String oauthProvider;
+
+  /** Supabase Auth user id (the JWT "sub" claim). Internal link only, never sent to clients. */
+  @JsonIgnore
+  @Column(name = "supabase_user_id", unique = true)
+  private UUID supabaseUserId;
 
   @Column(nullable = false, columnDefinition = "boolean default false")
   private boolean emailVerified;
@@ -128,6 +134,14 @@ public class Student {
 
   public void setOauthProvider(String oauthProvider) {
     this.oauthProvider = oauthProvider;
+  }
+
+  public UUID getSupabaseUserId() {
+    return supabaseUserId;
+  }
+
+  public void setSupabaseUserId(UUID supabaseUserId) {
+    this.supabaseUserId = supabaseUserId;
   }
 
   public String getDormLocation() {

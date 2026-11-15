@@ -8,7 +8,9 @@ import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.ProfileRepository;
 import com.Handoff.backend.repository.StudentRepository;
+import com.Handoff.backend.support.FakeSupabaseAuthClient;
 import jakarta.servlet.http.Cookie;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -17,7 +19,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.ObjectMapper;
@@ -59,7 +60,7 @@ class ProfileControllerTest {
   /**
    * Helper method to simulate a verified user registration and login session.
    */
-  private MockHttpSession loginAsNewStudent(String name, String email) throws Exception {
+  private Cookie loginAsNewStudent(String name, String email) throws Exception {
     String signupBody = objectMapper.writeValueAsString(
         new SignupRequest(name, email, "Password123!"));
     mockMvc.perform(post("/auth/signup")
@@ -67,15 +68,21 @@ class ProfileControllerTest {
             .content(signupBody))
         .andExpect(status().isCreated());
 
-    Student student = studentRepository.findByEmail(email).orElseThrow();
-    VerificationRequest verifyBody = new VerificationRequest(email, student.getVerificationPin(), "test-device");
+    VerificationRequest verifyBody = new VerificationRequest(email, FakeSupabaseAuthClient.SIGNUP_OTP, "test-device");
     MvcResult verifyResult = mockMvc.perform(post("/auth/verify-pin")
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(verifyBody)))
         .andExpect(status().isOk())
         .andReturn();
 
-    return (MockHttpSession) verifyResult.getRequest().getSession(false);
+    return verifyResult.getResponse().getCookie(AuthCookies.ACCESS);
+  }
+
+  /** Looks up the student behind a fake access cookie (the cookie value carries the Supabase user id). */
+  private Long studentIdFor(Cookie accessCookie) {
+    UUID supabaseUserId = UUID.fromString(
+        accessCookie.getValue().substring(FakeSupabaseAuthClient.ACCESS_PREFIX.length()));
+    return studentRepository.findBySupabaseUserId(supabaseUserId).orElseThrow().getId();
   }
 
   // =========================================================================
@@ -85,7 +92,7 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Success - Profile Creation with full valid payload returns 201 and created profile")
   void testCreateProfile_Success() throws Exception {
-    MockHttpSession session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
+    Cookie session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
 
     CreateProfileRequest request = new CreateProfileRequest(
         "Jane Doe",
@@ -94,7 +101,7 @@ class ProfileControllerTest {
     );
 
     mockMvc.perform(post("/api/profiles")
-            .session(session)
+            .cookie(session)
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isCreated())
@@ -115,12 +122,12 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Success - Domain Extraction accurately parses school domain from authenticated email")
   void testCreateProfile_DomainExtraction() throws Exception {
-    MockHttpSession session = loginAsNewStudent("Bob Miller", "bob@law.tulane.edu");
+    Cookie session = loginAsNewStudent("Bob Miller", "bob@law.tulane.edu");
 
     CreateProfileRequest request = new CreateProfileRequest("Bob Miller", "Law", null);
 
     mockMvc.perform(post("/api/profiles")
-            .session(session)
+            .cookie(session)
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isCreated())
@@ -133,12 +140,12 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Success - Profile Creation with optional bio omitted or null")
   void testCreateProfile_OptionalBio() throws Exception {
-    MockHttpSession session = loginAsNewStudent("Alex Smith", "alex@tulane.edu");
+    Cookie session = loginAsNewStudent("Alex Smith", "alex@tulane.edu");
 
     CreateProfileRequest request = new CreateProfileRequest("Alex Smith", "Finance", null);
 
     mockMvc.perform(post("/api/profiles")
-            .session(session)
+            .cookie(session)
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isCreated())
@@ -166,7 +173,7 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Error - Validation Failure when name is missing or blank returns 400 Bad Request")
   void testCreateProfile_MissingName() throws Exception {
-    MockHttpSession session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
+    Cookie session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
 
     String payload = """
         {
@@ -177,7 +184,7 @@ class ProfileControllerTest {
         """;
 
     mockMvc.perform(post("/api/profiles")
-            .session(session)
+            .cookie(session)
             .contentType(MediaType.APPLICATION_JSON)
             .content(payload))
         .andExpect(status().isBadRequest())
@@ -187,7 +194,7 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Error - Validation Failure when major is missing or blank returns 400 Bad Request")
   void testCreateProfile_MissingMajor() throws Exception {
-    MockHttpSession session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
+    Cookie session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
 
     String payload = """
         {
@@ -198,7 +205,7 @@ class ProfileControllerTest {
         """;
 
     mockMvc.perform(post("/api/profiles")
-            .session(session)
+            .cookie(session)
             .contentType(MediaType.APPLICATION_JSON)
             .content(payload))
         .andExpect(status().isBadRequest())
@@ -208,13 +215,13 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Error - Validation Failure when field exceeds character limit returns 400 Bad Request")
   void testCreateProfile_CharacterLimitExceeded() throws Exception {
-    MockHttpSession session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
+    Cookie session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
 
     String longBio = "a".repeat(1001);
     CreateProfileRequest request = new CreateProfileRequest("Jane Doe", "CS", longBio);
 
     mockMvc.perform(post("/api/profiles")
-            .session(session)
+            .cookie(session)
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isBadRequest())
@@ -224,10 +231,10 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Error - Missing request body returns 400 Bad Request")
   void testCreateProfile_MissingBody() throws Exception {
-    MockHttpSession session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
+    Cookie session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
 
     mockMvc.perform(post("/api/profiles")
-            .session(session)
+            .cookie(session)
             .contentType(MediaType.APPLICATION_JSON)
             .content(""))
         .andExpect(status().isBadRequest());
@@ -236,20 +243,20 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Error - Duplicate Profile returns 409 Conflict")
   void testCreateProfile_DuplicateProfile() throws Exception {
-    MockHttpSession session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
+    Cookie session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
 
     CreateProfileRequest request = new CreateProfileRequest("Jane Doe", "Computer Science", "Bio");
 
     // First attempt -> Success
     mockMvc.perform(post("/api/profiles")
-            .session(session)
+            .cookie(session)
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isCreated());
 
     // Second attempt -> Conflict
     mockMvc.perform(post("/api/profiles")
-            .session(session)
+            .cookie(session)
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isConflict())
@@ -263,7 +270,7 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Security - Data Integrity ignores manually injected user_id and school_domain")
   void testCreateProfile_IgnoresManualInjections() throws Exception {
-    MockHttpSession session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
+    Cookie session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
     Student authenticatedStudent = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
 
     // Payload maliciously contains user_id 9999 and school_domain 'hacker.edu'
@@ -281,7 +288,7 @@ class ProfileControllerTest {
         """;
 
     mockMvc.perform(post("/api/profiles")
-            .session(session)
+            .cookie(session)
             .contentType(MediaType.APPLICATION_JSON)
             .content(maliciousPayload))
         .andExpect(status().isCreated())
@@ -301,7 +308,7 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Success - Fetch own profile returns 200 OK with complete profile payload")
   void testGetMyProfile_Success() throws Exception {
-    MockHttpSession session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
+    Cookie session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
 
     CreateProfileRequest request = new CreateProfileRequest(
         "Jane Doe",
@@ -311,14 +318,14 @@ class ProfileControllerTest {
 
     // Create profile first
     mockMvc.perform(post("/api/profiles")
-            .session(session)
+            .cookie(session)
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isCreated());
 
     // Now fetch it
     mockMvc.perform(get("/api/profiles/me")
-            .session(session))
+            .cookie(session))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").isNumber())
         .andExpect(jsonPath("$.name").value("Jane Doe"))
@@ -332,11 +339,11 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Error - Not Found when authenticated user has no profile returns 404")
   void testGetMyProfile_NotFound() throws Exception {
-    MockHttpSession session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
+    Cookie session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
     // No profile created
 
     mockMvc.perform(get("/api/profiles/me")
-            .session(session))
+            .cookie(session))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.message").value("Profile not found"));
   }
@@ -360,13 +367,12 @@ class ProfileControllerTest {
         .andExpect(jsonPath("$.message").exists());
 
     // Case 2: Expired/invalidated session
-    MockHttpSession session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
-    session.invalidate(); // simulate expired session
+    Cookie session = loginAsNewStudent("Jane Doe", "jane@tulane.edu");
+    session = new Cookie(AuthCookies.ACCESS, "tampered-invalid-cookie"); // simulate expired session
 
     mockMvc.perform(get("/api/profiles/me")
-            .session(session))
-        .andExpect(status().isUnauthorized())
-        .andExpect(jsonPath("$.message").exists());
+            .cookie(session))
+        .andExpect(status().isUnauthorized());
   }
 
   // =========================================================================
@@ -376,14 +382,14 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Success - Fetch profile by ID returns 200 OK when user is owner")
   void testGetProfileById_Success() throws Exception {
-    MockHttpSession session = loginAsNewStudent("User A", "userA@tulane.edu");
+    Cookie session = loginAsNewStudent("User A", "userA@tulane.edu");
     String createBody = objectMapper.writeValueAsString(new CreateProfileRequest("User A", "CS", "Bio A"));
-    MvcResult result = mockMvc.perform(post("/api/profiles").session(session).contentType(MediaType.APPLICATION_JSON).content(createBody))
+    MvcResult result = mockMvc.perform(post("/api/profiles").cookie(session).contentType(MediaType.APPLICATION_JSON).content(createBody))
         .andExpect(status().isCreated()).andReturn();
     
     Long profileId = objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asLong();
 
-    mockMvc.perform(get("/api/profiles/" + profileId).session(session))
+    mockMvc.perform(get("/api/profiles/" + profileId).cookie(session))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.name").value("User A"));
   }
@@ -391,16 +397,16 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Error - Cross-User Fetch (IDOR) returns 403 Forbidden")
   void testGetProfileById_IDOR() throws Exception {
-    MockHttpSession sessionA = loginAsNewStudent("User A", "userA@tulane.edu");
-    MockHttpSession sessionB = loginAsNewStudent("User B", "userB@tulane.edu");
+    Cookie sessionA = loginAsNewStudent("User A", "userA@tulane.edu");
+    Cookie sessionB = loginAsNewStudent("User B", "userB@tulane.edu");
 
     String createBodyB = objectMapper.writeValueAsString(new CreateProfileRequest("User B", "Math", "Bio B"));
-    MvcResult resultB = mockMvc.perform(post("/api/profiles").session(sessionB).contentType(MediaType.APPLICATION_JSON).content(createBodyB))
+    MvcResult resultB = mockMvc.perform(post("/api/profiles").cookie(sessionB).contentType(MediaType.APPLICATION_JSON).content(createBodyB))
         .andExpect(status().isCreated()).andReturn();
     
     Long profileIdB = objectMapper.readTree(resultB.getResponse().getContentAsString()).get("id").asLong();
 
-    mockMvc.perform(get("/api/profiles/" + profileIdB).session(sessionA))
+    mockMvc.perform(get("/api/profiles/" + profileIdB).cookie(sessionA))
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.message").value("You do not have permission to access this profile."));
   }
@@ -408,9 +414,9 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Edge Case - Fetching a non-existent profile returns 404 Not Found")
   void testGetProfileById_NotFound() throws Exception {
-    MockHttpSession sessionA = loginAsNewStudent("User A", "userA@tulane.edu");
+    Cookie sessionA = loginAsNewStudent("User A", "userA@tulane.edu");
     
-    mockMvc.perform(get("/api/profiles/9999").session(sessionA))
+    mockMvc.perform(get("/api/profiles/9999").cookie(sessionA))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.message").value("Profile not found"));
   }
@@ -418,15 +424,15 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Success - Update profile by ID returns 200 OK when user is owner")
   void testUpdateProfile_Success() throws Exception {
-    MockHttpSession session = loginAsNewStudent("User A", "userA@tulane.edu");
+    Cookie session = loginAsNewStudent("User A", "userA@tulane.edu");
     String createBody = objectMapper.writeValueAsString(new CreateProfileRequest("User A", "CS", "Bio A"));
-    MvcResult result = mockMvc.perform(post("/api/profiles").session(session).contentType(MediaType.APPLICATION_JSON).content(createBody))
+    MvcResult result = mockMvc.perform(post("/api/profiles").cookie(session).contentType(MediaType.APPLICATION_JSON).content(createBody))
         .andExpect(status().isCreated()).andReturn();
     
     Long profileId = objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asLong();
     String updateBody = objectMapper.writeValueAsString(new com.Handoff.backend.dto.UpdateProfileRequest("User A Updated", "CS Updated", "Bio Updated"));
 
-    mockMvc.perform(put("/api/profiles/" + profileId).session(session).contentType(MediaType.APPLICATION_JSON).content(updateBody))
+    mockMvc.perform(put("/api/profiles/" + profileId).cookie(session).contentType(MediaType.APPLICATION_JSON).content(updateBody))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.name").value("User A Updated"))
         .andExpect(jsonPath("$.major").value("CS Updated"));
@@ -435,16 +441,16 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Success - Partial Update retains existing values")
   void testUpdateProfile_PartialUpdate() throws Exception {
-    MockHttpSession session = loginAsNewStudent("User A", "userA@tulane.edu");
+    Cookie session = loginAsNewStudent("User A", "userA@tulane.edu");
     String createBody = objectMapper.writeValueAsString(new CreateProfileRequest("User A", "CS", "Bio A"));
-    MvcResult result = mockMvc.perform(post("/api/profiles").session(session).contentType(MediaType.APPLICATION_JSON).content(createBody))
+    MvcResult result = mockMvc.perform(post("/api/profiles").cookie(session).contentType(MediaType.APPLICATION_JSON).content(createBody))
         .andExpect(status().isCreated()).andReturn();
     
     Long profileId = objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asLong();
     // Only update bio, leave name and major as null
     String updateBody = objectMapper.writeValueAsString(new com.Handoff.backend.dto.UpdateProfileRequest(null, null, "Bio Only Updated"));
 
-    mockMvc.perform(put("/api/profiles/" + profileId).session(session).contentType(MediaType.APPLICATION_JSON).content(updateBody))
+    mockMvc.perform(put("/api/profiles/" + profileId).cookie(session).contentType(MediaType.APPLICATION_JSON).content(updateBody))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.name").value("User A"))
         .andExpect(jsonPath("$.major").value("CS"))
@@ -454,17 +460,17 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Error - Cross-User Modification (IDOR) returns 403 Forbidden")
   void testUpdateProfile_IDOR() throws Exception {
-    MockHttpSession sessionA = loginAsNewStudent("User A", "userA@tulane.edu");
-    MockHttpSession sessionB = loginAsNewStudent("User B", "userB@tulane.edu");
+    Cookie sessionA = loginAsNewStudent("User A", "userA@tulane.edu");
+    Cookie sessionB = loginAsNewStudent("User B", "userB@tulane.edu");
 
     String createBodyB = objectMapper.writeValueAsString(new CreateProfileRequest("User B", "Math", "Bio B"));
-    MvcResult resultB = mockMvc.perform(post("/api/profiles").session(sessionB).contentType(MediaType.APPLICATION_JSON).content(createBodyB))
+    MvcResult resultB = mockMvc.perform(post("/api/profiles").cookie(sessionB).contentType(MediaType.APPLICATION_JSON).content(createBodyB))
         .andExpect(status().isCreated()).andReturn();
     
     Long profileIdB = objectMapper.readTree(resultB.getResponse().getContentAsString()).get("id").asLong();
     String updateBody = objectMapper.writeValueAsString(new com.Handoff.backend.dto.UpdateProfileRequest("Hacked Name", "Hacked Major", "Hacked Bio"));
 
-    mockMvc.perform(put("/api/profiles/" + profileIdB).session(sessionA).contentType(MediaType.APPLICATION_JSON).content(updateBody))
+    mockMvc.perform(put("/api/profiles/" + profileIdB).cookie(sessionA).contentType(MediaType.APPLICATION_JSON).content(updateBody))
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.message").value("You do not have permission to modify this profile."));
 
@@ -472,7 +478,7 @@ class ProfileControllerTest {
     assertThat(unchanged.getName()).isEqualTo("User B");
     assertThat(unchanged.getMajor()).isEqualTo("Math");
     assertThat(unchanged.getBio()).isEqualTo("Bio B");
-    assertThat(unchanged.getStudentId()).isEqualTo(sessionB.getAttribute(SessionKeys.STUDENT_ID));
+    assertThat(unchanged.getStudentId()).isEqualTo(studentIdFor(sessionB));
     assertThat(unchanged.getSchoolDomain()).isEqualTo("tulane.edu");
   }
 
@@ -489,14 +495,14 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Security - Update ignores injected profile identity and ownership fields")
   void testUpdateProfile_IgnoresOwnershipInjection() throws Exception {
-    MockHttpSession session = loginAsNewStudent("User A", "userA@tulane.edu");
-    MvcResult created = mockMvc.perform(post("/api/profiles").session(session)
+    Cookie session = loginAsNewStudent("User A", "userA@tulane.edu");
+    MvcResult created = mockMvc.perform(post("/api/profiles").cookie(session)
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(new CreateProfileRequest("User A", "CS", "Bio A"))))
         .andExpect(status().isCreated()).andReturn();
     long profileId = objectMapper.readTree(created.getResponse().getContentAsString()).get("id").asLong();
 
-    mockMvc.perform(put("/api/profiles/" + profileId).session(session)
+    mockMvc.perform(put("/api/profiles/" + profileId).cookie(session)
             .contentType(MediaType.APPLICATION_JSON)
             .content("""
                 {"bio":"Updated", "id":9999, "studentId":9999,
@@ -504,11 +510,11 @@ class ProfileControllerTest {
                 """))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(profileId))
-        .andExpect(jsonPath("$.studentId").value(session.getAttribute(SessionKeys.STUDENT_ID)))
+        .andExpect(jsonPath("$.studentId").value(studentIdFor(session)))
         .andExpect(jsonPath("$.schoolDomain").value("tulane.edu"));
 
     Profile saved = profileRepository.findById(profileId).orElseThrow();
-    assertThat(saved.getStudentId()).isEqualTo(session.getAttribute(SessionKeys.STUDENT_ID));
+    assertThat(saved.getStudentId()).isEqualTo(studentIdFor(session));
     assertThat(saved.getSchoolDomain()).isEqualTo("tulane.edu");
     assertThat(saved.getBio()).isEqualTo("Updated");
   }
@@ -516,9 +522,9 @@ class ProfileControllerTest {
   @Test
   @DisplayName("Edge Case - Update Profile Validation Failure for excessive bio length")
   void testUpdateProfile_ValidationFailure() throws Exception {
-    MockHttpSession session = loginAsNewStudent("User A", "userA@tulane.edu");
+    Cookie session = loginAsNewStudent("User A", "userA@tulane.edu");
     String createBody = objectMapper.writeValueAsString(new CreateProfileRequest("User A", "CS", "Bio A"));
-    MvcResult result = mockMvc.perform(post("/api/profiles").session(session).contentType(MediaType.APPLICATION_JSON).content(createBody))
+    MvcResult result = mockMvc.perform(post("/api/profiles").cookie(session).contentType(MediaType.APPLICATION_JSON).content(createBody))
         .andExpect(status().isCreated()).andReturn();
     
     Long profileId = objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asLong();
@@ -526,7 +532,7 @@ class ProfileControllerTest {
     String longBio = "a".repeat(1001);
     String updateBody = objectMapper.writeValueAsString(new com.Handoff.backend.dto.UpdateProfileRequest("User A", "CS", longBio));
 
-    mockMvc.perform(put("/api/profiles/" + profileId).session(session).contentType(MediaType.APPLICATION_JSON).content(updateBody))
+    mockMvc.perform(put("/api/profiles/" + profileId).cookie(session).contentType(MediaType.APPLICATION_JSON).content(updateBody))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.message").exists());
   }

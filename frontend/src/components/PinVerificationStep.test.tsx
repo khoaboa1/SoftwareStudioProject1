@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { NetworkError } from '../services/httpClient'
 import { ApiError, resendPin } from '../services/authService'
 import { PinVerificationStep } from './PinVerificationStep'
 
@@ -97,5 +98,18 @@ describe('PinVerificationStep', () => {
     expect(screen.getByRole('button', { name: 'Sending...' })).toBeDisabled()
     resolveResend()
     expect(await screen.findByText('A new 6-digit PIN has been generated!')).toBeInTheDocument()
+  })
+
+  it('offers a retry when verification cannot reach the server', async () => {
+    props.onVerify.mockRejectedValueOnce(new NetworkError()).mockResolvedValueOnce(undefined)
+    const user = userEvent.setup()
+    renderStep()
+    await user.type(screen.getByLabelText('6-Digit Verification PIN'), '123456')
+    await user.click(screen.getByRole('button', { name: 'Verify PIN & Trust Device' }))
+    expect(await screen.findByText("Can't reach the server. Check your connection and try again."))
+    .toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(props.onVerify).toHaveBeenCalledTimes(2)
+    expect(props.onVerify).toHaveBeenLastCalledWith('123456')
   })
 })

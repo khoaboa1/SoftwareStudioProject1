@@ -5,6 +5,7 @@ import com.Handoff.backend.dto.LoginRequest;
 import com.Handoff.backend.dto.SignupRequest;
 import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.StudentRepository;
+import com.Handoff.backend.support.FakeSupabaseAuthClient;
 import com.Handoff.backend.dto.VerificationRequest;
 import com.Handoff.backend.model.Category;
 import com.Handoff.backend.model.Condition;
@@ -12,13 +13,12 @@ import com.Handoff.backend.model.Listing;
 import com.Handoff.backend.model.Profile;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ProfileRepository;
-import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.ObjectMapper;
@@ -63,27 +63,26 @@ class ListingControllerTest {
     studentRepository.deleteAll();
   }
 
-  private MockHttpSession loginAsNewStudent(String email) throws Exception {
+  private Cookie loginAsNewStudent(String email) throws Exception {
     String signupBody = objectMapper.writeValueAsString(
         new SignupRequest("Jane Doe", email, "Password123!"));
     mockMvc.perform(post("/auth/signup").contentType("application/json").content(signupBody))
         .andExpect(status().isCreated());
 
-    Student student = studentRepository.findByEmail(email).orElseThrow();
-    VerificationRequest verifyBody = new VerificationRequest(email, student.getVerificationPin(), "test-device");
+    VerificationRequest verifyBody = new VerificationRequest(email, FakeSupabaseAuthClient.SIGNUP_OTP, "test-device");
     MvcResult verifyResult = mockMvc.perform(post("/auth/verify-pin")
         .contentType("application/json")
         .content(objectMapper.writeValueAsString(verifyBody)))
         .andExpect(status().isOk())
         .andReturn();
 
-    HttpSession session = verifyResult.getRequest().getSession(false);
-    return (MockHttpSession) session;
+    Cookie session = verifyResult.getResponse().getCookie(AuthCookies.ACCESS);
+    return session;
   }
 
   @Test
   void createListing_thenFeed_returnsItNewestFirst() throws Exception {
-    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Cookie session = loginAsNewStudent("jane@tulane.edu");
 
     // Reading the feed now requires a profile with a server-owned school domain.
     Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
@@ -92,12 +91,12 @@ class ListingControllerTest {
     String body = objectMapper.writeValueAsString(
         new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
 
-    mockMvc.perform(post("/listings").session(session).contentType("application/json").content(body))
+    mockMvc.perform(post("/listings").cookie(session).contentType("application/json").content(body))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.itemName").value("Desk Lamp"))
         .andExpect(jsonPath("$.sellerName").value("Jane Doe"));
 
-    mockMvc.perform(get("/listings").session(session))
+    mockMvc.perform(get("/listings").cookie(session))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].itemName").value("Desk Lamp"));
   }
@@ -113,34 +112,34 @@ class ListingControllerTest {
 
   @Test
   void createListing_rejectsInvalidCondition() throws Exception {
-    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Cookie session = loginAsNewStudent("jane@tulane.edu");
 
     String body = objectMapper.writeValueAsString(
         new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "SHINY", "FURNITURE"));
 
-    mockMvc.perform(post("/listings").session(session).contentType("application/json").content(body))
+    mockMvc.perform(post("/listings").cookie(session).contentType("application/json").content(body))
         .andExpect(status().isBadRequest());
   }
 
   @Test
   void createListing_rejectsNonPositivePrice() throws Exception {
-    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Cookie session = loginAsNewStudent("jane@tulane.edu");
 
     String body = objectMapper.writeValueAsString(
         new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("0"), "GOOD", "FURNITURE"));
 
-    mockMvc.perform(post("/listings").session(session).contentType("application/json").content(body))
+    mockMvc.perform(post("/listings").cookie(session).contentType("application/json").content(body))
         .andExpect(status().isBadRequest());
   }
 
   @Test
   void updateListing_owner_updatesFields() throws Exception {
-    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Cookie session = loginAsNewStudent("jane@tulane.edu");
     Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
     profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
     String createBody = objectMapper.writeValueAsString(
         new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
-    MvcResult createResult = mockMvc.perform(post("/listings").session(session)
+    MvcResult createResult = mockMvc.perform(post("/listings").cookie(session)
             .contentType("application/json").content(createBody))
         .andExpect(status().isCreated())
         .andReturn();
@@ -149,13 +148,13 @@ class ListingControllerTest {
     String updateBody = objectMapper.writeValueAsString(
         new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
 
-    mockMvc.perform(put("/listings/" + listingId).session(session)
+    mockMvc.perform(put("/listings/" + listingId).cookie(session)
             .contentType("application/json").content(updateBody))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.itemName").value("Mini Fridge"))
         .andExpect(jsonPath("$.price").value(40.00));
 
-    mockMvc.perform(get("/listings/" + listingId).session(session))
+    mockMvc.perform(get("/listings/" + listingId).cookie(session))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.itemName").value("Mini Fridge"))
         .andExpect(jsonPath("$.description").value("Barely used"))
@@ -166,31 +165,31 @@ class ListingControllerTest {
 
   @Test
   void updateListing_notOwner_returnsForbidden() throws Exception {
-    MockHttpSession ownerSession = loginAsNewStudent("jane@tulane.edu");
+    Cookie ownerSession = loginAsNewStudent("jane@tulane.edu");
     String createBody = objectMapper.writeValueAsString(
         new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
-    MvcResult createResult = mockMvc.perform(post("/listings").session(ownerSession)
+    MvcResult createResult = mockMvc.perform(post("/listings").cookie(ownerSession)
             .contentType("application/json").content(createBody))
         .andExpect(status().isCreated())
         .andReturn();
     Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
 
-    MockHttpSession otherSession = loginAsNewStudent("bob@tulane.edu");
+    Cookie otherSession = loginAsNewStudent("bob@tulane.edu");
     String updateBody = objectMapper.writeValueAsString(
         new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
 
-    mockMvc.perform(put("/listings/" + listingId).session(otherSession)
+    mockMvc.perform(put("/listings/" + listingId).cookie(otherSession)
             .contentType("application/json").content(updateBody))
         .andExpect(status().isForbidden());
   }
 
   @Test
   void updateListing_listingDoesNotExist_returnsNotFound() throws Exception {
-    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Cookie session = loginAsNewStudent("jane@tulane.edu");
     String updateBody = objectMapper.writeValueAsString(
         new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
 
-    mockMvc.perform(put("/listings/999999").session(session)
+    mockMvc.perform(put("/listings/999999").cookie(session)
             .contentType("application/json").content(updateBody))
         .andExpect(status().isNotFound());
   }
@@ -206,22 +205,22 @@ class ListingControllerTest {
 
   @Test
   void deleteListing_owner_removesListing() throws Exception {
-    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Cookie session = loginAsNewStudent("jane@tulane.edu");
     // Keep deletion verification within the owner's authenticated school feed.
     Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
     profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
     String createBody = objectMapper.writeValueAsString(
         new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
-    MvcResult createResult = mockMvc.perform(post("/listings").session(session)
+    MvcResult createResult = mockMvc.perform(post("/listings").cookie(session)
             .contentType("application/json").content(createBody))
         .andExpect(status().isCreated())
         .andReturn();
     Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
 
-    mockMvc.perform(delete("/listings/" + listingId).session(session))
+    mockMvc.perform(delete("/listings/" + listingId).cookie(session))
         .andExpect(status().isNoContent());
 
-    mockMvc.perform(get("/listings").session(session))
+    mockMvc.perform(get("/listings").cookie(session))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$").isArray())
         .andExpect(jsonPath("$.length()").value(0));
@@ -229,25 +228,25 @@ class ListingControllerTest {
 
   @Test
   void deleteListing_notOwner_returnsForbidden() throws Exception {
-    MockHttpSession ownerSession = loginAsNewStudent("jane@tulane.edu");
+    Cookie ownerSession = loginAsNewStudent("jane@tulane.edu");
     String createBody = objectMapper.writeValueAsString(
         new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
-    MvcResult createResult = mockMvc.perform(post("/listings").session(ownerSession)
+    MvcResult createResult = mockMvc.perform(post("/listings").cookie(ownerSession)
             .contentType("application/json").content(createBody))
         .andExpect(status().isCreated())
         .andReturn();
     Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
 
-    MockHttpSession otherSession = loginAsNewStudent("bob@tulane.edu");
-    mockMvc.perform(delete("/listings/" + listingId).session(otherSession))
+    Cookie otherSession = loginAsNewStudent("bob@tulane.edu");
+    mockMvc.perform(delete("/listings/" + listingId).cookie(otherSession))
         .andExpect(status().isForbidden());
   }
 
   @Test
   void deleteListing_listingDoesNotExist_returnsNotFound() throws Exception {
-    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Cookie session = loginAsNewStudent("jane@tulane.edu");
 
-    mockMvc.perform(delete("/listings/999999").session(session))
+    mockMvc.perform(delete("/listings/999999").cookie(session))
         .andExpect(status().isNotFound());
   }
 
@@ -261,16 +260,16 @@ class ListingControllerTest {
 
   @Test
   void listVerifiedSeller_includesSellerVerifiedInFeed() throws Exception {
-    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Cookie session = loginAsNewStudent("jane@tulane.edu");
     Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
     profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
     String createBody = objectMapper.writeValueAsString(
         new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
-    mockMvc.perform(post("/listings").session(session)
+    mockMvc.perform(post("/listings").cookie(session)
             .contentType("application/json").content(createBody))
         .andExpect(status().isCreated());
 
-    mockMvc.perform(get("/listings").session(session))
+    mockMvc.perform(get("/listings").cookie(session))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].sellerVerified").value(true));
   }
@@ -278,7 +277,7 @@ class ListingControllerTest {
   @Test
   void listUnverifiedStudent_excludesSellerVerifiedInFeed() throws Exception {
     // jane is a verified requester with a profile who can read the feed.
-    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Cookie session = loginAsNewStudent("jane@tulane.edu");
     Student jane = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
     profileRepository.save(new Profile(jane, "Jane Doe", "CS", null, "tulane.edu"));
 
@@ -289,29 +288,29 @@ class ListingControllerTest {
     Listing bobListing = new Listing("Desk Lamp", "Works great", new BigDecimal("10.00"), Condition.GOOD, Category.FURNITURE, bob);
     listingRepository.save(bobListing);
 
-    mockMvc.perform(get("/listings").session(session))
+    mockMvc.perform(get("/listings").cookie(session))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].sellerVerified").value(false));
   }
 
   @Test
   void getListingById_withVerifiedSeller_returnsSellerVerified() throws Exception {
-    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Cookie session = loginAsNewStudent("jane@tulane.edu");
     Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
     profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
     String createBody = objectMapper.writeValueAsString(
         new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
-    mockMvc.perform(post("/listings").session(session)
+    mockMvc.perform(post("/listings").cookie(session)
             .contentType("application/json").content(createBody))
         .andExpect(status().isCreated());
 
-    MvcResult createResult = mockMvc.perform(post("/listings").session(session)
+    MvcResult createResult = mockMvc.perform(post("/listings").cookie(session)
             .contentType("application/json").content(createBody))
         .andExpect(status().isCreated())
         .andReturn();
     Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
 
-    mockMvc.perform(get("/listings/" + listingId).session(session))
+    mockMvc.perform(get("/listings/" + listingId).cookie(session))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.sellerVerified").value(true));
   }
@@ -319,7 +318,7 @@ class ListingControllerTest {
   @Test
   void getListingById_withUnverifiedStudent_returnsSellerVerifiedFalse() throws Exception {
     // jane is a verified requester with a profile who can read the listing.
-    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Cookie session = loginAsNewStudent("jane@tulane.edu");
     Student jane = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
     profileRepository.save(new Profile(jane, "Jane Doe", "CS", null, "tulane.edu"));
 
@@ -330,21 +329,21 @@ class ListingControllerTest {
     Listing bobListing = new Listing("Desk Lamp", "Works great", new BigDecimal("10.00"), Condition.GOOD, Category.FURNITURE, bob);
     bobListing = listingRepository.save(bobListing);
 
-    mockMvc.perform(get("/listings/" + bobListing.getId()).session(session))
+    mockMvc.perform(get("/listings/" + bobListing.getId()).cookie(session))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.sellerVerified").value(false));
   }
 
   @Test
   void createListing_setsSellerVerifiedInResponse() throws Exception {
-    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Cookie session = loginAsNewStudent("jane@tulane.edu");
     Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
     profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
     
     String createBody = objectMapper.writeValueAsString(
         new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
     
-    mockMvc.perform(post("/listings").session(session)
+    mockMvc.perform(post("/listings").cookie(session)
             .contentType("application/json").content(createBody))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.sellerVerified").value(true));
@@ -352,16 +351,16 @@ class ListingControllerTest {
 
   @Test
   void updateListing_preservesSellerVerified() throws Exception {
-    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Cookie session = loginAsNewStudent("jane@tulane.edu");
     Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
     profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
     String createBody = objectMapper.writeValueAsString(
         new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
-    mockMvc.perform(post("/listings").session(session)
+    mockMvc.perform(post("/listings").cookie(session)
             .contentType("application/json").content(createBody))
         .andExpect(status().isCreated());
     Long listingId = objectMapper.readTree(
-        mockMvc.perform(post("/listings").session(session)
+        mockMvc.perform(post("/listings").cookie(session)
                 .contentType("application/json").content(createBody))
             .andExpect(status().isCreated())
             .andReturn().getResponse().getContentAsString())
@@ -369,7 +368,7 @@ class ListingControllerTest {
 
     String updateBody = objectMapper.writeValueAsString(
         new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
-    mockMvc.perform(put("/listings/" + listingId).session(session)
+    mockMvc.perform(put("/listings/" + listingId).cookie(session)
             .contentType("application/json").content(updateBody))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.sellerVerified").value(true));
@@ -377,16 +376,16 @@ class ListingControllerTest {
 
   @Test
   void getApiListings_setsSellerVerified() throws Exception {
-    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Cookie session = loginAsNewStudent("jane@tulane.edu");
     Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
     profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
     String createBody = objectMapper.writeValueAsString(
         new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
-    mockMvc.perform(post("/listings").session(session)
+    mockMvc.perform(post("/listings").cookie(session)
             .contentType("application/json").content(createBody))
         .andExpect(status().isCreated());
 
-    mockMvc.perform(get("/api/listings").session(session))
+    mockMvc.perform(get("/api/listings").cookie(session))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.items[0].sellerVerified").value(true));
   }
@@ -394,7 +393,7 @@ class ListingControllerTest {
   @Test
   void response_excludesSensitiveStudentFields() throws Exception {
     // jane is a verified requester with a profile who can read the listing.
-    MockHttpSession session = loginAsNewStudent("jane@tulane.edu");
+    Cookie session = loginAsNewStudent("jane@tulane.edu");
     Student jane = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
     profileRepository.save(new Profile(jane, "Jane Doe", "CS", null, "tulane.edu"));
 
@@ -410,7 +409,7 @@ class ListingControllerTest {
         Condition.GOOD, Category.FURNITURE, bob);
     bobListing = listingRepository.save(bobListing);
 
-    MvcResult result = mockMvc.perform(get("/listings/" + bobListing.getId()).session(session))
+    MvcResult result = mockMvc.perform(get("/listings/" + bobListing.getId()).cookie(session))
         .andExpect(status().isOk())
         .andReturn();
 

@@ -9,16 +9,18 @@ import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.ProfileRepository;
 import com.Handoff.backend.repository.StudentRepository;
+import com.Handoff.backend.support.FakeSupabaseAuthClient;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -54,7 +56,7 @@ class ListingBrowseControllerTest {
     listing(otherSchool, "Other school", "hidden", "70.00", Category.FURNITURE,
         ListingStatus.ACTIVE, 7);
 
-    mockMvc.perform(get("/api/listings").session(session(viewer)).param("limit", "2"))
+    mockMvc.perform(get("/api/listings").cookie(session(viewer)).param("limit", "2"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.items", hasSize(2)))
         .andExpect(jsonPath("$.items[0].itemName").value("Newest"))
@@ -78,7 +80,7 @@ class ListingBrowseControllerTest {
     listing(seller, "Desk Chair", "Wrong category", "30.00", Category.OTHER,
         ListingStatus.ACTIVE, 4);
 
-    mockMvc.perform(get("/api/listings").session(session(viewer))
+    mockMvc.perform(get("/api/listings").cookie(session(viewer))
             .param("q", "  CHAIR ")
             .param("category", "furniture")
             .param("minPrice", "20")
@@ -102,7 +104,7 @@ class ListingBrowseControllerTest {
     listing(seller, "Ordinary Shirt", "No wildcard", "12.00", Category.CLOTHING,
         ListingStatus.ACTIVE, 2);
 
-    mockMvc.perform(get("/api/listings").session(session(viewer)).param("q", "%"))
+    mockMvc.perform(get("/api/listings").cookie(session(viewer)).param("q", "%"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.items", hasSize(1)))
         .andExpect(jsonPath("$.items[0].itemName").value("100% Cotton"));
@@ -114,7 +116,7 @@ class ListingBrowseControllerTest {
     Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
     listing(seller, "Desk", "Item", "10.00", Category.FURNITURE, ListingStatus.ACTIVE, 1);
 
-    mockMvc.perform(get("/api/listings").session(session(viewer))
+    mockMvc.perform(get("/api/listings").cookie(session(viewer))
             .param("page", "5").param("limit", "2"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.items", hasSize(0)))
@@ -131,7 +133,7 @@ class ListingBrowseControllerTest {
 
     Student viewer = studentRepository.save(
         new Student("Viewer", "viewer@tulane.edu", "hashed", null, null));
-    mockMvc.perform(get("/api/listings").session(session(viewer)))
+    mockMvc.perform(get("/api/listings").cookie(session(viewer)))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.message").value("Profile not found"));
   }
@@ -152,7 +154,7 @@ class ListingBrowseControllerTest {
 
   private void assertBadRequest(Student viewer, String parameter, String value, String message)
       throws Exception {
-    mockMvc.perform(get("/api/listings").session(session(viewer)).param(parameter, value))
+    mockMvc.perform(get("/api/listings").cookie(session(viewer)).param(parameter, value))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.message").value(message));
   }
@@ -160,7 +162,7 @@ class ListingBrowseControllerTest {
   private void assertBadRequest(Student viewer, String firstParameter, String firstValue,
                                 String secondParameter, String secondValue, String message)
       throws Exception {
-    mockMvc.perform(get("/api/listings").session(session(viewer))
+    mockMvc.perform(get("/api/listings").cookie(session(viewer))
             .param(firstParameter, firstValue).param(secondParameter, secondValue))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.message").value(message));
@@ -173,11 +175,12 @@ class ListingBrowseControllerTest {
     return student;
   }
 
-  private MockHttpSession session(Student student) {
-    // Match the server-side session established by the existing authentication flow.
-    MockHttpSession session = new MockHttpSession();
-    session.setAttribute(SessionKeys.STUDENT_ID, student.getId());
-    return session;
+  private Cookie session(Student student) {
+    if (student.getSupabaseUserId() == null) {
+      student.setSupabaseUserId(UUID.randomUUID());
+      studentRepository.save(student);
+    }
+    return new Cookie(AuthCookies.ACCESS, FakeSupabaseAuthClient.accessTokenFor(student.getSupabaseUserId()));
   }
 
   @Test
@@ -197,7 +200,7 @@ class ListingBrowseControllerTest {
     listing(unverifiedSeller, "Unverified Item", "desc", "20.00", Category.FURNITURE,
         ListingStatus.ACTIVE, 1);
 
-    mockMvc.perform(get("/api/listings").session(session(viewer)))
+    mockMvc.perform(get("/api/listings").cookie(session(viewer)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.items", hasSize(2)))
         .andExpect(jsonPath("$.items[0].itemName").value("Verified Item"))

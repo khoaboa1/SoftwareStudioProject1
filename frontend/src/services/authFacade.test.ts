@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAuthFacade } from './authFacade'
 import { ApiError, type LoginResult } from './authService'
+import { NetworkError } from './httpClient'
 
 vi.mock('../lib/device', () => ({
   getOrCreateDeviceId: () => 'existing-browser',
@@ -142,13 +143,11 @@ describe('authentication facade and login adapter', () => {
     },
   )
 
-  it('propagates network failures without publishing an auth change', async () => {
-    const error = new TypeError('Network unavailable')
-    fetchMock.mockRejectedValueOnce(error)
-
+  it('turns network failures into a NetworkError without publishing an auth change', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('Network unavailable'))
     await expect(createAuthFacade(setStudent).signIn({
       email: student.email, password: 'Password123!',
-    })).rejects.toBe(error)
+    })).rejects.toBeInstanceOf(NetworkError)
     expect(setStudent).not.toHaveBeenCalled()
   })
 

@@ -8,18 +8,20 @@ import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.ProfileRepository;
 import com.Handoff.backend.repository.StudentRepository;
+import com.Handoff.backend.support.FakeSupabaseAuthClient;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -45,11 +47,12 @@ class ListingDomainScopingTest {
     return student;
   }
 
-  /** Model the server-side studentId session established by the existing authentication flow. */
-  private MockHttpSession session(Student student) {
-    MockHttpSession session = new MockHttpSession();
-    session.setAttribute(SessionKeys.STUDENT_ID, student.getId());
-    return session;
+  private Cookie session(Student student) {
+    if (student.getSupabaseUserId() == null) {
+      student.setSupabaseUserId(UUID.randomUUID());
+      studentRepository.save(student);
+    }
+    return new Cookie(AuthCookies.ACCESS, FakeSupabaseAuthClient.accessTokenFor(student.getSupabaseUserId()));
   }
 
   /** Give listings deterministic timestamps so ordering assertions do not depend on clock timing. */
@@ -65,7 +68,7 @@ class ListingDomainScopingTest {
     Student seller = student("peer", "tulane.edu");
     Listing item = listing(seller, "Desk Lamp", 1);
 
-    mockMvc.perform(get("/listings/" + item.getId()).session(session(viewer)))
+    mockMvc.perform(get("/listings/" + item.getId()).cookie(session(viewer)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(item.getId()))
         .andExpect(jsonPath("$.itemName").value("Desk Lamp"))
@@ -83,7 +86,7 @@ class ListingDomainScopingTest {
     Student owner = student("owner", "tulane.edu");
     Listing item = listing(owner, "Desk Lamp", 1);
 
-    mockMvc.perform(get("/listings/" + item.getId()).session(session(owner)))
+    mockMvc.perform(get("/listings/" + item.getId()).cookie(session(owner)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.itemName").value("Desk Lamp"));
   }
@@ -93,7 +96,7 @@ class ListingDomainScopingTest {
     Student viewer = student("viewer", "tulane.edu");
     Listing item = listing(student("other", "other-school.edu"), "Private", 1);
 
-    mockMvc.perform(get("/listings/" + item.getId()).session(session(viewer))
+    mockMvc.perform(get("/listings/" + item.getId()).cookie(session(viewer))
             .param("domain", "other-school.edu"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.message").value("Listing not found"));
@@ -104,7 +107,7 @@ class ListingDomainScopingTest {
     Student viewer = student("viewer", "tulane.edu");
     Listing item = listing(student("legacy", null), "Legacy", 1);
 
-    mockMvc.perform(get("/listings/" + item.getId()).session(session(viewer)))
+    mockMvc.perform(get("/listings/" + item.getId()).cookie(session(viewer)))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.message").value("Listing not found"));
   }
@@ -113,7 +116,7 @@ class ListingDomainScopingTest {
   void getListing_missingId_returnsNotFound() throws Exception {
     Student viewer = student("viewer", "tulane.edu");
 
-    mockMvc.perform(get("/listings/999999").session(session(viewer)))
+    mockMvc.perform(get("/listings/999999").cookie(session(viewer)))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.message").value("Listing not found"));
   }
@@ -123,7 +126,7 @@ class ListingDomainScopingTest {
     Student viewer = student("viewer", null);
     Listing item = listing(student("seller", "tulane.edu"), "Desk Lamp", 1);
 
-    mockMvc.perform(get("/listings/" + item.getId()).session(session(viewer)))
+    mockMvc.perform(get("/listings/" + item.getId()).cookie(session(viewer)))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.message").value("Profile not found"));
   }
@@ -137,10 +140,9 @@ class ListingDomainScopingTest {
 
   @Test
   void getListing_withStaleSession_returnsUnauthorized() throws Exception {
-    MockHttpSession stale = new MockHttpSession();
-    stale.setAttribute(SessionKeys.STUDENT_ID, Long.MAX_VALUE);
+    Cookie stale = new Cookie(AuthCookies.ACCESS, FakeSupabaseAuthClient.accessTokenFor(UUID.randomUUID()));
 
-    mockMvc.perform(get("/listings/1").session(stale))
+    mockMvc.perform(get("/listings/1").cookie(stale))
         .andExpect(status().isUnauthorized());
   }
 
@@ -156,7 +158,7 @@ class ListingDomainScopingTest {
     listing(student("prefix", "tulane.edu.evil.edu"), "Similar prefix", 6);
 
     // Exact array contents prove both isolation and retained chronological ordering.
-    mockMvc.perform(get("/listings").session(session(viewer)))
+    mockMvc.perform(get("/listings").cookie(session(viewer)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(2))
         .andExpect(jsonPath("$[0].itemName").value("Newer"))
@@ -171,7 +173,7 @@ class ListingDomainScopingTest {
     listing(student("peer", "tulane.edu"), "Allowed", 1);
     listing(student("other", "other-school.edu"), "Forbidden", 2);
 
-    mockMvc.perform(get("/listings").session(session(viewer)).param(parameter, "other-school.edu"))
+    mockMvc.perform(get("/listings").cookie(session(viewer)).param(parameter, "other-school.edu"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(1))
         .andExpect(jsonPath("$[0].itemName").value("Allowed"));
@@ -185,11 +187,11 @@ class ListingDomainScopingTest {
     listing(first, "Tulane", 1);
     listing(second, "Other school", 2);
 
-    mockMvc.perform(get("/listings").session(session(first)))
+    mockMvc.perform(get("/listings").cookie(session(first)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(1))
         .andExpect(jsonPath("$[0].itemName").value("Tulane"));
-    mockMvc.perform(get("/listings").session(session(second)))
+    mockMvc.perform(get("/listings").cookie(session(second)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(1))
         .andExpect(jsonPath("$[0].itemName").value("Other school"));
@@ -206,9 +208,8 @@ class ListingDomainScopingTest {
   @Test
   void feed_withStaleSession_returnsUnauthorized() throws Exception {
     // A session referring to a deleted/nonexistent student must not grant feed access.
-    MockHttpSession stale = new MockHttpSession();
-    stale.setAttribute(SessionKeys.STUDENT_ID, Long.MAX_VALUE);
-    mockMvc.perform(get("/listings").session(stale))
+    Cookie stale = new Cookie(AuthCookies.ACCESS, FakeSupabaseAuthClient.accessTokenFor(UUID.randomUUID()));
+    mockMvc.perform(get("/listings").cookie(stale))
         .andExpect(status().isUnauthorized());
   }
 
@@ -217,7 +218,7 @@ class ListingDomainScopingTest {
     // Never fall back to a request parameter or an unscoped query when a profile is missing.
     Student viewer = student("viewer", null);
     listing(student("other", "other-school.edu"), "Forbidden", 1);
-    mockMvc.perform(get("/listings").session(session(viewer)).param("domain", "other-school.edu"))
+    mockMvc.perform(get("/listings").cookie(session(viewer)).param("domain", "other-school.edu"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.message").value("Profile not found"));
   }
@@ -228,7 +229,7 @@ class ListingDomainScopingTest {
     Student viewer = student("viewer", "tulane.edu");
     listing(student("legacy", null), "Unscoped", 2);
     listing(student("peer", "tulane.edu"), "Allowed", 1);
-    mockMvc.perform(get("/listings").session(session(viewer)))
+    mockMvc.perform(get("/listings").cookie(session(viewer)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.length()").value(1))
         .andExpect(jsonPath("$[0].itemName").value("Allowed"));
@@ -239,7 +240,7 @@ class ListingDomainScopingTest {
     // Other schools' listings must not populate an otherwise empty school marketplace.
     Student viewer = student("viewer", "tulane.edu");
     listing(student("other", "other-school.edu"), "Forbidden", 1);
-    mockMvc.perform(get("/listings").session(session(viewer)))
+    mockMvc.perform(get("/listings").cookie(session(viewer)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$").isArray())
         .andExpect(jsonPath("$.length()").value(0));

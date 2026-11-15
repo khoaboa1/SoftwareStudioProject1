@@ -4,13 +4,16 @@ import com.Handoff.backend.model.Profile;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ProfileRepository;
 import com.Handoff.backend.repository.StudentRepository;
+import com.Handoff.backend.support.FakeSupabaseAuthClient;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -36,7 +39,7 @@ class ProfileSearchControllerTest {
     profile("Jane Doe", "jane@tulane.edu", "tulane.edu");
 
     mockMvc.perform(get("/api/profiles/search")
-            .session(session(requester))
+            .cookie(session(requester))
             .param("q", "jane"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.items[0].name").value("Jane Doe"))
@@ -51,7 +54,7 @@ class ProfileSearchControllerTest {
     Student requester = profile("Viewer", "viewer@tulane.edu", "tulane.edu").getStudent();
 
     mockMvc.perform(get("/api/profiles/search")
-            .session(session(requester))
+            .cookie(session(requester))
             .param("q", "nobody"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.items").isEmpty())
@@ -63,7 +66,7 @@ class ProfileSearchControllerTest {
     Student requester = profile("Viewer", "viewer@tulane.edu", "tulane.edu").getStudent();
 
     mockMvc.perform(get("/api/profiles/search")
-            .session(session(requester))
+            .cookie(session(requester))
             .param("q", "   "))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.message").value("q is required"));
@@ -81,16 +84,18 @@ class ProfileSearchControllerTest {
     Student requester = student("Profileless", "none@tulane.edu");
 
     mockMvc.perform(get("/api/profiles/search")
-            .session(session(requester))
+            .cookie(session(requester))
             .param("q", "jane"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.message").value("Profile not found"));
   }
 
-  private MockHttpSession session(Student student) {
-    MockHttpSession session = new MockHttpSession();
-    session.setAttribute(SessionKeys.STUDENT_ID, student.getId());
-    return session;
+  private Cookie session(Student student) {
+    if (student.getSupabaseUserId() == null) {
+      student.setSupabaseUserId(UUID.randomUUID());
+      studentRepository.save(student);
+    }
+    return new Cookie(AuthCookies.ACCESS, FakeSupabaseAuthClient.accessTokenFor(student.getSupabaseUserId()));
   }
 
   private Profile profile(String name, String email, String domain) {

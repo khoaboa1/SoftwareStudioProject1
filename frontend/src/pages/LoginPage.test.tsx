@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { NetworkError } from '../services/httpClient'
 import { ApiError, login, resendPin, verifyPin } from '../services/authService'
 import { LoginPage } from './LoginPage'
 
@@ -150,5 +151,29 @@ describe('LoginPage authentication behavior', () => {
 
     expect(screen.getByRole('heading', { name: 'Log in to Handoff' })).toBeInTheDocument()
     expect(screen.getByLabelText('Password')).toHaveValue('')
+  })
+
+  it('offers a retry when the server cannot be reached', async () => {
+    vi.mocked(login)
+      .mockRejectedValueOnce(new NetworkError())
+      .mockResolvedValueOnce({
+        requiresPin: false, message: 'Login successful',
+        id: 1, studentName: 'Jane Doe', email: 'jane@tulane.edu',
+      })
+    const user = await submitLogin()
+    expect(await screen.findByText("Can't reach the server. Check your connection and try again."))
+    .toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('Marketplace destination')).toBeInTheDocument()
+    expect(login).toHaveBeenCalledTimes(2)
+  })
+
+  it('titles the PIN step for both unverified accounts and new devices', async () => {
+    vi.mocked(login).mockResolvedValue({
+      requiresPin: true,
+      message: 'Account is unverified. A new verification PIN has been sent to your school email.',
+    })
+    await submitLogin()
+    expect(await screen.findByRole('heading', { name: "Verify it's you" })).toBeInTheDocument()
   })
 })

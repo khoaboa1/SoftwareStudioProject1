@@ -18,14 +18,14 @@ import com.Handoff.backend.repository.ConversationRepository;
 import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.ProfileRepository;
 import com.Handoff.backend.repository.StudentRepository;
-import jakarta.servlet.http.HttpSession;
+import com.Handoff.backend.support.FakeSupabaseAuthClient;
+import jakarta.servlet.http.Cookie;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.ObjectMapper;
@@ -49,20 +49,19 @@ class ConversationControllerTest {
     studentRepository.deleteAll();
   }
 
-  private MockHttpSession loginAsNewStudent(String email) throws Exception {
+  private Cookie loginAsNewStudent(String email) throws Exception {
     String signupBody = objectMapper.writeValueAsString(
         new SignupRequest("Jane Doe", email, "Password123!"));
     mockMvc.perform(post("/auth/signup").contentType("application/json").content(signupBody))
         .andExpect(status().isCreated());
-    Student student = studentRepository.findByEmail(email).orElseThrow();
-    VerificationRequest verifyBody = new VerificationRequest(email, student.getVerificationPin(), "test-device");
+    VerificationRequest verifyBody = new VerificationRequest(email, FakeSupabaseAuthClient.SIGNUP_OTP, "test-device");
     MvcResult verifyResult = mockMvc.perform(post("/auth/verify-pin")
         .contentType("application/json")
         .content(objectMapper.writeValueAsString(verifyBody)))
         .andExpect(status().isOk()).andReturn();
-    HttpSession session = verifyResult.getRequest().getSession(false);
-    sessions.put(email, (MockHttpSession) session);
-    return (MockHttpSession) session;
+    Cookie session = verifyResult.getResponse().getCookie(AuthCookies.ACCESS);
+    sessions.put(email, session);
+    return session;
   }
 
   private Student student(String name, String email, String domain) throws Exception {
@@ -84,9 +83,9 @@ class ConversationControllerTest {
     Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
     Student buyer = student("Buyer", "buyer@tulane.edu", "tulane.edu");
     Listing listing = listing(seller);
-    MockHttpSession session = loginSession("buyer@tulane.edu");
+    Cookie session = loginSession("buyer@tulane.edu");
 
-    mockMvc.perform(post("/listings/{id}/conversation", listing.getId()).session(session))
+    mockMvc.perform(post("/listings/{id}/conversation", listing.getId()).cookie(session))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.id").isNumber())
         .andExpect(jsonPath("$.listingId").value(listing.getId()))
@@ -98,22 +97,22 @@ class ConversationControllerTest {
         .andExpect(jsonPath("$.createdAt").exists());
   }
 
-  private MockHttpSession loginSession(String email) {
+  private Cookie loginSession(String email) {
     return sessions.get(email);
   }
 
-  private final java.util.Map<String, MockHttpSession> sessions = new java.util.HashMap<>();
+  private final java.util.Map<String, Cookie> sessions = new java.util.HashMap<>();
 
   @Test
   void start_secondTime_returns200SameId() throws Exception {
     Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
     student("Buyer", "buyer@tulane.edu", "tulane.edu");
     Listing listing = listing(seller);
-    MockHttpSession session = loginSession("buyer@tulane.edu");
-    MvcResult first = mockMvc.perform(post("/listings/{id}/conversation", listing.getId()).session(session))
+    Cookie session = loginSession("buyer@tulane.edu");
+    MvcResult first = mockMvc.perform(post("/listings/{id}/conversation", listing.getId()).cookie(session))
         .andExpect(status().isCreated()).andReturn();
     long firstId = objectMapper.readTree(first.getResponse().getContentAsString()).get("id").asLong();
-    mockMvc.perform(post("/listings/{id}/conversation", listing.getId()).session(session))
+    mockMvc.perform(post("/listings/{id}/conversation", listing.getId()).cookie(session))
         .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(firstId));
     assertThat(conversationRepository.count()).isEqualTo(1);
   }
@@ -130,7 +129,7 @@ class ConversationControllerTest {
     Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
     Listing listing = listing(seller);
     mockMvc.perform(post("/listings/{id}/conversation", listing.getId())
-            .session(loginSession("seller@tulane.edu")))
+            .cookie(loginSession("seller@tulane.edu")))
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.message").value("You cannot message yourself about your own listing"));
   }
@@ -143,7 +142,7 @@ class ConversationControllerTest {
     listing.setStatus(ListingStatus.SOLD);
     listingRepository.save(listing);
     mockMvc.perform(post("/listings/{id}/conversation", listing.getId())
-            .session(loginSession("buyer@tulane.edu")))
+            .cookie(loginSession("buyer@tulane.edu")))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.message").value("This item has already been sold"));
   }
@@ -154,7 +153,7 @@ class ConversationControllerTest {
     student("Buyer", "buyer@tulane.edu", "tulane.edu");
     Listing listing = listing(seller);
     mockMvc.perform(post("/listings/{id}/conversation", listing.getId())
-            .session(loginSession("buyer@tulane.edu")))
+            .cookie(loginSession("buyer@tulane.edu")))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.message").value("Listing not found"));
   }
@@ -162,15 +161,15 @@ class ConversationControllerTest {
   @Test
   void start_missingListing_returns404() throws Exception {
     student("Buyer", "buyer@tulane.edu", "tulane.edu");
-    mockMvc.perform(post("/listings/999999/conversation").session(loginSession("buyer@tulane.edu")))
+    mockMvc.perform(post("/listings/999999/conversation").cookie(loginSession("buyer@tulane.edu")))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.message").value("Listing not found"));
   }
 
   @Test
   void start_requesterWithoutProfile_returns404ProfileNotFound() throws Exception {
-    MockHttpSession session = loginAsNewStudent("buyer@tulane.edu");
-    mockMvc.perform(post("/listings/999999/conversation").session(session))
+    Cookie session = loginAsNewStudent("buyer@tulane.edu");
+    mockMvc.perform(post("/listings/999999/conversation").cookie(session))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.message").value("Profile not found"));
   }
@@ -181,9 +180,9 @@ class ConversationControllerTest {
     student("Buyer", "buyer@tulane.edu", "tulane.edu");
     Listing listing = listing(seller);
     mockMvc.perform(post("/listings/{id}/conversation", listing.getId())
-            .session(loginSession("buyer@tulane.edu"))).andExpect(status().isCreated());
+            .cookie(loginSession("buyer@tulane.edu"))).andExpect(status().isCreated());
     mockMvc.perform(delete("/listings/{id}", listing.getId())
-            .session(loginSession("seller@tulane.edu"))).andExpect(status().isNoContent());
+            .cookie(loginSession("seller@tulane.edu"))).andExpect(status().isNoContent());
     assertThat(conversationRepository.count()).isZero();
   }
 }
