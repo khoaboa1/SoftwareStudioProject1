@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Logo } from './Logo'
+import { MessagesMenu } from './MessagesMenu'
 import { Button } from './ui/Button'
 import { useAuth } from '../lib/auth-context'
 import { createAuthFacade } from '../services/authFacade'
@@ -38,6 +39,7 @@ export function AppHeader() {
           </nav>
         </div>
         <div className="flex items-center gap-4">
+          <MessagesMenu />
           <span className="hidden text-sm text-zinc-600 sm:inline">
             Logged in as {student?.studentName}
           </span>
