@@ -51,7 +51,9 @@ export function SignupPage() {
         setStatus('idle')
         return
       }
-      setServerError(getErrorMessage(error, 'Something went wrong. Please try again.'))
+      setServerError(
+        getErrorMessage(error, 'Something went wrong. Please try again.')
+      )
       setCanRetry(isNetworkError(error))
       setStatus('error')
     }
@@ -79,7 +81,11 @@ export function SignupPage() {
         verifyErrorFallback="Failed to verify PIN. Please try again."
         onVerify={async (pin) => {
           // The backend sets the HttpOnly auth cookies here, so the student is signed in.
-          const student = await verifyPin({ email, pin, deviceId: getOrCreateDeviceId() })
+          const student = await verifyPin({
+            email,
+            pin,
+            deviceId: getOrCreateDeviceId(),
+          })
           setStudent(student)
           navigate('/profile-setup', { replace: true })
         }}
@@ -121,7 +127,11 @@ export function SignupPage() {
       {status === 'error' && serverError && (
         <FormAlert
           kind="error"
-          action={canRetry ? { label: 'Try again', onClick: () => void submitSignup() } : undefined}
+          action={
+            canRetry
+              ? { label: 'Try again', onClick: () => void submitSignup() }
+              : undefined
+          }
         >
           {serverError}
         </FormAlert>
@@ -152,7 +162,10 @@ export function SignupPage() {
         {emailTaken && (
           <p className="-mt-3 text-sm text-zinc-600">
             Already registered?{' '}
-            <Link to="/login" className="font-medium text-accent-700 hover:text-accent-800">
+            <Link
+              to="/login"
+              className="font-medium text-accent-700 hover:text-accent-800"
+            >
               Log in instead
             </Link>
           </p>

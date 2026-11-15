@@ -18,12 +18,21 @@ type PinVerificationStepProps = {
 }
 
 export function PinVerificationStep({
-  email, title, subtitle, footer, helperText, submitLabel, verifyErrorFallback, onVerify,
+  email,
+  title,
+  subtitle,
+  footer,
+  helperText,
+  submitLabel,
+  verifyErrorFallback,
+  onVerify,
 }: PinVerificationStepProps) {
   const [pin, setPin] = useState('')
   const [pinError, setPinError] = useState<string | undefined>()
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
-  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent'>('idle')
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent'>(
+    'idle'
+  )
   const [serverError, setServerError] = useState<string | null>(null)
   const [canRetry, setCanRetry] = useState(false)
 
@@ -58,9 +67,7 @@ export function PinVerificationStep({
       setResendStatus('sent')
       setTimeout(() => setResendStatus('idle'), 4000)
     } catch (error) {
-      setServerError(
-        getErrorMessage(error, 'Failed to resend PIN.'),
-      )
+      setServerError(getErrorMessage(error, 'Failed to resend PIN.'))
       setResendStatus('idle')
     }
   }
@@ -70,16 +77,29 @@ export function PinVerificationStep({
       {serverError && (
         <FormAlert
           kind="error"
-          action={canRetry ? { label: 'Try again', onClick: () => void runVerify(pin.trim()) } : undefined}
+          action={
+            canRetry
+              ? {
+                  label: 'Try again',
+                  onClick: () => void runVerify(pin.trim()),
+                }
+              : undefined
+          }
         >
           {serverError}
         </FormAlert>
       )}
       {resendStatus === 'sent' && (
-        <FormAlert kind="success">A new 6-digit PIN has been generated!</FormAlert>
+        <FormAlert kind="success">
+          A new 6-digit PIN has been generated!
+        </FormAlert>
       )}
 
-      <form onSubmit={handleVerifyPin} noValidate className="flex flex-col gap-5">
+      <form
+        onSubmit={handleVerifyPin}
+        noValidate
+        className="flex flex-col gap-5"
+      >
         <TextField
           label="6-Digit Verification PIN"
           type="text"

@@ -8,7 +8,8 @@ const NO_REFRESH_PATHS = new Set([
   '/auth/refresh',
   '/auth/logout',
 ])
-export const NETWORK_ERROR_MESSAGE = "Can't reach the server. Check your connection and try again."
+export const NETWORK_ERROR_MESSAGE =
+  "Can't reach the server. Check your connection and try again."
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {
@@ -30,7 +31,9 @@ async function send(path: string, options: RequestInit): Promise<Response> {
       // The backend keeps the Supabase tokens in HttpOnly cookies; the browser attaches them.
       credentials: 'include',
       headers: {
-        ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+        ...(options.body instanceof FormData
+          ? {}
+          : { 'Content-Type': 'application/json' }),
         ...options.headers,
       },
     })
@@ -50,9 +53,16 @@ function refreshSession(): Promise<boolean> {
   }
   return refreshInFlight
 }
-export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function request<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
   let response = await send(path, options)
-  if (response.status === 401 && !NO_REFRESH_PATHS.has(path) && (await refreshSession())) {
+  if (
+    response.status === 401 &&
+    !NO_REFRESH_PATHS.has(path) &&
+    (await refreshSession())
+  ) {
     response = await send(path, options)
   }
   if (!response.ok) {

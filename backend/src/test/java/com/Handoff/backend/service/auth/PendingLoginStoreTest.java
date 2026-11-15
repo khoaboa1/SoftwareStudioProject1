@@ -13,11 +13,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class PendingLoginStoreTest {
 
-    private static final SupabaseSession SESSION = new SupabaseSession(
-        "access", "refresh", 3600, UUID.fromString("11111111-1111-1111-1111-111111111111"));
+    private static final SupabaseSession SESSION = new SupabaseSession("access", "refresh", 3600,
+            UUID.fromString("11111111-1111-1111-1111-111111111111"));
 
-    private static final SupabaseSession OTHER_SESSION = new SupabaseSession(
-        "access-2", "refresh-2", 3600, UUID.fromString("11111111-1111-1111-1111-111111111111"));
+    private static final SupabaseSession OTHER_SESSION = new SupabaseSession("access-2", "refresh-2", 3600,
+            UUID.fromString("11111111-1111-1111-1111-111111111111"));
 
     private static final class MutableClock extends Clock {
         private Instant now = Instant.parse("2026-11-14T12:00:00Z");

@@ -39,7 +39,7 @@ export function ProfileSetupPage() {
       navigate('/feed')
     } catch (error) {
       setServerError(
-        getErrorMessage(error, 'Something went wrong. Please try again.'),
+        getErrorMessage(error, 'Something went wrong. Please try again.')
       )
       setStatus('error')
     }
@@ -51,7 +51,9 @@ export function ProfileSetupPage() {
       subtitle="Tell us your major so we can connect you to your campus marketplace"
       footer={null}
     >
-      {status === 'error' && serverError && <FormAlert kind="error">{serverError}</FormAlert>}
+      {status === 'error' && serverError && (
+        <FormAlert kind="error">{serverError}</FormAlert>
+      )}
 
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
         <TextField

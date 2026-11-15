@@ -1,18 +1,17 @@
 package com.Handoff.backend.service.auth;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
-
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 /**
- * Holds a Supabase session for a login from an untrusted device until the device PIN is verified,
- * so the auth cookies are only issued after the PIN check passes.
+ * Holds a Supabase session for a login from an untrusted device until the device PIN is verified, so the auth cookies
+ * are only issued after the PIN check passes.
  */
 @Component
 public class PendingLoginStore {

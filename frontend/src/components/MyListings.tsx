@@ -14,24 +14,36 @@ import { getListings } from '../services/listingService'
  */
 export function MyListings({ sellerId }: { sellerId: number }) {
   const { state } = useAsyncResource(
-    () => getListings().then((listings) => listings.filter((listing) => listing.sellerId === sellerId)),
-    [sellerId],
+    () =>
+      getListings().then((listings) =>
+        listings.filter((listing) => listing.sellerId === sellerId)
+      ),
+    [sellerId]
   )
 
   return (
     <section className="mt-8">
       <h2 className="mb-4 text-lg font-semibold text-zinc-900">
-        {state.status === 'ready' ? `My listings (${state.data.length})` : 'My listings'}
+        {state.status === 'ready'
+          ? `My listings (${state.data.length})`
+          : 'My listings'}
       </h2>
 
       {state.status === 'loading' && <ListingGridSkeleton count={2} />}
 
-      {state.status === 'error' && <FormAlert kind="error">{getErrorMessage(state.error, 'Could not load your listings.')}</FormAlert>}
+      {state.status === 'error' && (
+        <FormAlert kind="error">
+          {getErrorMessage(state.error, 'Could not load your listings.')}
+        </FormAlert>
+      )}
 
       {state.status === 'ready' && state.data.length === 0 && (
         <p className="text-sm text-zinc-500">
           You haven't posted any listings yet.{' '}
-          <Link to="/feed" className="font-medium text-accent-700 hover:text-accent-800">
+          <Link
+            to="/feed"
+            className="font-medium text-accent-700 hover:text-accent-800"
+          >
             Post one in the marketplace
           </Link>
         </p>

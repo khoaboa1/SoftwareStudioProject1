@@ -28,7 +28,7 @@ function renderMyListings() {
   return render(
     <MemoryRouter>
       <MyListings sellerId={7} />
-    </MemoryRouter>,
+    </MemoryRouter>
   )
 }
 
@@ -48,7 +48,12 @@ describe('MyListings', () => {
   it('shows only the listings posted by this seller', async () => {
     vi.mocked(getListings).mockResolvedValue([
       listing({ id: 1, itemName: 'Desk Lamp', sellerId: 7 }),
-      listing({ id: 2, itemName: 'Mini Fridge', sellerId: 99, sellerName: 'Someone Else' }),
+      listing({
+        id: 2,
+        itemName: 'Mini Fridge',
+        sellerId: 99,
+        sellerName: 'Someone Else',
+      }),
       listing({ id: 3, itemName: 'Office Chair', sellerId: 7 }),
     ])
 
@@ -68,7 +73,9 @@ describe('MyListings', () => {
 
     renderMyListings()
 
-    expect(await screen.findByRole('heading', { name: 'My listings (2)' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'My listings (2)' })
+    ).toBeInTheDocument()
   })
 
   it('keeps the feed order (newest first)', async () => {
@@ -80,7 +87,9 @@ describe('MyListings', () => {
     renderMyListings()
 
     await screen.findByText('Newest')
-    const titles = screen.getAllByRole('article').map((card) => card.querySelector('h2')?.textContent)
+    const titles = screen
+      .getAllByRole('article')
+      .map((card) => card.querySelector('h2')?.textContent)
     expect(titles).toEqual(['Newest', 'Oldest'])
   })
 
@@ -89,8 +98,12 @@ describe('MyListings', () => {
 
     renderMyListings()
 
-    expect(await screen.findByText("You haven't posted any listings yet.")).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Post one in the marketplace' })).toHaveAttribute('href', '/feed')
+    expect(
+      await screen.findByText("You haven't posted any listings yet.")
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Post one in the marketplace' })
+    ).toHaveAttribute('href', '/feed')
   })
 
   it('does not offer edit or delete on profile listings', async () => {
@@ -99,12 +112,18 @@ describe('MyListings', () => {
     renderMyListings()
 
     await screen.findByText('Desk Lamp')
-    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Edit' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Delete' })
+    ).not.toBeInTheDocument()
   })
 
   it('shows the API error message when listings fail to load', async () => {
-    vi.mocked(getListings).mockRejectedValue(new ApiError(500, 'Database unavailable'))
+    vi.mocked(getListings).mockRejectedValue(
+      new ApiError(500, 'Database unavailable')
+    )
 
     renderMyListings()
 
@@ -116,6 +135,8 @@ describe('MyListings', () => {
 
     renderMyListings()
 
-    expect(await screen.findByText('Could not load your listings.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Could not load your listings.')
+    ).toBeInTheDocument()
   })
 })

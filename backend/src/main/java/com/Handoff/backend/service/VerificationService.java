@@ -3,101 +3,98 @@ package com.Handoff.backend.service;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.StudentRepository;
 import com.Handoff.backend.service.email.EmailSender;
+import java.security.SecureRandom;
+import java.time.LocalDateTime;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.security.SecureRandom;
-import java.time.LocalDateTime;
-import java.util.List;
-
 @Service
 public class VerificationService {
 
-  private static final Logger logger = LoggerFactory.getLogger(VerificationService.class);
+    private static final Logger logger = LoggerFactory.getLogger(VerificationService.class);
 
-  private final StudentRepository studentRepository;
-  private final List<EmailSender> emailSenders;
-  private final UniversityEmailValidator universityEmailValidator;
-  private final SecureRandom secureRandom = new SecureRandom();
+    private final StudentRepository studentRepository;
+    private final List<EmailSender> emailSenders;
+    private final UniversityEmailValidator universityEmailValidator;
+    private final SecureRandom secureRandom = new SecureRandom();
 
-  /** Spring injects every EmailSender bean, sorted by {@code @Order}. */
-  public VerificationService(StudentRepository studentRepository, List<EmailSender> emailSenders,
-                             UniversityEmailValidator universityEmailValidator) {
-    this.studentRepository = studentRepository;
-    this.emailSenders = emailSenders;
-    this.universityEmailValidator = universityEmailValidator;
-  }
-
-  public String generateAndSendPin(Student student) {
-    if (!universityEmailValidator.isValid(student.getEmail())) {
-      throw new InvalidSignupException("Only .edu school emails can receive a verification PIN");
+    /** Spring injects every EmailSender bean, sorted by {@code @Order}. */
+    public VerificationService(StudentRepository studentRepository, List<EmailSender> emailSenders,
+            UniversityEmailValidator universityEmailValidator) {
+        this.studentRepository = studentRepository;
+        this.emailSenders = emailSenders;
+        this.universityEmailValidator = universityEmailValidator;
     }
 
-    String pin = String.format("%06d", secureRandom.nextInt(1_000_000));
-    student.setVerificationPin(pin);
-    student.setVerificationPinExpiry(LocalDateTime.now().plusMinutes(15));
-    studentRepository.save(student);
+    public String generateAndSendPin(Student student) {
+        if (!universityEmailValidator.isValid(student.getEmail())) {
+            throw new InvalidSignupException("Only .edu school emails can receive a verification PIN");
+        }
 
-    logger.info("\n=======================================================\n" +
-                "  [EMAIL VERIFICATION PIN] Sent to: {}\n" +
-                "  PIN: {}\n" +
-                "  Expires in: 15 minutes\n" +
-                "=======================================================", student.getEmail(), pin);
+        String pin = String.format("%06d", secureRandom.nextInt(1_000_000));
+        student.setVerificationPin(pin);
+        student.setVerificationPinExpiry(LocalDateTime.now().plusMinutes(15));
+        studentRepository.save(student);
 
-    // Try each configured sender in order (webhook -> Resend -> SMTP) until one succeeds.
-    for (EmailSender sender : emailSenders) {
-      if (sender.send(student.getEmail(), pin)) {
-        break;
-      }
+        logger.info("\n=======================================================\n"
+                + "  [EMAIL VERIFICATION PIN] Sent to: {}\n" + "  PIN: {}\n" + "  Expires in: 15 minutes\n"
+                + "=======================================================", student.getEmail(), pin);
+
+        // Try each configured sender in order (webhook -> Resend -> SMTP) until one succeeds.
+        for (EmailSender sender : emailSenders) {
+            if (sender.send(student.getEmail(), pin)) {
+                break;
+            }
+        }
+
+        return pin;
     }
 
-    return pin;
-  }
+    public Student verifyPin(String email, String pin, String deviceId) {
+        if (!universityEmailValidator.isValid(email)) {
+            throw new InvalidVerificationPinException("Use a valid .edu school email");
+        }
+        if (pin == null || pin.isBlank()) {
+            throw new InvalidVerificationPinException("Verification PIN is required");
+        }
 
-  public Student verifyPin(String email, String pin, String deviceId) {
-    if (!universityEmailValidator.isValid(email)) {
-      throw new InvalidVerificationPinException("Use a valid .edu school email");
-    }
-    if (pin == null || pin.isBlank()) {
-      throw new InvalidVerificationPinException("Verification PIN is required");
-    }
+        Student student = studentRepository.findByEmail(email)
+                .orElseThrow(() -> new InvalidVerificationPinException("Student not found"));
 
-    Student student = studentRepository.findByEmail(email)
-        .orElseThrow(() -> new InvalidVerificationPinException("Student not found"));
+        if (student.getVerificationPin() == null || student.getVerificationPinExpiry() == null) {
+            throw new InvalidVerificationPinException("No active verification PIN found. Please request a new one.");
+        }
 
-    if (student.getVerificationPin() == null || student.getVerificationPinExpiry() == null) {
-      throw new InvalidVerificationPinException("No active verification PIN found. Please request a new one.");
-    }
+        if (LocalDateTime.now().isAfter(student.getVerificationPinExpiry())) {
+            throw new InvalidVerificationPinException("Verification PIN has expired. Please request a new one.");
+        }
 
-    if (LocalDateTime.now().isAfter(student.getVerificationPinExpiry())) {
-      throw new InvalidVerificationPinException("Verification PIN has expired. Please request a new one.");
-    }
+        if (!pin.trim().equals(student.getVerificationPin())) {
+            throw new InvalidVerificationPinException("Incorrect verification PIN");
+        }
 
-    if (!pin.trim().equals(student.getVerificationPin())) {
-      throw new InvalidVerificationPinException("Incorrect verification PIN");
-    }
+        student.setVerified(true);
+        student.setEmailVerified(true);
+        student.setVerificationPin(null);
+        student.setVerificationPinExpiry(null);
 
-    student.setVerified(true);
-    student.setEmailVerified(true);
-    student.setVerificationPin(null);
-    student.setVerificationPinExpiry(null);
+        if (deviceId != null && !deviceId.isBlank()) {
+            student.trustDevice(deviceId);
+        }
 
-    if (deviceId != null && !deviceId.isBlank()) {
-      student.trustDevice(deviceId);
-    }
-
-    return studentRepository.save(student);
-  }
-
-  public void resendPin(String email) {
-    if (!universityEmailValidator.isValid(email)) {
-      throw new InvalidSignupException("Use a valid .edu school email");
+        return studentRepository.save(student);
     }
 
-    Student student = studentRepository.findByEmail(email)
-        .orElseThrow(() -> new InvalidSignupException("Account not found with this email"));
+    public void resendPin(String email) {
+        if (!universityEmailValidator.isValid(email)) {
+            throw new InvalidSignupException("Use a valid .edu school email");
+        }
 
-    generateAndSendPin(student);
-  }
+        Student student = studentRepository.findByEmail(email)
+                .orElseThrow(() -> new InvalidSignupException("Account not found with this email"));
+
+        generateAndSendPin(student);
+    }
 }

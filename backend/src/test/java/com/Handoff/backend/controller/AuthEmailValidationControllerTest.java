@@ -42,127 +42,123 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ExtendWith(MockitoExtension.class)
 class AuthEmailValidationControllerTest {
 
-  private static final UUID USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
-  @Mock
-  private StudentRepository studentRepository;
-  @Mock
-  private SupabaseAuthClient supabase;
-  @Mock
-  private EmailSender emailSender;
+    @Mock
+    private StudentRepository studentRepository;
+    @Mock
+    private SupabaseAuthClient supabase;
+    @Mock
+    private EmailSender emailSender;
 
-  private final JsonMapper objectMapper = JsonMapper.builder().build();
-  private MockMvc mockMvc;
+    private final JsonMapper objectMapper = JsonMapper.builder().build();
+    private MockMvc mockMvc;
 
-  @BeforeEach
-  void setUp() {
-    UniversityEmailValidator validator = new UniversityEmailValidator();
-    VerificationService verificationService =
-        new VerificationService(studentRepository, List.of(emailSender), validator);
-    AuthService authService =
-        new AuthService(studentRepository, verificationService, validator, supabase, new PendingLoginStore(),
-            new BCryptPasswordEncoder());
-    mockMvc = MockMvcBuilders.standaloneSetup(
-        new AuthController(authService, new CurrentStudentResolver(authService), new AuthCookies(false)))
-        .build();
-  }
+    @BeforeEach
+    void setUp() {
+        UniversityEmailValidator validator = new UniversityEmailValidator();
+        VerificationService verificationService = new VerificationService(studentRepository, List.of(emailSender),
+                validator);
+        AuthService authService = new AuthService(studentRepository, verificationService, validator, supabase,
+                new PendingLoginStore(), new BCryptPasswordEncoder());
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                new AuthController(authService, new CurrentStudentResolver(authService), new AuthCookies(false)))
+                .build();
+    }
 
-  private Student studentWithPin(String email) {
-    Student student = new Student("Jane Doe", email, "hashed", null, null);
-    student.setId(42L);
-    student.setVerificationPin("123456");
-    student.setVerificationPinExpiry(LocalDateTime.now().plusMinutes(15));
-    return student;
-  }
+    private Student studentWithPin(String email) {
+        Student student = new Student("Jane Doe", email, "hashed", null, null);
+        student.setId(42L);
+        student.setVerificationPin("123456");
+        student.setVerificationPinExpiry(LocalDateTime.now().plusMinutes(15));
+        return student;
+    }
 
-  @ParameterizedTest
-  @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#acceptedEmails")
-  void signup_returnsCreatedAndUnverifiedStudent(String email) throws Exception {
-    when(studentRepository.findByEmail(email)).thenReturn(Optional.empty());
-    when(supabase.signUp(email, "Password123!")).thenReturn(USER_ID);
-    when(studentRepository.save(any(Student.class))).thenAnswer(invocation -> {
-      Student student = invocation.getArgument(0);
-      student.setId(42L);
-      return student;
-    });
+    @ParameterizedTest
+    @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#acceptedEmails")
+    void signup_returnsCreatedAndUnverifiedStudent(String email) throws Exception {
+        when(studentRepository.findByEmail(email)).thenReturn(Optional.empty());
+        when(supabase.signUp(email, "Password123!")).thenReturn(USER_ID);
+        when(studentRepository.save(any(Student.class))).thenAnswer(invocation -> {
+            Student student = invocation.getArgument(0);
+            student.setId(42L);
+            return student;
+        });
 
-    MvcResult result = mockMvc.perform(post("/auth/signup").contentType("application/json")
-        .content(objectMapper.writeValueAsString(new SignupRequest("Jane Doe", email, "Password123!"))))
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.id").value(42))
-        .andExpect(jsonPath("$.email").value(email))
-        .andExpect(jsonPath("$.verified").value(false))
-        .andExpect(jsonPath("$.passwordHash").doesNotExist())
-        .andExpect(jsonPath("$.verificationPin").doesNotExist())
-        .andReturn();
+        MvcResult result = mockMvc
+                .perform(post("/auth/signup").contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new SignupRequest("Jane Doe", email, "Password123!"))))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.id").value(42))
+                .andExpect(jsonPath("$.email").value(email)).andExpect(jsonPath("$.verified").value(false))
+                .andExpect(jsonPath("$.passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.verificationPin").doesNotExist()).andReturn();
 
-    assertThat(result.getResponse().getCookie(AuthCookies.ACCESS)).isNull();
-  }
+        assertThat(result.getResponse().getCookie(AuthCookies.ACCESS)).isNull();
+    }
 
-  @ParameterizedTest
-  @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#acceptedEmails")
-  void verifyPin_returnsVerifiedStudentAndSetsAuthCookies(String email) throws Exception {
-    Student student = studentWithPin(email);
-    when(studentRepository.findByEmail(email)).thenReturn(Optional.of(student));
-    when(studentRepository.save(student)).thenReturn(student);
-    when(supabase.verifySignupOtp(email, "123456")).thenReturn(new SupabaseSession("access-token", "refresh-token", 3600, USER_ID));
+    @ParameterizedTest
+    @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#acceptedEmails")
+    void verifyPin_returnsVerifiedStudentAndSetsAuthCookies(String email) throws Exception {
+        Student student = studentWithPin(email);
+        when(studentRepository.findByEmail(email)).thenReturn(Optional.of(student));
+        when(studentRepository.save(student)).thenReturn(student);
+        when(supabase.verifySignupOtp(email, "123456"))
+                .thenReturn(new SupabaseSession("access-token", "refresh-token", 3600, USER_ID));
 
-    MvcResult result = mockMvc.perform(post("/auth/verify-pin").contentType("application/json")
-        .content(objectMapper.writeValueAsString(new VerificationRequest(email, "123456", "browser-1"))))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.email").value(email))
-        .andExpect(jsonPath("$.verified").value(true))
-        .andExpect(jsonPath("$.emailVerified").value(true))
-        .andReturn();
+        MvcResult result = mockMvc
+                .perform(post("/auth/verify-pin").contentType("application/json").content(
+                        objectMapper.writeValueAsString(new VerificationRequest(email, "123456", "browser-1"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.verified").value(true)).andExpect(jsonPath("$.emailVerified").value(true))
+                .andReturn();
 
-    assertThat(result.getResponse().getCookie(AuthCookies.ACCESS).getValue()).isEqualTo("access-token");
-    assertThat(student.isDeviceTrusted("browser-1")).isTrue();
-    verifyNoInteractions(emailSender);
-  }
+        assertThat(result.getResponse().getCookie(AuthCookies.ACCESS).getValue()).isEqualTo("access-token");
+        assertThat(student.isDeviceTrusted("browser-1")).isTrue();
+        verifyNoInteractions(emailSender);
+    }
 
-  @ParameterizedTest
-  @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#acceptedEmails")
-  void resendPin_returnsNoContentAndResendsSupabaseCode(String email) throws Exception {
-    Student student = studentWithPin(email);
-    when(studentRepository.findByEmail(email)).thenReturn(Optional.of(student));
+    @ParameterizedTest
+    @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#acceptedEmails")
+    void resendPin_returnsNoContentAndResendsSupabaseCode(String email) throws Exception {
+        Student student = studentWithPin(email);
+        when(studentRepository.findByEmail(email)).thenReturn(Optional.of(student));
 
-    MvcResult result = mockMvc.perform(post("/auth/resend-pin").contentType("application/json")
-        .content(objectMapper.writeValueAsString(new ResendPinRequest(email))))
-        .andExpect(status().isNoContent())
-        .andExpect(content().string(""))
-        .andReturn();
+        MvcResult result = mockMvc
+                .perform(post("/auth/resend-pin").contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new ResendPinRequest(email))))
+                .andExpect(status().isNoContent()).andExpect(content().string("")).andReturn();
 
-    verify(supabase).resendSignupOtp(email);
-    verifyNoInteractions(emailSender);
-    assertThat(result.getResponse().getCookie(AuthCookies.ACCESS)).isNull();
-  }
+        verify(supabase).resendSignupOtp(email);
+        verifyNoInteractions(emailSender);
+        assertThat(result.getResponse().getCookie(AuthCookies.ACCESS)).isNull();
+    }
 
-  @ParameterizedTest
-  @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#rejectedEmails")
-  void signup_rejectsInvalidEmailWithExistingMessage(String email) throws Exception {
-    assertInvalidEmail("/auth/signup", new SignupRequest("Jane Doe", email, "Password123!"));
-  }
+    @ParameterizedTest
+    @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#rejectedEmails")
+    void signup_rejectsInvalidEmailWithExistingMessage(String email) throws Exception {
+        assertInvalidEmail("/auth/signup", new SignupRequest("Jane Doe", email, "Password123!"));
+    }
 
-  @ParameterizedTest
-  @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#rejectedEmails")
-  void verifyPin_rejectsInvalidEmailWithExistingMessage(String email) throws Exception {
-    assertInvalidEmail("/auth/verify-pin", new VerificationRequest(email, "123456", "browser-1"));
-  }
+    @ParameterizedTest
+    @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#rejectedEmails")
+    void verifyPin_rejectsInvalidEmailWithExistingMessage(String email) throws Exception {
+        assertInvalidEmail("/auth/verify-pin", new VerificationRequest(email, "123456", "browser-1"));
+    }
 
-  @ParameterizedTest
-  @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#rejectedEmails")
-  void resendPin_rejectsInvalidEmailWithExistingMessage(String email) throws Exception {
-    assertInvalidEmail("/auth/resend-pin", new ResendPinRequest(email));
-  }
+    @ParameterizedTest
+    @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#rejectedEmails")
+    void resendPin_rejectsInvalidEmailWithExistingMessage(String email) throws Exception {
+        assertInvalidEmail("/auth/resend-pin", new ResendPinRequest(email));
+    }
 
-  private void assertInvalidEmail(String endpoint, Object request) throws Exception {
-    MvcResult result = mockMvc.perform(post(endpoint).contentType("application/json")
-        .content(objectMapper.writeValueAsString(request)))
-        .andExpect(status().isBadRequest())
-        .andExpect(content().json("{\"message\":\"Use a valid .edu school email\"}"))
-        .andReturn();
+    private void assertInvalidEmail(String endpoint, Object request) throws Exception {
+        MvcResult result = mockMvc
+                .perform(post(endpoint).contentType("application/json")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().json("{\"message\":\"Use a valid .edu school email\"}")).andReturn();
 
-    assertThat(result.getResponse().getCookie(AuthCookies.ACCESS)).isNull();
-    verifyNoInteractions(studentRepository, supabase, emailSender);
-  }
+        assertThat(result.getResponse().getCookie(AuthCookies.ACCESS)).isNull();
+        verifyNoInteractions(studentRepository, supabase, emailSender);
+    }
 }

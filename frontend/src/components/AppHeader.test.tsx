@@ -24,7 +24,7 @@ function renderHeader() {
         <Route path="/feed" element={<AppHeader />} />
         <Route path="/login" element={<p>Login screen</p>} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   )
 }
 
@@ -42,8 +42,14 @@ describe('AppHeader', () => {
   it('links to the marketplace and the profile page', () => {
     renderHeader()
 
-    expect(screen.getByRole('link', { name: 'Marketplace' })).toHaveAttribute('href', '/feed')
-    expect(screen.getByRole('link', { name: 'My profile' })).toHaveAttribute('href', '/profile')
+    expect(screen.getByRole('link', { name: 'Marketplace' })).toHaveAttribute(
+      'href',
+      '/feed'
+    )
+    expect(screen.getByRole('link', { name: 'My profile' })).toHaveAttribute(
+      'href',
+      '/profile'
+    )
   })
 
   it('logs out, clears the student, and goes to the login page', async () => {

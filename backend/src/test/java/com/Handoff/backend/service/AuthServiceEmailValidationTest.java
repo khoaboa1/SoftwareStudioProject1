@@ -27,65 +27,62 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AuthServiceEmailValidationTest {
 
-  @Mock
-  private StudentRepository studentRepository;
-  @Mock
-  private SupabaseAuthClient supabase;
-  @Mock
-  private EmailSender emailSender;
+    @Mock
+    private StudentRepository studentRepository;
+    @Mock
+    private SupabaseAuthClient supabase;
+    @Mock
+    private EmailSender emailSender;
 
-  private static final UUID USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
-  private AuthService authService;
+    private AuthService authService;
 
-  @BeforeEach
-  void setUp() {
-    UniversityEmailValidator validator = new UniversityEmailValidator();
-    VerificationService verificationService =
-        new VerificationService(studentRepository, List.of(emailSender), validator);
-    authService = new AuthService(studentRepository, verificationService, validator, supabase, new PendingLoginStore(),
-        new BCryptPasswordEncoder());
-  }
+    @BeforeEach
+    void setUp() {
+        UniversityEmailValidator validator = new UniversityEmailValidator();
+        VerificationService verificationService = new VerificationService(studentRepository, List.of(emailSender),
+                validator);
+        authService = new AuthService(studentRepository, verificationService, validator, supabase,
+                new PendingLoginStore(), new BCryptPasswordEncoder());
+    }
 
-  @ParameterizedTest
-  @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#acceptedEmails")
-  void signup_acceptsEmailAndCreatesSupabaseUserWithoutNormalizing(String email) {
-    when(studentRepository.findByEmail(email)).thenReturn(Optional.empty());
-    when(supabase.signUp(email, "Password123!")).thenReturn(USER_ID);
-    when(studentRepository.save(any(Student.class))).thenAnswer(invocation -> invocation.getArgument(0));
-    Student student = authService.signup("Jane Doe", email, "Password123!");
-    assertThat(student.getEmail()).isEqualTo(email);
-    assertThat(student.getSupabaseUserId()).isEqualTo(USER_ID);
-    assertThat(student.isVerified()).isFalse();
-    verify(studentRepository).findByEmail(email);
-    verifyNoInteractions(emailSender);
-  }
+    @ParameterizedTest
+    @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#acceptedEmails")
+    void signup_acceptsEmailAndCreatesSupabaseUserWithoutNormalizing(String email) {
+        when(studentRepository.findByEmail(email)).thenReturn(Optional.empty());
+        when(supabase.signUp(email, "Password123!")).thenReturn(USER_ID);
+        when(studentRepository.save(any(Student.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        Student student = authService.signup("Jane Doe", email, "Password123!");
+        assertThat(student.getEmail()).isEqualTo(email);
+        assertThat(student.getSupabaseUserId()).isEqualTo(USER_ID);
+        assertThat(student.isVerified()).isFalse();
+        verify(studentRepository).findByEmail(email);
+        verifyNoInteractions(emailSender);
+    }
 
-  @ParameterizedTest
-  @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#rejectedEmails")
-  void signup_rejectsEmailBeforePasswordValidationOrSideEffects(String email) {
-    assertThatThrownBy(() -> authService.signup("Jane Doe", email, null))
-        .isExactlyInstanceOf(InvalidSignupException.class)
-        .hasMessage("Use a valid .edu school email");
+    @ParameterizedTest
+    @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#rejectedEmails")
+    void signup_rejectsEmailBeforePasswordValidationOrSideEffects(String email) {
+        assertThatThrownBy(() -> authService.signup("Jane Doe", email, null))
+                .isExactlyInstanceOf(InvalidSignupException.class).hasMessage("Use a valid .edu school email");
 
-    verifyNoInteractions(studentRepository, supabase, emailSender);
-  }
+        verifyNoInteractions(studentRepository, supabase, emailSender);
+    }
 
-  @Test
-  void signup_validatesNameBeforeEmail() {
-    assertThatThrownBy(() -> authService.signup(" ", "jane@gmail.com", "Password123!"))
-        .isExactlyInstanceOf(InvalidSignupException.class)
-        .hasMessage("Full name is required");
+    @Test
+    void signup_validatesNameBeforeEmail() {
+        assertThatThrownBy(() -> authService.signup(" ", "jane@gmail.com", "Password123!"))
+                .isExactlyInstanceOf(InvalidSignupException.class).hasMessage("Full name is required");
 
-    verifyNoInteractions(studentRepository, supabase, emailSender);
-  }
+        verifyNoInteractions(studentRepository, supabase, emailSender);
+    }
 
-  @Test
-  void signup_validatesPasswordAfterAcceptedEmail() {
-    assertThatThrownBy(() -> authService.signup("Jane Doe", "jane@tulane.edu", "short"))
-        .isExactlyInstanceOf(InvalidSignupException.class)
-        .hasMessage("Password must be at least 8 characters");
+    @Test
+    void signup_validatesPasswordAfterAcceptedEmail() {
+        assertThatThrownBy(() -> authService.signup("Jane Doe", "jane@tulane.edu", "short"))
+                .isExactlyInstanceOf(InvalidSignupException.class).hasMessage("Password must be at least 8 characters");
 
-    verifyNoInteractions(studentRepository, supabase, emailSender);
-  }
+        verifyNoInteractions(studentRepository, supabase, emailSender);
+    }
 }

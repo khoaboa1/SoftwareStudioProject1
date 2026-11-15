@@ -19,36 +19,35 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/listings")
 public class ConversationController {
-  private final ConversationService conversationService;
-  private final CurrentStudentResolver currentStudentResolver;
+    private final ConversationService conversationService;
+    private final CurrentStudentResolver currentStudentResolver;
 
-  public ConversationController(ConversationService conversationService,
-                                CurrentStudentResolver currentStudentResolver) {
-    this.conversationService = conversationService;
-    this.currentStudentResolver = currentStudentResolver;
-  }
+    public ConversationController(ConversationService conversationService,
+            CurrentStudentResolver currentStudentResolver) {
+        this.conversationService = conversationService;
+        this.currentStudentResolver = currentStudentResolver;
+    }
 
-  @PostMapping("/{id}/conversation")
-  public ResponseEntity<ConversationResponse> startConversation(@PathVariable Long id,
-                                                                 HttpServletRequest request) {
-    Student buyer = currentStudentResolver.require(request, "You must be logged in to message a seller");
-    var result = conversationService.startOrReopen(id, buyer);
-    return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
-        .body(ConversationResponse.from(result.conversation()));
-  }
+    @PostMapping("/{id}/conversation")
+    public ResponseEntity<ConversationResponse> startConversation(@PathVariable Long id, HttpServletRequest request) {
+        Student buyer = currentStudentResolver.require(request, "You must be logged in to message a seller");
+        var result = conversationService.startOrReopen(id, buyer);
+        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
+                .body(ConversationResponse.from(result.conversation()));
+    }
 
-  @ExceptionHandler(ListingNotFoundException.class)
-  public ResponseEntity<ErrorResponse> handleListingNotFound(ListingNotFoundException ex) {
-    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(ex.getMessage()));
-  }
+    @ExceptionHandler(ListingNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleListingNotFound(ListingNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(ex.getMessage()));
+    }
 
-  @ExceptionHandler(OwnListingConversationException.class)
-  public ResponseEntity<ErrorResponse> handleOwnListing(OwnListingConversationException ex) {
-    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(ex.getMessage()));
-  }
+    @ExceptionHandler(OwnListingConversationException.class)
+    public ResponseEntity<ErrorResponse> handleOwnListing(OwnListingConversationException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(ex.getMessage()));
+    }
 
-  @ExceptionHandler(ListingSoldException.class)
-  public ResponseEntity<ErrorResponse> handleSoldListing(ListingSoldException ex) {
-    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(ex.getMessage()));
-  }
+    @ExceptionHandler(ListingSoldException.class)
+    public ResponseEntity<ErrorResponse> handleSoldListing(ListingSoldException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(ex.getMessage()));
+    }
 }

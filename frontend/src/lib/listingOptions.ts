@@ -18,9 +18,9 @@ export const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
 ]
 
 export const CONDITION_LABELS = Object.fromEntries(
-  CONDITION_OPTIONS.map((option) => [option.value, option.label]),
+  CONDITION_OPTIONS.map((option) => [option.value, option.label])
 ) as Record<Condition, string>
 
 export const CATEGORY_LABELS = Object.fromEntries(
-  CATEGORY_OPTIONS.map((option) => [option.value, option.label]),
+  CATEGORY_OPTIONS.map((option) => [option.value, option.label])
 ) as Record<Category, string>

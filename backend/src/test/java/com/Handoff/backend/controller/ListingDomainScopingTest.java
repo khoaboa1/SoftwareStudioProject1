@@ -33,216 +33,193 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional // Roll back fixtures after each case so domains cannot leak between tests.
 class ListingDomainScopingTest {
 
-  @Autowired private MockMvc mockMvc;
-  @Autowired private StudentRepository studentRepository;
-  @Autowired private ProfileRepository profileRepository;
-  @Autowired private ListingRepository listingRepository;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private StudentRepository studentRepository;
+    @Autowired
+    private ProfileRepository profileRepository;
+    @Autowired
+    private ListingRepository listingRepository;
 
-  /** Persist a student and optional profile; the domain deliberately comes from the profile. */
-  private Student student(String name, String domain) {
-    Student student = studentRepository.save(new Student(name, name + "@example.edu", "hashed", null, null));
-    if (domain != null) {
-      profileRepository.save(new Profile(student, name, "Computer Science", null, domain));
+    /** Persist a student and optional profile; the domain deliberately comes from the profile. */
+    private Student student(String name, String domain) {
+        Student student = studentRepository.save(new Student(name, name + "@example.edu", "hashed", null, null));
+        if (domain != null) {
+            profileRepository.save(new Profile(student, name, "Computer Science", null, domain));
+        }
+        return student;
     }
-    return student;
-  }
 
-  private Cookie session(Student student) {
-    if (student.getSupabaseUserId() == null) {
-      student.setSupabaseUserId(UUID.randomUUID());
-      studentRepository.save(student);
+    private Cookie session(Student student) {
+        if (student.getSupabaseUserId() == null) {
+            student.setSupabaseUserId(UUID.randomUUID());
+            studentRepository.save(student);
+        }
+        return new Cookie(AuthCookies.ACCESS, FakeSupabaseAuthClient.accessTokenFor(student.getSupabaseUserId()));
     }
-    return new Cookie(AuthCookies.ACCESS, FakeSupabaseAuthClient.accessTokenFor(student.getSupabaseUserId()));
-  }
 
-  /** Give listings deterministic timestamps so ordering assertions do not depend on clock timing. */
-  private Listing listing(Student seller, String name, long seconds) {
-    Listing listing = new Listing(name, "Test item", BigDecimal.TEN, Condition.GOOD, Category.FURNITURE, seller);
-    listing.setCreatedAt(Instant.parse("2026-01-01T00:00:00Z").plusSeconds(seconds));
-    return listingRepository.save(listing);
-  }
+    /** Give listings deterministic timestamps so ordering assertions do not depend on clock timing. */
+    private Listing listing(Student seller, String name, long seconds) {
+        Listing listing = new Listing(name, "Test item", BigDecimal.TEN, Condition.GOOD, Category.FURNITURE, seller);
+        listing.setCreatedAt(Instant.parse("2026-01-01T00:00:00Z").plusSeconds(seconds));
+        return listingRepository.save(listing);
+    }
 
-  @Test
-  void getListing_sameSchoolPeer_returnsListingDetails() throws Exception {
-    Student viewer = student("viewer", "tulane.edu");
-    Student seller = student("peer", "tulane.edu");
-    Listing item = listing(seller, "Desk Lamp", 1);
+    @Test
+    void getListing_sameSchoolPeer_returnsListingDetails() throws Exception {
+        Student viewer = student("viewer", "tulane.edu");
+        Student seller = student("peer", "tulane.edu");
+        Listing item = listing(seller, "Desk Lamp", 1);
 
-    mockMvc.perform(get("/listings/" + item.getId()).cookie(session(viewer)))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.id").value(item.getId()))
-        .andExpect(jsonPath("$.itemName").value("Desk Lamp"))
-        .andExpect(jsonPath("$.description").value("Test item"))
-        .andExpect(jsonPath("$.price").value(10))
-        .andExpect(jsonPath("$.condition").value("GOOD"))
-        .andExpect(jsonPath("$.category").value("FURNITURE"))
-        .andExpect(jsonPath("$.sellerId").value(seller.getId()))
-        .andExpect(jsonPath("$.sellerName").value("peer"))
-        .andExpect(jsonPath("$.createdAt").exists());
-  }
+        mockMvc.perform(get("/listings/" + item.getId()).cookie(session(viewer))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(item.getId())).andExpect(jsonPath("$.itemName").value("Desk Lamp"))
+                .andExpect(jsonPath("$.description").value("Test item")).andExpect(jsonPath("$.price").value(10))
+                .andExpect(jsonPath("$.condition").value("GOOD")).andExpect(jsonPath("$.category").value("FURNITURE"))
+                .andExpect(jsonPath("$.sellerId").value(seller.getId()))
+                .andExpect(jsonPath("$.sellerName").value("peer")).andExpect(jsonPath("$.createdAt").exists());
+    }
 
-  @Test
-  void getListing_owner_returnsOwnListing() throws Exception {
-    Student owner = student("owner", "tulane.edu");
-    Listing item = listing(owner, "Desk Lamp", 1);
+    @Test
+    void getListing_owner_returnsOwnListing() throws Exception {
+        Student owner = student("owner", "tulane.edu");
+        Listing item = listing(owner, "Desk Lamp", 1);
 
-    mockMvc.perform(get("/listings/" + item.getId()).cookie(session(owner)))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.itemName").value("Desk Lamp"));
-  }
+        mockMvc.perform(get("/listings/" + item.getId()).cookie(session(owner))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.itemName").value("Desk Lamp"));
+    }
 
-  @Test
-  void getListing_otherSchool_returnsNotFound_evenWithDomainOverride() throws Exception {
-    Student viewer = student("viewer", "tulane.edu");
-    Listing item = listing(student("other", "other-school.edu"), "Private", 1);
+    @Test
+    void getListing_otherSchool_returnsNotFound_evenWithDomainOverride() throws Exception {
+        Student viewer = student("viewer", "tulane.edu");
+        Listing item = listing(student("other", "other-school.edu"), "Private", 1);
 
-    mockMvc.perform(get("/listings/" + item.getId()).cookie(session(viewer))
-            .param("domain", "other-school.edu"))
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.message").value("Listing not found"));
-  }
+        mockMvc.perform(get("/listings/" + item.getId()).cookie(session(viewer)).param("domain", "other-school.edu"))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.message").value("Listing not found"));
+    }
 
-  @Test
-  void getListing_sellerWithoutProfile_returnsNotFound() throws Exception {
-    Student viewer = student("viewer", "tulane.edu");
-    Listing item = listing(student("legacy", null), "Legacy", 1);
+    @Test
+    void getListing_sellerWithoutProfile_returnsNotFound() throws Exception {
+        Student viewer = student("viewer", "tulane.edu");
+        Listing item = listing(student("legacy", null), "Legacy", 1);
 
-    mockMvc.perform(get("/listings/" + item.getId()).cookie(session(viewer)))
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.message").value("Listing not found"));
-  }
+        mockMvc.perform(get("/listings/" + item.getId()).cookie(session(viewer))).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Listing not found"));
+    }
 
-  @Test
-  void getListing_missingId_returnsNotFound() throws Exception {
-    Student viewer = student("viewer", "tulane.edu");
+    @Test
+    void getListing_missingId_returnsNotFound() throws Exception {
+        Student viewer = student("viewer", "tulane.edu");
 
-    mockMvc.perform(get("/listings/999999").cookie(session(viewer)))
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.message").value("Listing not found"));
-  }
+        mockMvc.perform(get("/listings/999999").cookie(session(viewer))).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Listing not found"));
+    }
 
-  @Test
-  void getListing_requesterWithoutProfile_returnsProfileNotFound() throws Exception {
-    Student viewer = student("viewer", null);
-    Listing item = listing(student("seller", "tulane.edu"), "Desk Lamp", 1);
+    @Test
+    void getListing_requesterWithoutProfile_returnsProfileNotFound() throws Exception {
+        Student viewer = student("viewer", null);
+        Listing item = listing(student("seller", "tulane.edu"), "Desk Lamp", 1);
 
-    mockMvc.perform(get("/listings/" + item.getId()).cookie(session(viewer)))
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.message").value("Profile not found"));
-  }
+        mockMvc.perform(get("/listings/" + item.getId()).cookie(session(viewer))).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Profile not found"));
+    }
 
-  @Test
-  void getListing_withoutSession_returnsUnauthorized() throws Exception {
-    mockMvc.perform(get("/listings/1"))
-        .andExpect(status().isUnauthorized())
-        .andExpect(jsonPath("$.message").value("You must be logged in to view marketplace listings"));
-  }
+    @Test
+    void getListing_withoutSession_returnsUnauthorized() throws Exception {
+        mockMvc.perform(get("/listings/1")).andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("You must be logged in to view marketplace listings"));
+    }
 
-  @Test
-  void getListing_withStaleSession_returnsUnauthorized() throws Exception {
-    Cookie stale = new Cookie(AuthCookies.ACCESS, FakeSupabaseAuthClient.accessTokenFor(UUID.randomUUID()));
+    @Test
+    void getListing_withStaleSession_returnsUnauthorized() throws Exception {
+        Cookie stale = new Cookie(AuthCookies.ACCESS, FakeSupabaseAuthClient.accessTokenFor(UUID.randomUUID()));
 
-    mockMvc.perform(get("/listings/1").cookie(stale))
-        .andExpect(status().isUnauthorized());
-  }
+        mockMvc.perform(get("/listings/1").cookie(stale)).andExpect(status().isUnauthorized());
+    }
 
-  @Test
-  void feed_returnsOnlyExactProfileDomain_newestFirst() throws Exception {
-    // Include the requester's listing, a peer's listing, another school, and near-matching domains.
-    Student viewer = student("viewer", "tulane.edu");
-    listing(viewer, "Older", 1);
-    listing(student("peer", "tulane.edu"), "Newer", 2);
-    listing(student("other", "other-school.edu"), "Other school", 3);
-    listing(student("subdomain", "students.tulane.edu"), "Subdomain", 4);
-    listing(student("suffix", "not-tulane.edu"), "Similar suffix", 5);
-    listing(student("prefix", "tulane.edu.evil.edu"), "Similar prefix", 6);
+    @Test
+    void feed_returnsOnlyExactProfileDomain_newestFirst() throws Exception {
+        // Include the requester's listing, a peer's listing, another school, and near-matching domains.
+        Student viewer = student("viewer", "tulane.edu");
+        listing(viewer, "Older", 1);
+        listing(student("peer", "tulane.edu"), "Newer", 2);
+        listing(student("other", "other-school.edu"), "Other school", 3);
+        listing(student("subdomain", "students.tulane.edu"), "Subdomain", 4);
+        listing(student("suffix", "not-tulane.edu"), "Similar suffix", 5);
+        listing(student("prefix", "tulane.edu.evil.edu"), "Similar prefix", 6);
 
-    // Exact array contents prove both isolation and retained chronological ordering.
-    mockMvc.perform(get("/listings").cookie(session(viewer)))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(2))
-        .andExpect(jsonPath("$[0].itemName").value("Newer"))
-        .andExpect(jsonPath("$[1].itemName").value("Older"));
-  }
+        // Exact array contents prove both isolation and retained chronological ordering.
+        mockMvc.perform(get("/listings").cookie(session(viewer))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2)).andExpect(jsonPath("$[0].itemName").value("Newer"))
+                .andExpect(jsonPath("$[1].itemName").value("Older"));
+    }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"domain", "schoolDomain", "school_domain"})
-  void feed_ignoresClientDomainOverrides(String parameter) throws Exception {
-    // A forged tenant parameter must not substitute for the authenticated profile's domain.
-    Student viewer = student("viewer", "tulane.edu");
-    listing(student("peer", "tulane.edu"), "Allowed", 1);
-    listing(student("other", "other-school.edu"), "Forbidden", 2);
+    @ParameterizedTest
+    @ValueSource(strings = { "domain", "schoolDomain", "school_domain" })
+    void feed_ignoresClientDomainOverrides(String parameter) throws Exception {
+        // A forged tenant parameter must not substitute for the authenticated profile's domain.
+        Student viewer = student("viewer", "tulane.edu");
+        listing(student("peer", "tulane.edu"), "Allowed", 1);
+        listing(student("other", "other-school.edu"), "Forbidden", 2);
 
-    mockMvc.perform(get("/listings").cookie(session(viewer)).param(parameter, "other-school.edu"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(1))
-        .andExpect(jsonPath("$[0].itemName").value("Allowed"));
-  }
+        mockMvc.perform(get("/listings").cookie(session(viewer)).param(parameter, "other-school.edu"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].itemName").value("Allowed"));
+    }
 
-  @Test
-  void feed_scopesIndependentlyForEachStudent() throws Exception {
-    // Consecutive requests must resolve each session's profile without retaining the first domain.
-    Student first = student("first", "tulane.edu");
-    Student second = student("second", "other-school.edu");
-    listing(first, "Tulane", 1);
-    listing(second, "Other school", 2);
+    @Test
+    void feed_scopesIndependentlyForEachStudent() throws Exception {
+        // Consecutive requests must resolve each session's profile without retaining the first domain.
+        Student first = student("first", "tulane.edu");
+        Student second = student("second", "other-school.edu");
+        listing(first, "Tulane", 1);
+        listing(second, "Other school", 2);
 
-    mockMvc.perform(get("/listings").cookie(session(first)))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(1))
-        .andExpect(jsonPath("$[0].itemName").value("Tulane"));
-    mockMvc.perform(get("/listings").cookie(session(second)))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(1))
-        .andExpect(jsonPath("$[0].itemName").value("Other school"));
-  }
+        mockMvc.perform(get("/listings").cookie(session(first))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0].itemName").value("Tulane"));
+        mockMvc.perform(get("/listings").cookie(session(second))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0].itemName").value("Other school"));
+    }
 
-  @Test
-  void feed_withoutSession_returnsUnauthorized() throws Exception {
-    // Supplying a domain does not authenticate an anonymous request.
-    mockMvc.perform(get("/listings").param("domain", "tulane.edu"))
-        .andExpect(status().isUnauthorized())
-        .andExpect(jsonPath("$.message").isString());
-  }
+    @Test
+    void feed_withoutSession_returnsUnauthorized() throws Exception {
+        // Supplying a domain does not authenticate an anonymous request.
+        mockMvc.perform(get("/listings").param("domain", "tulane.edu")).andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").isString());
+    }
 
-  @Test
-  void feed_withStaleSession_returnsUnauthorized() throws Exception {
-    // A session referring to a deleted/nonexistent student must not grant feed access.
-    Cookie stale = new Cookie(AuthCookies.ACCESS, FakeSupabaseAuthClient.accessTokenFor(UUID.randomUUID()));
-    mockMvc.perform(get("/listings").cookie(stale))
-        .andExpect(status().isUnauthorized());
-  }
+    @Test
+    void feed_withStaleSession_returnsUnauthorized() throws Exception {
+        // A session referring to a deleted/nonexistent student must not grant feed access.
+        Cookie stale = new Cookie(AuthCookies.ACCESS, FakeSupabaseAuthClient.accessTokenFor(UUID.randomUUID()));
+        mockMvc.perform(get("/listings").cookie(stale)).andExpect(status().isUnauthorized());
+    }
 
-  @Test
-  void feed_withoutRequesterProfile_returnsNotFound() throws Exception {
-    // Never fall back to a request parameter or an unscoped query when a profile is missing.
-    Student viewer = student("viewer", null);
-    listing(student("other", "other-school.edu"), "Forbidden", 1);
-    mockMvc.perform(get("/listings").cookie(session(viewer)).param("domain", "other-school.edu"))
-        .andExpect(status().isNotFound())
-        .andExpect(jsonPath("$.message").value("Profile not found"));
-  }
+    @Test
+    void feed_withoutRequesterProfile_returnsNotFound() throws Exception {
+        // Never fall back to a request parameter or an unscoped query when a profile is missing.
+        Student viewer = student("viewer", null);
+        listing(student("other", "other-school.edu"), "Forbidden", 1);
+        mockMvc.perform(get("/listings").cookie(session(viewer)).param("domain", "other-school.edu"))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.message").value("Profile not found"));
+    }
 
-  @Test
-  void feed_excludesSellersWithoutProfiles() throws Exception {
-    // Legacy listings remain hidden until their sellers have a trustworthy tenant identifier.
-    Student viewer = student("viewer", "tulane.edu");
-    listing(student("legacy", null), "Unscoped", 2);
-    listing(student("peer", "tulane.edu"), "Allowed", 1);
-    mockMvc.perform(get("/listings").cookie(session(viewer)))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.length()").value(1))
-        .andExpect(jsonPath("$[0].itemName").value("Allowed"));
-  }
+    @Test
+    void feed_excludesSellersWithoutProfiles() throws Exception {
+        // Legacy listings remain hidden until their sellers have a trustworthy tenant identifier.
+        Student viewer = student("viewer", "tulane.edu");
+        listing(student("legacy", null), "Unscoped", 2);
+        listing(student("peer", "tulane.edu"), "Allowed", 1);
+        mockMvc.perform(get("/listings").cookie(session(viewer))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0].itemName").value("Allowed"));
+    }
 
-  @Test
-  void feed_withoutMatchingListings_returnsEmptyArray() throws Exception {
-    // Other schools' listings must not populate an otherwise empty school marketplace.
-    Student viewer = student("viewer", "tulane.edu");
-    listing(student("other", "other-school.edu"), "Forbidden", 1);
-    mockMvc.perform(get("/listings").cookie(session(viewer)))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$").isArray())
-        .andExpect(jsonPath("$.length()").value(0));
-  }
+    @Test
+    void feed_withoutMatchingListings_returnsEmptyArray() throws Exception {
+        // Other schools' listings must not populate an otherwise empty school marketplace.
+        Student viewer = student("viewer", "tulane.edu");
+        listing(student("other", "other-school.edu"), "Forbidden", 1);
+        mockMvc.perform(get("/listings").cookie(session(viewer))).andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray()).andExpect(jsonPath("$.length()").value(0));
+    }
 }

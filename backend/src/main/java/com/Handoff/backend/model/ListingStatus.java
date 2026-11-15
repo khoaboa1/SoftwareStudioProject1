@@ -2,10 +2,5 @@ package com.Handoff.backend.model;
 
 /** Lifecycle values used to decide whether a listing is visible in public marketplace results. */
 public enum ListingStatus {
-  ACTIVE,
-  PENDING,
-  SOLD,
-  INACTIVE,
-  DRAFT,
-  DELETED
+    ACTIVE, PENDING, SOLD, INACTIVE, DRAFT, DELETED
 }

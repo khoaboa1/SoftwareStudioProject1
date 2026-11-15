@@ -4,11 +4,18 @@ import { getErrorMessage, hasApiStatus, isNetworkError } from './apiError'
 
 describe('getErrorMessage', () => {
   it('returns the API message for an ApiError', () => {
-    expect(getErrorMessage(new ApiError(400, 'Price must be positive'), 'fallback')).toBe('Price must be positive')
+    expect(
+      getErrorMessage(new ApiError(400, 'Price must be positive'), 'fallback')
+    ).toBe('Price must be positive')
   })
 
   it('returns the fallback for a network error', () => {
-    expect(getErrorMessage(new TypeError('Failed to fetch'), 'Could not load your profile.')).toBe('Could not load your profile.')
+    expect(
+      getErrorMessage(
+        new TypeError('Failed to fetch'),
+        'Could not load your profile.'
+      )
+    ).toBe('Could not load your profile.')
   })
 
   it('returns the fallback for non-Error values', () => {

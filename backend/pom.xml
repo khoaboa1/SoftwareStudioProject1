@@ -131,6 +131,28 @@
 					</execution>
 				</executions>
 			</plugin>
+			<plugin>
+				<groupId>net.revelc.code.formatter</groupId>
+				<artifactId>formatter-maven-plugin</artifactId>
+				<version>2.25.0</version>
+				<configuration>
+					<sourceDirs>
+						<sourceDir>${project.build.sourceDirectory}</sourceDir>
+					</sourceDirs>
+					<testSourceDirs>
+						<sourceDir>${project.build.testSourceDirectory}</sourceDir>
+					</testSourceDirs>
+				</configuration>
+				<executions>
+					<execution>
+						<id>format-validate</id>
+						<goals>
+							<goal>validate</goal>
+						</goals>
+						<phase>verify</phase>
+					</execution>
+				</executions>
+			</plugin>
 		</plugins>
 	</build>
 

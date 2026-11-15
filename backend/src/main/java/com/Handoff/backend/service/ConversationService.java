@@ -10,35 +10,35 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class ConversationService {
-  private final ListingService listingService;
-  private final ConversationRepository conversationRepository;
+    private final ListingService listingService;
+    private final ConversationRepository conversationRepository;
 
-  public record StartResult(Conversation conversation, boolean created) {}
-
-  public ConversationService(ListingService listingService, ConversationRepository conversationRepository) {
-    this.listingService = listingService;
-    this.conversationRepository = conversationRepository;
-  }
-
-  public StartResult startOrReopen(Long listingId, Student buyer) {
-    Listing listing = listingService.getListing(listingId, buyer);
-    if (listing.getSeller().getId().equals(buyer.getId())) {
-      throw new OwnListingConversationException();
+    public record StartResult(Conversation conversation, boolean created) {
     }
 
-    var existing = conversationRepository.findByListing_IdAndBuyer_Id(listingId, buyer.getId());
-    if (existing.isPresent()) {
-      return new StartResult(existing.get(), false);
+    public ConversationService(ListingService listingService, ConversationRepository conversationRepository) {
+        this.listingService = listingService;
+        this.conversationRepository = conversationRepository;
     }
-    if (listing.getStatus() == ListingStatus.SOLD) {
-      throw new ListingSoldException();
+
+    public StartResult startOrReopen(Long listingId, Student buyer) {
+        Listing listing = listingService.getListing(listingId, buyer);
+        if (listing.getSeller().getId().equals(buyer.getId())) {
+            throw new OwnListingConversationException();
+        }
+
+        var existing = conversationRepository.findByListing_IdAndBuyer_Id(listingId, buyer.getId());
+        if (existing.isPresent()) {
+            return new StartResult(existing.get(), false);
+        }
+        if (listing.getStatus() == ListingStatus.SOLD) {
+            throw new ListingSoldException();
+        }
+        try {
+            return new StartResult(conversationRepository.saveAndFlush(new Conversation(listing, buyer)), true);
+        } catch (DataIntegrityViolationException ex) {
+            return conversationRepository.findByListing_IdAndBuyer_Id(listingId, buyer.getId())
+                    .map(conversation -> new StartResult(conversation, false)).orElseThrow(() -> ex);
+        }
     }
-    try {
-      return new StartResult(conversationRepository.saveAndFlush(new Conversation(listing, buyer)), true);
-    } catch (DataIntegrityViolationException ex) {
-      return conversationRepository.findByListing_IdAndBuyer_Id(listingId, buyer.getId())
-          .map(conversation -> new StartResult(conversation, false))
-          .orElseThrow(() -> ex);
-    }
-  }
 }

@@ -31,7 +31,9 @@ describe('authentication facade and login adapter', () => {
   })
 
   function respond(body: unknown, status = 200) {
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(body), { status }))
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(body), { status })
+    )
   }
 
   function expectRequest(path: string, body?: unknown) {
@@ -45,17 +47,23 @@ describe('authentication facade and login adapter', () => {
 
   it('preserves the login API and adapts its response before updating auth state', async () => {
     const response = {
-      requiresPin: false, message: 'Login successful',
-      id: 1, studentName: 'Jane Doe', email: 'jane@tulane.edu',
+      requiresPin: false,
+      message: 'Login successful',
+      id: 1,
+      studentName: 'Jane Doe',
+      email: 'jane@tulane.edu',
     }
     respond(response)
 
     const result = await createAuthFacade(setStudent).signIn({
-      email: student.email, password: 'Password123!',
+      email: student.email,
+      password: 'Password123!',
     })
 
     expectRequest('/auth/login', {
-      email: student.email, password: 'Password123!', deviceId: 'existing-browser',
+      email: student.email,
+      password: 'Password123!',
+      deviceId: 'existing-browser',
     })
     expect(result).toEqual(response)
     expect(setStudent).toHaveBeenCalledExactlyOnceWith(student)
@@ -63,24 +71,39 @@ describe('authentication facade and login adapter', () => {
 
   it('preserves explicit student values instead of replacing them with defaults', async () => {
     const response = {
-      ...student, requiresPin: false, message: 'Login successful',
-      emailVerified: false, sellingItems: ['Lamp'], dormLocation: 'Wall',
+      ...student,
+      requiresPin: false,
+      message: 'Login successful',
+      emailVerified: false,
+      sellingItems: ['Lamp'],
+      dormLocation: 'Wall',
     }
     respond(response)
 
-    await createAuthFacade(setStudent).signIn({ email: student.email, password: 'Password123!' })
+    await createAuthFacade(setStudent).signIn({
+      email: student.email,
+      password: 'Password123!',
+    })
 
     expect(setStudent).toHaveBeenCalledExactlyOnceWith({
-      ...student, emailVerified: false, sellingItems: ['Lamp'], dormLocation: 'Wall',
+      ...student,
+      emailVerified: false,
+      sellingItems: ['Lamp'],
+      dormLocation: 'Wall',
     })
   })
 
   it('does not authenticate a PIN-required response even if it includes identity fields', async () => {
-    const response = { ...student, requiresPin: true, message: 'Check your email' }
+    const response = {
+      ...student,
+      requiresPin: true,
+      message: 'Check your email',
+    }
     respond(response)
 
     const result = await createAuthFacade(setStudent).signIn({
-      email: student.email, password: 'Password123!',
+      email: student.email,
+      password: 'Password123!',
     })
 
     expect(result).toEqual(response)
@@ -88,27 +111,38 @@ describe('authentication facade and login adapter', () => {
   })
 
   it.each(['id', 'studentName', 'email'] as const)(
-    'preserves the existing no-auth-update behavior when %s is missing', async (field) => {
-      const response: LoginResult = { ...student, requiresPin: false, message: 'Login successful' }
+    'preserves the existing no-auth-update behavior when %s is missing',
+    async (field) => {
+      const response: LoginResult = {
+        ...student,
+        requiresPin: false,
+        message: 'Login successful',
+      }
       delete response[field]
       respond(response)
 
-      expect(await createAuthFacade(setStudent).signIn({
-        email: student.email, password: 'Password123!',
-      })).toEqual(response)
+      expect(
+        await createAuthFacade(setStudent).signIn({
+          email: student.email,
+          password: 'Password123!',
+        })
+      ).toEqual(response)
       expect(setStudent).not.toHaveBeenCalled()
-    },
+    }
   )
 
   it('preserves the PIN API and publishes the returned student', async () => {
     respond(student)
 
     const result = await createAuthFacade(setStudent).verifySignIn({
-      email: student.email, pin: '123456',
+      email: student.email,
+      pin: '123456',
     })
 
     expectRequest('/auth/verify-pin', {
-      email: student.email, pin: '123456', deviceId: 'existing-browser',
+      email: student.email,
+      pin: '123456',
+      deviceId: 'existing-browser',
     })
     expect(result).toEqual(student)
     expect(setStudent).toHaveBeenCalledExactlyOnceWith(student)
@@ -116,7 +150,11 @@ describe('authentication facade and login adapter', () => {
 
   it('preserves the logout API and clears auth only after the server succeeds', async () => {
     let finishRequest!: (response: Response) => void
-    fetchMock.mockReturnValueOnce(new Promise<Response>((resolve) => { finishRequest = resolve }))
+    fetchMock.mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        finishRequest = resolve
+      })
+    )
 
     const result = createAuthFacade(setStudent).signOut()
 
@@ -128,26 +166,34 @@ describe('authentication facade and login adapter', () => {
   })
 
   it.each(['signIn', 'verifySignIn', 'signOut'] as const)(
-    'propagates %s API failures without publishing an auth change', async (action) => {
+    'propagates %s API failures without publishing an auth change',
+    async (action) => {
       respond({ message: 'Request rejected' }, 401)
       const auth = createAuthFacade(setStudent)
-      const pending = action === 'signIn'
-        ? auth.signIn({ email: student.email, password: 'Password123!' })
-        : action === 'verifySignIn'
-          ? auth.verifySignIn({ email: student.email, pin: '123456' })
-          : auth.signOut()
+      const pending =
+        action === 'signIn'
+          ? auth.signIn({ email: student.email, password: 'Password123!' })
+          : action === 'verifySignIn'
+            ? auth.verifySignIn({ email: student.email, pin: '123456' })
+            : auth.signOut()
 
       await expect(pending).rejects.toBeInstanceOf(ApiError)
-      await expect(pending).rejects.toMatchObject({ status: 401, message: 'Request rejected' })
+      await expect(pending).rejects.toMatchObject({
+        status: 401,
+        message: 'Request rejected',
+      })
       expect(setStudent).not.toHaveBeenCalled()
-    },
+    }
   )
 
   it('turns network failures into a NetworkError without publishing an auth change', async () => {
     fetchMock.mockRejectedValueOnce(new TypeError('Network unavailable'))
-    await expect(createAuthFacade(setStudent).signIn({
-      email: student.email, password: 'Password123!',
-    })).rejects.toBeInstanceOf(NetworkError)
+    await expect(
+      createAuthFacade(setStudent).signIn({
+        email: student.email,
+        password: 'Password123!',
+      })
+    ).rejects.toBeInstanceOf(NetworkError)
     expect(setStudent).not.toHaveBeenCalled()
   })
 

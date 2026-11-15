@@ -1,7 +1,8 @@
 import { request } from './httpClient'
 
 export type Condition = 'NEW' | 'LIKE_NEW' | 'GOOD' | 'FAIR' | 'WORN'
-export type Category = 'FURNITURE' | 'ELECTRONICS' | 'KITCHEN' | 'DECOR' | 'CLOTHING' | 'OTHER'
+export type Category =
+  'FURNITURE' | 'ELECTRONICS' | 'KITCHEN' | 'DECOR' | 'CLOTHING' | 'OTHER'
 
 export type Listing = {
   id: number
@@ -41,12 +42,16 @@ export type SearchListingsParams = {
   limit?: number
 }
 
-export function searchListings(params: SearchListingsParams): Promise<ListingPage> {
+export function searchListings(
+  params: SearchListingsParams
+): Promise<ListingPage> {
   const query = new URLSearchParams()
   if (params.q !== undefined) query.set('q', params.q)
   if (params.category !== undefined) query.set('category', params.category)
-  if (params.minPrice !== undefined) query.set('minPrice', String(params.minPrice))
-  if (params.maxPrice !== undefined) query.set('maxPrice', String(params.maxPrice))
+  if (params.minPrice !== undefined)
+    query.set('minPrice', String(params.minPrice))
+  if (params.maxPrice !== undefined)
+    query.set('maxPrice', String(params.maxPrice))
   if (params.sortBy !== undefined) query.set('sortBy', params.sortBy)
   if (params.sortOrder !== undefined) query.set('sortOrder', params.sortOrder)
   if (params.page !== undefined) query.set('page', String(params.page))
@@ -89,7 +94,7 @@ export function updateListing(
     condition: Condition
     category: Category
     imageUrls: string[]
-  },
+  }
 ): Promise<Listing> {
   return request<Listing>(`/listings/${id}`, {
     method: 'PUT',

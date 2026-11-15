@@ -40,391 +40,357 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class ListingControllerTest {
 
-  @Autowired
-  private MockMvc mockMvc;
+    @Autowired
+    private MockMvc mockMvc;
 
-  @Autowired
-  private StudentRepository studentRepository;
+    @Autowired
+    private StudentRepository studentRepository;
 
-  @Autowired
-  private ListingRepository listingRepository;
+    @Autowired
+    private ListingRepository listingRepository;
 
-  @Autowired
-  private ProfileRepository profileRepository;
+    @Autowired
+    private ProfileRepository profileRepository;
 
-  @Autowired
-  private ObjectMapper objectMapper;
+    @Autowired
+    private ObjectMapper objectMapper;
 
-  @BeforeEach
-  void cleanDatabase() {
-    listingRepository.deleteAll();
-    // Profiles reference students, so remove them before resetting student fixtures.
-    profileRepository.deleteAll();
-    studentRepository.deleteAll();
-  }
+    @BeforeEach
+    void cleanDatabase() {
+        listingRepository.deleteAll();
+        // Profiles reference students, so remove them before resetting student fixtures.
+        profileRepository.deleteAll();
+        studentRepository.deleteAll();
+    }
 
-  private Cookie loginAsNewStudent(String email) throws Exception {
-    String signupBody = objectMapper.writeValueAsString(
-        new SignupRequest("Jane Doe", email, "Password123!"));
-    mockMvc.perform(post("/auth/signup").contentType("application/json").content(signupBody))
-        .andExpect(status().isCreated());
+    private Cookie loginAsNewStudent(String email) throws Exception {
+        String signupBody = objectMapper.writeValueAsString(new SignupRequest("Jane Doe", email, "Password123!"));
+        mockMvc.perform(post("/auth/signup").contentType("application/json").content(signupBody))
+                .andExpect(status().isCreated());
 
-    VerificationRequest verifyBody = new VerificationRequest(email, FakeSupabaseAuthClient.SIGNUP_OTP, "test-device");
-    MvcResult verifyResult = mockMvc.perform(post("/auth/verify-pin")
-        .contentType("application/json")
-        .content(objectMapper.writeValueAsString(verifyBody)))
-        .andExpect(status().isOk())
-        .andReturn();
+        VerificationRequest verifyBody = new VerificationRequest(email, FakeSupabaseAuthClient.SIGNUP_OTP,
+                "test-device");
+        MvcResult verifyResult = mockMvc.perform(post("/auth/verify-pin").contentType("application/json")
+                .content(objectMapper.writeValueAsString(verifyBody))).andExpect(status().isOk()).andReturn();
 
-    Cookie session = verifyResult.getResponse().getCookie(AuthCookies.ACCESS);
-    return session;
-  }
+        Cookie session = verifyResult.getResponse().getCookie(AuthCookies.ACCESS);
+        return session;
+    }
 
-  @Test
-  void createListing_thenFeed_returnsItNewestFirst() throws Exception {
-    Cookie session = loginAsNewStudent("jane@tulane.edu");
+    @Test
+    void createListing_thenFeed_returnsItNewestFirst() throws Exception {
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
 
-    // Reading the feed now requires a profile with a server-owned school domain.
-    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
-    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
+        // Reading the feed now requires a profile with a server-owned school domain.
+        Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+        profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
 
-    String body = objectMapper.writeValueAsString(
-        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+        String body = objectMapper.writeValueAsString(
+                new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
 
-    mockMvc.perform(post("/listings").cookie(session).contentType("application/json").content(body))
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.itemName").value("Desk Lamp"))
-        .andExpect(jsonPath("$.sellerName").value("Jane Doe"));
+        mockMvc.perform(post("/listings").cookie(session).contentType("application/json").content(body))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.itemName").value("Desk Lamp"))
+                .andExpect(jsonPath("$.sellerName").value("Jane Doe"));
 
-    mockMvc.perform(get("/listings").cookie(session))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$[0].itemName").value("Desk Lamp"));
-  }
+        mockMvc.perform(get("/listings").cookie(session)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].itemName").value("Desk Lamp"));
+    }
 
-  @Test
-  void createListing_rejectsWhenNotLoggedIn() throws Exception {
-    String body = objectMapper.writeValueAsString(
-        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+    @Test
+    void createListing_rejectsWhenNotLoggedIn() throws Exception {
+        String body = objectMapper.writeValueAsString(
+                new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
 
-    mockMvc.perform(post("/listings").contentType("application/json").content(body))
-        .andExpect(status().isUnauthorized());
-  }
+        mockMvc.perform(post("/listings").contentType("application/json").content(body))
+                .andExpect(status().isUnauthorized());
+    }
 
-  @Test
-  void createListing_rejectsInvalidCondition() throws Exception {
-    Cookie session = loginAsNewStudent("jane@tulane.edu");
+    @Test
+    void createListing_rejectsInvalidCondition() throws Exception {
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
 
-    String body = objectMapper.writeValueAsString(
-        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "SHINY", "FURNITURE"));
+        String body = objectMapper.writeValueAsString(
+                new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "SHINY", "FURNITURE"));
 
-    mockMvc.perform(post("/listings").cookie(session).contentType("application/json").content(body))
-        .andExpect(status().isBadRequest());
-  }
+        mockMvc.perform(post("/listings").cookie(session).contentType("application/json").content(body))
+                .andExpect(status().isBadRequest());
+    }
 
-  @Test
-  void createListing_rejectsNonPositivePrice() throws Exception {
-    Cookie session = loginAsNewStudent("jane@tulane.edu");
+    @Test
+    void createListing_rejectsNonPositivePrice() throws Exception {
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
 
-    String body = objectMapper.writeValueAsString(
-        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("0"), "GOOD", "FURNITURE"));
+        String body = objectMapper.writeValueAsString(
+                new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("0"), "GOOD", "FURNITURE"));
 
-    mockMvc.perform(post("/listings").cookie(session).contentType("application/json").content(body))
-        .andExpect(status().isBadRequest());
-  }
+        mockMvc.perform(post("/listings").cookie(session).contentType("application/json").content(body))
+                .andExpect(status().isBadRequest());
+    }
 
-  @Test
-  void updateListing_owner_updatesFields() throws Exception {
-    Cookie session = loginAsNewStudent("jane@tulane.edu");
-    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
-    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
-    String createBody = objectMapper.writeValueAsString(
-        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
-    MvcResult createResult = mockMvc.perform(post("/listings").cookie(session)
-            .contentType("application/json").content(createBody))
-        .andExpect(status().isCreated())
-        .andReturn();
-    Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
+    @Test
+    void updateListing_owner_updatesFields() throws Exception {
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
+        Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+        profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
+        String createBody = objectMapper.writeValueAsString(
+                new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+        MvcResult createResult = mockMvc
+                .perform(post("/listings").cookie(session).contentType("application/json").content(createBody))
+                .andExpect(status().isCreated()).andReturn();
+        Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
 
-    String updateBody = objectMapper.writeValueAsString(
-        new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
+        String updateBody = objectMapper.writeValueAsString(
+                new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
 
-    mockMvc.perform(put("/listings/" + listingId).cookie(session)
-            .contentType("application/json").content(updateBody))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.itemName").value("Mini Fridge"))
-        .andExpect(jsonPath("$.price").value(40.00));
+        mockMvc.perform(
+                put("/listings/" + listingId).cookie(session).contentType("application/json").content(updateBody))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.itemName").value("Mini Fridge"))
+                .andExpect(jsonPath("$.price").value(40.00));
 
-    mockMvc.perform(get("/listings/" + listingId).cookie(session))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.itemName").value("Mini Fridge"))
-        .andExpect(jsonPath("$.description").value("Barely used"))
-        .andExpect(jsonPath("$.price").value(40.00))
-        .andExpect(jsonPath("$.condition").value("LIKE_NEW"))
-        .andExpect(jsonPath("$.category").value("KITCHEN"));
-  }
+        mockMvc.perform(get("/listings/" + listingId).cookie(session)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.itemName").value("Mini Fridge"))
+                .andExpect(jsonPath("$.description").value("Barely used")).andExpect(jsonPath("$.price").value(40.00))
+                .andExpect(jsonPath("$.condition").value("LIKE_NEW"))
+                .andExpect(jsonPath("$.category").value("KITCHEN"));
+    }
 
-  @Test
-  void updateListing_notOwner_returnsForbidden() throws Exception {
-    Cookie ownerSession = loginAsNewStudent("jane@tulane.edu");
-    String createBody = objectMapper.writeValueAsString(
-        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
-    MvcResult createResult = mockMvc.perform(post("/listings").cookie(ownerSession)
-            .contentType("application/json").content(createBody))
-        .andExpect(status().isCreated())
-        .andReturn();
-    Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
+    @Test
+    void updateListing_notOwner_returnsForbidden() throws Exception {
+        Cookie ownerSession = loginAsNewStudent("jane@tulane.edu");
+        String createBody = objectMapper.writeValueAsString(
+                new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+        MvcResult createResult = mockMvc
+                .perform(post("/listings").cookie(ownerSession).contentType("application/json").content(createBody))
+                .andExpect(status().isCreated()).andReturn();
+        Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
 
-    Cookie otherSession = loginAsNewStudent("bob@tulane.edu");
-    String updateBody = objectMapper.writeValueAsString(
-        new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
+        Cookie otherSession = loginAsNewStudent("bob@tulane.edu");
+        String updateBody = objectMapper.writeValueAsString(
+                new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
 
-    mockMvc.perform(put("/listings/" + listingId).cookie(otherSession)
-            .contentType("application/json").content(updateBody))
-        .andExpect(status().isForbidden());
-  }
+        mockMvc.perform(
+                put("/listings/" + listingId).cookie(otherSession).contentType("application/json").content(updateBody))
+                .andExpect(status().isForbidden());
+    }
 
-  @Test
-  void updateListing_listingDoesNotExist_returnsNotFound() throws Exception {
-    Cookie session = loginAsNewStudent("jane@tulane.edu");
-    String updateBody = objectMapper.writeValueAsString(
-        new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
+    @Test
+    void updateListing_listingDoesNotExist_returnsNotFound() throws Exception {
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
+        String updateBody = objectMapper.writeValueAsString(
+                new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
 
-    mockMvc.perform(put("/listings/999999").cookie(session)
-            .contentType("application/json").content(updateBody))
-        .andExpect(status().isNotFound());
-  }
+        mockMvc.perform(put("/listings/999999").cookie(session).contentType("application/json").content(updateBody))
+                .andExpect(status().isNotFound());
+    }
 
-  @Test
-  void updateListing_rejectsWhenNotLoggedIn() throws Exception {
-    String updateBody = objectMapper.writeValueAsString(
-        new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
+    @Test
+    void updateListing_rejectsWhenNotLoggedIn() throws Exception {
+        String updateBody = objectMapper.writeValueAsString(
+                new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
 
-    mockMvc.perform(put("/listings/1").contentType("application/json").content(updateBody))
-        .andExpect(status().isUnauthorized());
-  }
+        mockMvc.perform(put("/listings/1").contentType("application/json").content(updateBody))
+                .andExpect(status().isUnauthorized());
+    }
 
-  @Test
-  void deleteListing_owner_removesListing() throws Exception {
-    Cookie session = loginAsNewStudent("jane@tulane.edu");
-    // Keep deletion verification within the owner's authenticated school feed.
-    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
-    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
-    String createBody = objectMapper.writeValueAsString(
-        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
-    MvcResult createResult = mockMvc.perform(post("/listings").cookie(session)
-            .contentType("application/json").content(createBody))
-        .andExpect(status().isCreated())
-        .andReturn();
-    Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
+    @Test
+    void deleteListing_owner_removesListing() throws Exception {
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
+        // Keep deletion verification within the owner's authenticated school feed.
+        Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+        profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
+        String createBody = objectMapper.writeValueAsString(
+                new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+        MvcResult createResult = mockMvc
+                .perform(post("/listings").cookie(session).contentType("application/json").content(createBody))
+                .andExpect(status().isCreated()).andReturn();
+        Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
 
-    mockMvc.perform(delete("/listings/" + listingId).cookie(session))
-        .andExpect(status().isNoContent());
+        mockMvc.perform(delete("/listings/" + listingId).cookie(session)).andExpect(status().isNoContent());
 
-    mockMvc.perform(get("/listings").cookie(session))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$").isArray())
-        .andExpect(jsonPath("$.length()").value(0));
-  }
+        mockMvc.perform(get("/listings").cookie(session)).andExpect(status().isOk()).andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
 
-  @Test
-  void deleteListing_notOwner_returnsForbidden() throws Exception {
-    Cookie ownerSession = loginAsNewStudent("jane@tulane.edu");
-    String createBody = objectMapper.writeValueAsString(
-        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
-    MvcResult createResult = mockMvc.perform(post("/listings").cookie(ownerSession)
-            .contentType("application/json").content(createBody))
-        .andExpect(status().isCreated())
-        .andReturn();
-    Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
+    @Test
+    void deleteListing_notOwner_returnsForbidden() throws Exception {
+        Cookie ownerSession = loginAsNewStudent("jane@tulane.edu");
+        String createBody = objectMapper.writeValueAsString(
+                new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+        MvcResult createResult = mockMvc
+                .perform(post("/listings").cookie(ownerSession).contentType("application/json").content(createBody))
+                .andExpect(status().isCreated()).andReturn();
+        Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
 
-    Cookie otherSession = loginAsNewStudent("bob@tulane.edu");
-    mockMvc.perform(delete("/listings/" + listingId).cookie(otherSession))
-        .andExpect(status().isForbidden());
-  }
+        Cookie otherSession = loginAsNewStudent("bob@tulane.edu");
+        mockMvc.perform(delete("/listings/" + listingId).cookie(otherSession)).andExpect(status().isForbidden());
+    }
 
-  @Test
-  void deleteListing_listingDoesNotExist_returnsNotFound() throws Exception {
-    Cookie session = loginAsNewStudent("jane@tulane.edu");
+    @Test
+    void deleteListing_listingDoesNotExist_returnsNotFound() throws Exception {
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
 
-    mockMvc.perform(delete("/listings/999999").cookie(session))
-        .andExpect(status().isNotFound());
-  }
+        mockMvc.perform(delete("/listings/999999").cookie(session)).andExpect(status().isNotFound());
+    }
 
-  @Test
-  void getCategories_returnsAllCategoryValues() throws Exception {
-    mockMvc.perform(get("/listings/categories"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$", org.hamcrest.Matchers.containsInAnyOrder(
-            "FURNITURE", "ELECTRONICS", "KITCHEN", "DECOR", "CLOTHING", "OTHER")));
-  }
+    @Test
+    void getCategories_returnsAllCategoryValues() throws Exception {
+        mockMvc.perform(get("/listings/categories")).andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.containsInAnyOrder("FURNITURE", "ELECTRONICS", "KITCHEN",
+                        "DECOR", "CLOTHING", "OTHER")));
+    }
 
-  @Test
-  void listVerifiedSeller_includesSellerVerifiedInFeed() throws Exception {
-    Cookie session = loginAsNewStudent("jane@tulane.edu");
-    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
-    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
-    String createBody = objectMapper.writeValueAsString(
-        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
-    mockMvc.perform(post("/listings").cookie(session)
-            .contentType("application/json").content(createBody))
-        .andExpect(status().isCreated());
+    @Test
+    void listVerifiedSeller_includesSellerVerifiedInFeed() throws Exception {
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
+        Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+        profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
+        String createBody = objectMapper.writeValueAsString(
+                new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+        mockMvc.perform(post("/listings").cookie(session).contentType("application/json").content(createBody))
+                .andExpect(status().isCreated());
 
-    mockMvc.perform(get("/listings").cookie(session))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$[0].sellerVerified").value(true));
-  }
+        mockMvc.perform(get("/listings").cookie(session)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].sellerVerified").value(true));
+    }
 
-  @Test
-  void listUnverifiedStudent_excludesSellerVerifiedInFeed() throws Exception {
-    // jane is a verified requester with a profile who can read the feed.
-    Cookie session = loginAsNewStudent("jane@tulane.edu");
-    Student jane = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
-    profileRepository.save(new Profile(jane, "Jane Doe", "CS", null, "tulane.edu"));
+    @Test
+    void listUnverifiedStudent_excludesSellerVerifiedInFeed() throws Exception {
+        // jane is a verified requester with a profile who can read the feed.
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
+        Student jane = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+        profileRepository.save(new Profile(jane, "Jane Doe", "CS", null, "tulane.edu"));
 
-    // bob is an unverified seller (no login session, no PIN verification).
-    Student bob = new Student("Bob Smith", "bob@tulane.edu", "hashed", null, null);
-    studentRepository.save(bob);
-    profileRepository.save(new Profile(bob, "Bob Smith", "CS", null, "tulane.edu"));
-    Listing bobListing = new Listing("Desk Lamp", "Works great", new BigDecimal("10.00"), Condition.GOOD, Category.FURNITURE, bob);
-    listingRepository.save(bobListing);
+        // bob is an unverified seller (no login session, no PIN verification).
+        Student bob = new Student("Bob Smith", "bob@tulane.edu", "hashed", null, null);
+        studentRepository.save(bob);
+        profileRepository.save(new Profile(bob, "Bob Smith", "CS", null, "tulane.edu"));
+        Listing bobListing = new Listing("Desk Lamp", "Works great", new BigDecimal("10.00"), Condition.GOOD,
+                Category.FURNITURE, bob);
+        listingRepository.save(bobListing);
 
-    mockMvc.perform(get("/listings").cookie(session))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$[0].sellerVerified").value(false));
-  }
+        mockMvc.perform(get("/listings").cookie(session)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].sellerVerified").value(false));
+    }
 
-  @Test
-  void getListingById_withVerifiedSeller_returnsSellerVerified() throws Exception {
-    Cookie session = loginAsNewStudent("jane@tulane.edu");
-    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
-    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
-    String createBody = objectMapper.writeValueAsString(
-        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
-    mockMvc.perform(post("/listings").cookie(session)
-            .contentType("application/json").content(createBody))
-        .andExpect(status().isCreated());
+    @Test
+    void getListingById_withVerifiedSeller_returnsSellerVerified() throws Exception {
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
+        Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+        profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
+        String createBody = objectMapper.writeValueAsString(
+                new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+        mockMvc.perform(post("/listings").cookie(session).contentType("application/json").content(createBody))
+                .andExpect(status().isCreated());
 
-    MvcResult createResult = mockMvc.perform(post("/listings").cookie(session)
-            .contentType("application/json").content(createBody))
-        .andExpect(status().isCreated())
-        .andReturn();
-    Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
+        MvcResult createResult = mockMvc
+                .perform(post("/listings").cookie(session).contentType("application/json").content(createBody))
+                .andExpect(status().isCreated()).andReturn();
+        Long listingId = objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asLong();
 
-    mockMvc.perform(get("/listings/" + listingId).cookie(session))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.sellerVerified").value(true));
-  }
+        mockMvc.perform(get("/listings/" + listingId).cookie(session)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.sellerVerified").value(true));
+    }
 
-  @Test
-  void getListingById_withUnverifiedStudent_returnsSellerVerifiedFalse() throws Exception {
-    // jane is a verified requester with a profile who can read the listing.
-    Cookie session = loginAsNewStudent("jane@tulane.edu");
-    Student jane = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
-    profileRepository.save(new Profile(jane, "Jane Doe", "CS", null, "tulane.edu"));
+    @Test
+    void getListingById_withUnverifiedStudent_returnsSellerVerifiedFalse() throws Exception {
+        // jane is a verified requester with a profile who can read the listing.
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
+        Student jane = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+        profileRepository.save(new Profile(jane, "Jane Doe", "CS", null, "tulane.edu"));
 
-    // bob is an unverified seller (no login session, no PIN verification).
-    Student bob = new Student("Bob Smith", "bob@tulane.edu", "hashed", null, null);
-    studentRepository.save(bob);
-    profileRepository.save(new Profile(bob, "Bob Smith", "CS", null, "tulane.edu"));
-    Listing bobListing = new Listing("Desk Lamp", "Works great", new BigDecimal("10.00"), Condition.GOOD, Category.FURNITURE, bob);
-    bobListing = listingRepository.save(bobListing);
+        // bob is an unverified seller (no login session, no PIN verification).
+        Student bob = new Student("Bob Smith", "bob@tulane.edu", "hashed", null, null);
+        studentRepository.save(bob);
+        profileRepository.save(new Profile(bob, "Bob Smith", "CS", null, "tulane.edu"));
+        Listing bobListing = new Listing("Desk Lamp", "Works great", new BigDecimal("10.00"), Condition.GOOD,
+                Category.FURNITURE, bob);
+        bobListing = listingRepository.save(bobListing);
 
-    mockMvc.perform(get("/listings/" + bobListing.getId()).cookie(session))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.sellerVerified").value(false));
-  }
+        mockMvc.perform(get("/listings/" + bobListing.getId()).cookie(session)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.sellerVerified").value(false));
+    }
 
-  @Test
-  void createListing_setsSellerVerifiedInResponse() throws Exception {
-    Cookie session = loginAsNewStudent("jane@tulane.edu");
-    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
-    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
-    
-    String createBody = objectMapper.writeValueAsString(
-        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
-    
-    mockMvc.perform(post("/listings").cookie(session)
-            .contentType("application/json").content(createBody))
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.sellerVerified").value(true));
-  }
+    @Test
+    void createListing_setsSellerVerifiedInResponse() throws Exception {
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
+        Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+        profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
 
-  @Test
-  void updateListing_preservesSellerVerified() throws Exception {
-    Cookie session = loginAsNewStudent("jane@tulane.edu");
-    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
-    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
-    String createBody = objectMapper.writeValueAsString(
-        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
-    mockMvc.perform(post("/listings").cookie(session)
-            .contentType("application/json").content(createBody))
-        .andExpect(status().isCreated());
-    Long listingId = objectMapper.readTree(
-        mockMvc.perform(post("/listings").cookie(session)
-                .contentType("application/json").content(createBody))
-            .andExpect(status().isCreated())
-            .andReturn().getResponse().getContentAsString())
-        .get("id").asLong();
+        String createBody = objectMapper.writeValueAsString(
+                new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
 
-    String updateBody = objectMapper.writeValueAsString(
-        new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
-    mockMvc.perform(put("/listings/" + listingId).cookie(session)
-            .contentType("application/json").content(updateBody))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.sellerVerified").value(true));
-  }
+        mockMvc.perform(post("/listings").cookie(session).contentType("application/json").content(createBody))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.sellerVerified").value(true));
+    }
 
-  @Test
-  void getApiListings_setsSellerVerified() throws Exception {
-    Cookie session = loginAsNewStudent("jane@tulane.edu");
-    Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
-    profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
-    String createBody = objectMapper.writeValueAsString(
-        new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
-    mockMvc.perform(post("/listings").cookie(session)
-            .contentType("application/json").content(createBody))
-        .andExpect(status().isCreated());
+    @Test
+    void updateListing_preservesSellerVerified() throws Exception {
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
+        Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+        profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
+        String createBody = objectMapper.writeValueAsString(
+                new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+        mockMvc.perform(post("/listings").cookie(session).contentType("application/json").content(createBody))
+                .andExpect(status().isCreated());
+        Long listingId = objectMapper
+                .readTree(mockMvc
+                        .perform(post("/listings").cookie(session).contentType("application/json").content(createBody))
+                        .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString())
+                .get("id").asLong();
 
-    mockMvc.perform(get("/api/listings").cookie(session))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.items[0].sellerVerified").value(true));
-  }
+        String updateBody = objectMapper.writeValueAsString(
+                new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
+        mockMvc.perform(
+                put("/listings/" + listingId).cookie(session).contentType("application/json").content(updateBody))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.sellerVerified").value(true));
+    }
 
-  @Test
-  void response_excludesSensitiveStudentFields() throws Exception {
-    // jane is a verified requester with a profile who can read the listing.
-    Cookie session = loginAsNewStudent("jane@tulane.edu");
-    Student jane = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
-    profileRepository.save(new Profile(jane, "Jane Doe", "CS", null, "tulane.edu"));
+    @Test
+    void getApiListings_setsSellerVerified() throws Exception {
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
+        Student seller = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+        profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
+        String createBody = objectMapper.writeValueAsString(
+                new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+        mockMvc.perform(post("/listings").cookie(session).contentType("application/json").content(createBody))
+                .andExpect(status().isCreated());
 
-    // bob is an unverified seller with sensitive account fields populated.
-    Student bob = new Student("Bob Smith", "bob@tulane.edu", "hashed-password", null, null);
-    bob.setOauthProvider("google");
-    bob.setVerificationPin("123456");
-    bob.setVerificationPinExpiry(java.time.LocalDateTime.now().plusMinutes(30));
-    bob.setTrustedDeviceIds(Set.of("device-1"));
-    studentRepository.save(bob);
-    profileRepository.save(new Profile(bob, "Bob Smith", "CS", null, "tulane.edu"));
-    Listing bobListing = new Listing("Desk Lamp", "Works great", new BigDecimal("10.00"),
-        Condition.GOOD, Category.FURNITURE, bob);
-    bobListing = listingRepository.save(bobListing);
+        mockMvc.perform(get("/api/listings").cookie(session)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].sellerVerified").value(true));
+    }
 
-    MvcResult result = mockMvc.perform(get("/listings/" + bobListing.getId()).cookie(session))
-        .andExpect(status().isOk())
-        .andReturn();
+    @Test
+    void response_excludesSensitiveStudentFields() throws Exception {
+        // jane is a verified requester with a profile who can read the listing.
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
+        Student jane = studentRepository.findByEmail("jane@tulane.edu").orElseThrow();
+        profileRepository.save(new Profile(jane, "Jane Doe", "CS", null, "tulane.edu"));
 
-    String body = result.getResponse().getContentAsString();
+        // bob is an unverified seller with sensitive account fields populated.
+        Student bob = new Student("Bob Smith", "bob@tulane.edu", "hashed-password", null, null);
+        bob.setOauthProvider("google");
+        bob.setVerificationPin("123456");
+        bob.setVerificationPinExpiry(java.time.LocalDateTime.now().plusMinutes(30));
+        bob.setTrustedDeviceIds(Set.of("device-1"));
+        studentRepository.save(bob);
+        profileRepository.save(new Profile(bob, "Bob Smith", "CS", null, "tulane.edu"));
+        Listing bobListing = new Listing("Desk Lamp", "Works great", new BigDecimal("10.00"), Condition.GOOD,
+                Category.FURNITURE, bob);
+        bobListing = listingRepository.save(bobListing);
 
-    assertFalse(body.contains("passwordHash"), "passwordHash must not appear in listing JSON");
-    assertFalse(body.contains("verificationPin"), "verificationPin must not appear in listing JSON");
-    assertFalse(body.contains("verificationPinExpiry"),
-        "verificationPinExpiry must not appear in listing JSON");
-    assertFalse(body.contains("trustedDeviceIds"),
-        "trustedDeviceIds must not appear in listing JSON");
-    assertFalse(body.contains("oauthProvider"), "oauthProvider must not appear in listing JSON");
-    assertFalse(body.contains("email_verified"), "email_verified must not appear in listing JSON");
+        MvcResult result = mockMvc.perform(get("/listings/" + bobListing.getId()).cookie(session))
+                .andExpect(status().isOk()).andReturn();
 
-    assertTrue(body.contains("sellerVerified"), "sellerVerified must be present in listing JSON");
-    assertTrue(body.contains("Bob Smith"), "seller name must be present in listing JSON");
-  }
+        String body = result.getResponse().getContentAsString();
+
+        assertFalse(body.contains("passwordHash"), "passwordHash must not appear in listing JSON");
+        assertFalse(body.contains("verificationPin"), "verificationPin must not appear in listing JSON");
+        assertFalse(body.contains("verificationPinExpiry"), "verificationPinExpiry must not appear in listing JSON");
+        assertFalse(body.contains("trustedDeviceIds"), "trustedDeviceIds must not appear in listing JSON");
+        assertFalse(body.contains("oauthProvider"), "oauthProvider must not appear in listing JSON");
+        assertFalse(body.contains("email_verified"), "email_verified must not appear in listing JSON");
+
+        assertTrue(body.contains("sellerVerified"), "sellerVerified must be present in listing JSON");
+        assertTrue(body.contains("Bob Smith"), "seller name must be present in listing JSON");
+    }
 }

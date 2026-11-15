@@ -5,7 +5,13 @@ type SelectFieldProps = SelectHTMLAttributes<HTMLSelectElement> & {
   options: { value: string; label: string }[]
 }
 
-export function SelectField({ label, options, id, className, ...selectProps }: SelectFieldProps) {
+export function SelectField({
+  label,
+  options,
+  id,
+  className,
+  ...selectProps
+}: SelectFieldProps) {
   const generatedId = useId()
   const fieldId = id ?? generatedId
 

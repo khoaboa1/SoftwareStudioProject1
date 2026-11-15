@@ -39,14 +39,16 @@ export function LoginPage() {
 
       if (res.requiresPin) {
         setStep('verify_pin')
-        setPromptMessage(res.message || 'New device detected. Enter your 6-digit PIN.')
+        setPromptMessage(
+          res.message || 'New device detected. Enter your 6-digit PIN.'
+        )
         setStatus('idle')
       } else {
         navigate('/feed')
       }
     } catch (error) {
       setServerError(
-        getErrorMessage(error, 'Something went wrong. Please try again.'),
+        getErrorMessage(error, 'Something went wrong. Please try again.')
       )
       setCanRetry(isNetworkError(error))
       setStatus('error')
@@ -119,7 +121,11 @@ export function LoginPage() {
       {status === 'error' && serverError && (
         <FormAlert
           kind="error"
-          action={canRetry ? { label: 'Try again', onClick: () => void submitLogin() } : undefined}
+          action={
+            canRetry
+              ? { label: 'Try again', onClick: () => void submitLogin() }
+              : undefined
+          }
         >
           {serverError}
         </FormAlert>

@@ -26,76 +26,75 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class CurrentStudentResolverTest {
-  private static final UUID USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
-  @Mock
-  private AuthService authService;
+    private static final UUID USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    @Mock
+    private AuthService authService;
 
-  @AfterEach
-  void clearSecurityContext() {
-    SecurityContextHolder.clearContext();
-  }
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
 
-  private void authenticateAs(String subject) {
-    Jwt jwt = Jwt.withTokenValue("token").header("alg", "none").subject(subject).build();
-    SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
-  }
+    private void authenticateAs(String subject) {
+        Jwt jwt = Jwt.withTokenValue("token").header("alg", "none").subject(subject).build();
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
+    }
 
-  @Test
-  void require_returnsStudentForTokenSubject() {
-    Student bob = new Student("Bob", "bob@tulane.edu", null, null, null);
-    authenticateAs(USER_ID.toString());
-    when(authService.findBySupabaseUserId(USER_ID)).thenReturn(Optional.of(bob));
-    CurrentStudentResolver resolver = new CurrentStudentResolver(authService);
-    assertThat(resolver.require(new MockHttpServletRequest(), "Log in first")).isSameAs(bob);
-  }
+    @Test
+    void require_returnsStudentForTokenSubject() {
+        Student bob = new Student("Bob", "bob@tulane.edu", null, null, null);
+        authenticateAs(USER_ID.toString());
+        when(authService.findBySupabaseUserId(USER_ID)).thenReturn(Optional.of(bob));
+        CurrentStudentResolver resolver = new CurrentStudentResolver(authService);
+        assertThat(resolver.require(new MockHttpServletRequest(), "Log in first")).isSameAs(bob);
+    }
 
-  @Test
-  void require_throwsWithGivenMessage_whenNotAuthenticated() {
-    CurrentStudentResolver resolver = new CurrentStudentResolver(authService);
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    assertThatThrownBy(() -> resolver.require(request, "Log in first"))
-        .isInstanceOf(NotAuthenticatedException.class)
-        .hasMessage("Log in first");
-    // Must not create a session as a side effect.
-    assertThat(request.getSession(false)).isNull();
-    verifyNoInteractions(authService);
-  }
+    @Test
+    void require_throwsWithGivenMessage_whenNotAuthenticated() {
+        CurrentStudentResolver resolver = new CurrentStudentResolver(authService);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        assertThatThrownBy(() -> resolver.require(request, "Log in first"))
+                .isInstanceOf(NotAuthenticatedException.class).hasMessage("Log in first");
+        // Must not create a session as a side effect.
+        assertThat(request.getSession(false)).isNull();
+        verifyNoInteractions(authService);
+    }
 
-  @Test
-  void require_throws_whenTokenStudentNoLongerExists() {
-    authenticateAs(USER_ID.toString());
-    when(authService.findBySupabaseUserId(USER_ID)).thenReturn(Optional.empty());
-    MockHttpServletRequest request = new MockHttpServletRequest();
-    CurrentStudentResolver resolver = new CurrentStudentResolver(authService);
-    assertThatThrownBy(() -> resolver.require(request, "Log in first"))
-        .isInstanceOf(NotAuthenticatedException.class);
-  }
+    @Test
+    void require_throws_whenTokenStudentNoLongerExists() {
+        authenticateAs(USER_ID.toString());
+        when(authService.findBySupabaseUserId(USER_ID)).thenReturn(Optional.empty());
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        CurrentStudentResolver resolver = new CurrentStudentResolver(authService);
+        assertThatThrownBy(() -> resolver.require(request, "Log in first"))
+                .isInstanceOf(NotAuthenticatedException.class);
+    }
 
-  @Test
-  void find_returnsEmpty_whenSubjectIsNotUuid() {
-    authenticateAs("not-a-uuid");
-    assertThat(new CurrentStudentResolver(authService).find(new MockHttpServletRequest())).isEmpty();
-    verifyNoInteractions(authService);
-  }
+    @Test
+    void find_returnsEmpty_whenSubjectIsNotUuid() {
+        authenticateAs("not-a-uuid");
+        assertThat(new CurrentStudentResolver(authService).find(new MockHttpServletRequest())).isEmpty();
+        verifyNoInteractions(authService);
+    }
 
-  @Test
-  void find_returnsEmpty_forNonJwtAuthentication() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken("user", "password"));
-    assertThat(new CurrentStudentResolver(authService).find(new MockHttpServletRequest())).isEmpty();
-    verifyNoInteractions(authService);
-  }
+    @Test
+    void find_returnsEmpty_forNonJwtAuthentication() {
+        SecurityContextHolder.getContext()
+                .setAuthentication(new UsernamePasswordAuthenticationToken("user", "password"));
+        assertThat(new CurrentStudentResolver(authService).find(new MockHttpServletRequest())).isEmpty();
+        verifyNoInteractions(authService);
+    }
 
-  @Test
-  void apiExceptionHandler_mapsSharedExceptionsToStatusAndMessage() {
-    ApiExceptionHandler handler = new ApiExceptionHandler();
-    ResponseEntity<ErrorResponse> unauthorized = handler
-        .handleNotAuthenticated(new NotAuthenticatedException("Log in first"));
-    ResponseEntity<ErrorResponse> notFound = handler
-        .handleProfileNotFound(new ProfileNotFoundException("Profile not found"));
-    assertThat(unauthorized.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-    assertThat(unauthorized.getBody().message()).isEqualTo("Log in first");
-    assertThat(notFound.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-    assertThat(notFound.getBody().message()).isEqualTo("Profile not found");
-  }
+    @Test
+    void apiExceptionHandler_mapsSharedExceptionsToStatusAndMessage() {
+        ApiExceptionHandler handler = new ApiExceptionHandler();
+        ResponseEntity<ErrorResponse> unauthorized = handler
+                .handleNotAuthenticated(new NotAuthenticatedException("Log in first"));
+        ResponseEntity<ErrorResponse> notFound = handler
+                .handleProfileNotFound(new ProfileNotFoundException("Profile not found"));
+        assertThat(unauthorized.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(unauthorized.getBody().message()).isEqualTo("Log in first");
+        assertThat(notFound.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(notFound.getBody().message()).isEqualTo("Profile not found");
+    }
 }
