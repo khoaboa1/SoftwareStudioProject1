@@ -15,14 +15,24 @@ const success: LoginResult = {
 
 describe('studentFromLogin', () => {
   it('carries the verified status through from a successful login', () => {
-    expect(studentFromLogin({ ...success, verified: true })?.verified).toBe(true)
+    expect(studentFromLogin({ ...success, verified: true })?.verified).toBe(
+      true
+    )
   })
 
   it('keeps an unverified status as false', () => {
-    expect(studentFromLogin({ ...success, verified: false })?.verified).toBe(false)
+    expect(studentFromLogin({ ...success, verified: false })?.verified).toBe(
+      false
+    )
   })
 
   it('returns null when the login still requires a PIN', () => {
-    expect(studentFromLogin({ requiresPin: true, message: 'PIN sent', email: 'jane@tulane.edu' })).toBeNull()
+    expect(
+      studentFromLogin({
+        requiresPin: true,
+        message: 'PIN sent',
+        email: 'jane@tulane.edu',
+      })
+    ).toBeNull()
   })
 })

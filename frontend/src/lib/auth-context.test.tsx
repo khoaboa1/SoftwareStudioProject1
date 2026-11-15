@@ -4,7 +4,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { AuthProvider, useAuth } from './auth-context'
 
 vi.mock('../services/authService', () => ({
-  getCurrentStudent: vi.fn().mockResolvedValue({ id: 1, studentName: 'Jane Doe', email: 'jane@tulane.edu' }),
+  getCurrentStudent: vi.fn().mockResolvedValue({
+    id: 1,
+    studentName: 'Jane Doe',
+    email: 'jane@tulane.edu',
+  }),
 }))
 
 vi.mock('../services/profileService', () => ({
@@ -29,7 +33,7 @@ describe('AuthProvider', () => {
     render(
       <AuthProvider>
         <Probe />
-      </AuthProvider>,
+      </AuthProvider>
     )
     expect(await screen.findByText('hasProfile: true')).toBeInTheDocument()
 

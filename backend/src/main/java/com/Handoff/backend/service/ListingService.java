@@ -1,163 +1,162 @@
 package com.Handoff.backend.service;
 
-import com.Handoff.backend.model.Category;
-import com.Handoff.backend.model.Condition;
-import com.Handoff.backend.model.Listing;
-import com.Handoff.backend.model.Student;
 import com.Handoff.backend.dto.CreateListingRequest;
 import com.Handoff.backend.dto.ListingBrowseRequest;
 import com.Handoff.backend.dto.ListingPageResponse;
 import com.Handoff.backend.dto.ListingResponse;
+import com.Handoff.backend.model.Category;
+import com.Handoff.backend.model.Condition;
+import com.Handoff.backend.model.Listing;
+import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.ListingSpecifications;
 import com.Handoff.backend.repository.ProfileRepository;
-
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-
 @Service
 public class ListingService {
 
-  private final ListingRepository listingRepository;
-  private final ProfileRepository profileRepository;
+    private final ListingRepository listingRepository;
+    private final ProfileRepository profileRepository;
 
-  // Keep tenant resolution in the service so callers cannot supply a domain override.
-  public ListingService(ListingRepository listingRepository, ProfileRepository profileRepository) {
-    this.listingRepository = listingRepository;
-    this.profileRepository = profileRepository;
-  }
-
-  /** Resolve the authenticated student's persisted profile before executing a scoped database query. */
-  public List<Listing> getFeed(Student requester) {
-    var profile = profileRepository.findByStudent_Id(requester.getId())
-        .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
-    return listingRepository.findBySchoolDomain(profile.getSchoolDomain());
-  }
-
-  /**
-   * Runs the validated browse query inside a read-only transaction and maps the
-   * result to the API-owned response envelope while related seller data is available.
-   */
-  @Transactional(readOnly = true)
-  public ListingPageResponse browseListings(Student requester, ListingBrowseRequest request) {
-    // Resolve the school domain from the authenticated user's profile, never from a query parameter.
-    var profile = profileRepository.findByStudent_Id(requester.getId())
-        .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
-    // ID provides deterministic ordering when multiple listings share the requested sort value.
-    Sort sort = Sort.by(request.sortDirection(), request.sortBy())
-        .and(Sort.by(request.sortDirection(), "id"));
-    // Spring Data uses zero-based pages; the public contract uses one-based pages.
-    PageRequest pageRequest = PageRequest.of(request.page() - 1, request.limit(), sort);
-    Page<Listing> result = listingRepository.findAll(
-        ListingSpecifications.visibleBrowseResults(profile.getSchoolDomain(), request), pageRequest);
-
-    // Return explicit DTOs so persistence details and Page internals do not leak into JSON.
-    List<ListingResponse> items = result.getContent().stream().map(ListingResponse::from).toList();
-    return new ListingPageResponse(items, new ListingPageResponse.Meta(
-        result.getTotalElements(), request.page(), result.getTotalPages(), request.limit()));
-  }
-
-  public Listing getListing(Long id, Student requester) {
-    var profile = profileRepository.findByStudent_Id(requester.getId())
-        .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
-    return listingRepository.findByIdAndSchoolDomain(id, profile.getSchoolDomain())
-        .orElseThrow(ListingNotFoundException::new);
-  }
-
-  // Validate item to create list.
-  private void validateListing(CreateListingRequest request) {
-    if (request.itemName() == null || request.itemName().isBlank()) {
-      throw new InvalidListingException("Item name is required");
+    // Keep tenant resolution in the service so callers cannot supply a domain override.
+    public ListingService(ListingRepository listingRepository, ProfileRepository profileRepository) {
+        this.listingRepository = listingRepository;
+        this.profileRepository = profileRepository;
     }
-    if (request.description() == null || request.description().isBlank()) {
-      throw new InvalidListingException("Description is required");
+
+    /**
+     * Resolve the authenticated student's persisted profile before executing a scoped database query.
+     */
+    public List<Listing> getFeed(Student requester) {
+        var profile = profileRepository.findByStudent_Id(requester.getId())
+                .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
+        return listingRepository.findBySchoolDomain(profile.getSchoolDomain());
     }
-    if (request.price() == null || request.price().signum() <= 0) {
-      throw new InvalidListingException("Price must be greater than zero");
+
+    /**
+     * Runs the validated browse query inside a read-only transaction and maps the result to the API-owned response
+     * envelope while related seller data is available.
+     */
+    @Transactional(readOnly = true)
+    public ListingPageResponse browseListings(Student requester, ListingBrowseRequest request) {
+        // Resolve the school domain from the authenticated user's profile, never from a query
+        // parameter.
+        var profile = profileRepository.findByStudent_Id(requester.getId())
+                .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
+        // ID provides deterministic ordering when multiple listings share the requested sort value.
+        Sort sort = Sort.by(request.sortDirection(), request.sortBy()).and(Sort.by(request.sortDirection(), "id"));
+        // Spring Data uses zero-based pages; the public contract uses one-based pages.
+        PageRequest pageRequest = PageRequest.of(request.page() - 1, request.limit(), sort);
+        Page<Listing> result = listingRepository
+                .findAll(ListingSpecifications.visibleBrowseResults(profile.getSchoolDomain(), request), pageRequest);
+
+        // Return explicit DTOs so persistence details and Page internals do not leak into JSON.
+        List<ListingResponse> items = result.getContent().stream().map(ListingResponse::from).toList();
+        return new ListingPageResponse(items, new ListingPageResponse.Meta(result.getTotalElements(), request.page(),
+                result.getTotalPages(), request.limit()));
     }
-  }
 
-  private List<String> resolveImageUrls(CreateListingRequest request) {
-    if (request.imageUrls() != null) {
-      if (request.imageUrls().size() > 8) {
-        throw new InvalidListingException("A listing can have at most 8 photos");
-      }
-      return request.imageUrls().stream().map(this::normalizeImageUrl)
-          .filter(url -> url != null).toList();
+    public Listing getListing(Long id, Student requester) {
+        var profile = profileRepository.findByStudent_Id(requester.getId())
+                .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
+        return listingRepository.findByIdAndSchoolDomain(id, profile.getSchoolDomain())
+                .orElseThrow(ListingNotFoundException::new);
     }
-    String url = normalizeImageUrl(request.imageUrl());
-    return url == null ? List.of() : List.of(url);
-  }
 
-  private String normalizeImageUrl(String raw) {
-    if (raw == null || raw.isBlank()) {
-      return null;
+    // Validate item to create list.
+    private void validateListing(CreateListingRequest request) {
+        if (request.itemName() == null || request.itemName().isBlank()) {
+            throw new InvalidListingException("Item name is required");
+        }
+        if (request.description() == null || request.description().isBlank()) {
+            throw new InvalidListingException("Description is required");
+        }
+        if (request.price() == null || request.price().signum() <= 0) {
+            throw new InvalidListingException("Price must be greater than zero");
+        }
     }
-    String imageUrl = raw.trim();
-    if (!imageUrl.startsWith("https://") || imageUrl.length() > 1000) {
-      throw new InvalidListingException("imageUrl must be an https URL of at most 1000 characters");
+
+    private List<String> resolveImageUrls(CreateListingRequest request) {
+        if (request.imageUrls() != null) {
+            if (request.imageUrls().size() > 8) {
+                throw new InvalidListingException("A listing can have at most 8 photos");
+            }
+            return request.imageUrls().stream().map(this::normalizeImageUrl).filter(url -> url != null).toList();
+        }
+        String url = normalizeImageUrl(request.imageUrl());
+        return url == null ? List.of() : List.of(url);
     }
-    return imageUrl;
-  }
 
-  public Listing createListing(Student seller, CreateListingRequest request) {
-    validateListing(request);
-
-    Condition condition = parseEnum(Condition.class, request.condition(), "condition");
-    Category category = parseEnum(Category.class, request.category(), "category");
-    List<String> imageUrls = resolveImageUrls(request);
-
-    Listing newListing = new Listing(request.itemName(), request.description(), request.price(), condition, category, seller);
-    newListing.replaceImages(imageUrls);
-
-    return listingRepository.save(newListing);
-  }
-
-  public Listing updateListing(Long listingId, Student requester, CreateListingRequest request) {
-    Listing listing = getOwnedListing(listingId, requester);
-    validateListing(request);
-
-    Condition condition = parseEnum(Condition.class, request.condition(), "condition");
-    Category category = parseEnum(Category.class, request.category(), "category");
-    List<String> imageUrls = resolveImageUrls(request);
-
-    listing.setItemName(request.itemName());
-    listing.setDescription(request.description());
-    listing.setPrice(request.price());
-    listing.setCondition(condition);
-    listing.setCategory(category);
-    listing.replaceImages(imageUrls);
-
-    return listingRepository.save(listing);
-  }
-
-  public void deleteListing(Long listingId, Student requester) {
-    Listing listing = getOwnedListing(listingId, requester);
-    listingRepository.delete(listing);
-  }
-
-  private Listing getOwnedListing(Long listingId, Student requester) {
-    Listing listing = listingRepository.findById(listingId)
-        .orElseThrow(ListingNotFoundException::new);
-    if (!listing.getSeller().getId().equals(requester.getId())) {
-      throw new ForbiddenListingActionException();
+    private String normalizeImageUrl(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String imageUrl = raw.trim();
+        if (!imageUrl.startsWith("https://") || imageUrl.length() > 1000) {
+            throw new InvalidListingException("imageUrl must be an https URL of at most 1000 characters");
+        }
+        return imageUrl;
     }
-    return listing;
-  }
 
-  private <E extends Enum<E>> E parseEnum(Class<E> enumType, String raw, String fieldLabel) {
-    if (raw == null) {
-      throw new InvalidListingException("Invalid " + fieldLabel);
+    public Listing createListing(Student seller, CreateListingRequest request) {
+        validateListing(request);
+
+        Condition condition = parseEnum(Condition.class, request.condition(), "condition");
+        Category category = parseEnum(Category.class, request.category(), "category");
+        List<String> imageUrls = resolveImageUrls(request);
+
+        Listing newListing = new Listing(request.itemName(), request.description(), request.price(), condition,
+                category, seller);
+        newListing.replaceImages(imageUrls);
+
+        return listingRepository.save(newListing);
     }
-    try {
-      return Enum.valueOf(enumType, raw.toUpperCase());
-    } catch (IllegalArgumentException ex) {
-      throw new InvalidListingException("Invalid " + fieldLabel);
+
+    public Listing updateListing(Long listingId, Student requester, CreateListingRequest request) {
+        Listing listing = getOwnedListing(listingId, requester);
+        validateListing(request);
+
+        Condition condition = parseEnum(Condition.class, request.condition(), "condition");
+        Category category = parseEnum(Category.class, request.category(), "category");
+        List<String> imageUrls = resolveImageUrls(request);
+
+        listing.setItemName(request.itemName());
+        listing.setDescription(request.description());
+        listing.setPrice(request.price());
+        listing.setCondition(condition);
+        listing.setCategory(category);
+        listing.replaceImages(imageUrls);
+
+        return listingRepository.save(listing);
     }
-  }
+
+    public void deleteListing(Long listingId, Student requester) {
+        Listing listing = getOwnedListing(listingId, requester);
+        listingRepository.delete(listing);
+    }
+
+    private Listing getOwnedListing(Long listingId, Student requester) {
+        Listing listing = listingRepository.findById(listingId).orElseThrow(ListingNotFoundException::new);
+        if (!listing.getSeller().getId().equals(requester.getId())) {
+            throw new ForbiddenListingActionException();
+        }
+        return listing;
+    }
+
+    private <E extends Enum<E>> E parseEnum(Class<E> enumType, String raw, String fieldLabel) {
+        if (raw == null) {
+            throw new InvalidListingException("Invalid " + fieldLabel);
+        }
+        try {
+            return Enum.valueOf(enumType, raw.toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new InvalidListingException("Invalid " + fieldLabel);
+        }
+    }
 }

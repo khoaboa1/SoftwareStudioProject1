@@ -15,36 +15,50 @@ import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
 @Entity
-@Table(name = "conversations", uniqueConstraints = @UniqueConstraint(columnNames = {"listing_id", "buyer_id"}))
+@Table(name = "conversations", uniqueConstraints = @UniqueConstraint(columnNames = { "listing_id", "buyer_id" }))
 public class Conversation {
-  @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  private Long id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
-  @ManyToOne(fetch = FetchType.LAZY, optional = false)
-  @JoinColumn(name = "listing_id", nullable = false)
-  @OnDelete(action = OnDeleteAction.CASCADE)
-  private Listing listing;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "listing_id", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
+    private Listing listing;
 
-  @ManyToOne(optional = false)
-  @JoinColumn(name = "buyer_id", nullable = false)
-  private Student buyer;
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "buyer_id", nullable = false)
+    private Student buyer;
 
-  @Column(name = "created_at", nullable = false)
-  private Instant createdAt;
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt;
 
-  protected Conversation() {
-  }
+    protected Conversation() {
+    }
 
-  public Conversation(Listing listing, Student buyer) {
-    this.listing = listing;
-    this.buyer = buyer;
-    this.createdAt = Instant.now();
-  }
+    public Conversation(Listing listing, Student buyer) {
+        this.listing = listing;
+        this.buyer = buyer;
+        this.createdAt = Instant.now();
+    }
 
-  public Long getId() { return id; }
-  public void setId(Long id) { this.id = id; }
-  public Listing getListing() { return listing; }
-  public Student getBuyer() { return buyer; }
-  public Instant getCreatedAt() { return createdAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public Listing getListing() {
+        return listing;
+    }
+
+    public Student getBuyer() {
+        return buyer;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }

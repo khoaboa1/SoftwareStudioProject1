@@ -1,6 +1,6 @@
 import { type FormEvent, type ReactNode, useState } from 'react'
 import { resendPin } from '../services/authService'
-import { getErrorMessage } from '../lib/apiError'
+import { getErrorMessage, isNetworkError } from '../lib/apiError'
 import { AuthCard } from './AuthCard'
 import { Button } from './ui/Button'
 import { FormAlert } from './ui/FormAlert'
@@ -18,58 +18,88 @@ type PinVerificationStepProps = {
 }
 
 export function PinVerificationStep({
-  email, title, subtitle, footer, helperText, submitLabel, verifyErrorFallback, onVerify,
+  email,
+  title,
+  subtitle,
+  footer,
+  helperText,
+  submitLabel,
+  verifyErrorFallback,
+  onVerify,
 }: PinVerificationStepProps) {
   const [pin, setPin] = useState('')
   const [pinError, setPinError] = useState<string | undefined>()
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
-  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent'>('idle')
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent'>(
+    'idle'
+  )
   const [serverError, setServerError] = useState<string | null>(null)
+  const [canRetry, setCanRetry] = useState(false)
 
-  async function handleVerifyPin(event: FormEvent<HTMLFormElement>) {
+  async function runVerify(value: string) {
+    setStatus('submitting')
+    setServerError(null)
+    setCanRetry(false)
+    try {
+      await onVerify(value)
+    } catch (error) {
+      setServerError(getErrorMessage(error, verifyErrorFallback))
+      setCanRetry(isNetworkError(error))
+      setStatus('error')
+    }
+  }
+
+  function handleVerifyPin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-
     if (!pin.trim() || pin.trim().length !== 6) {
       setPinError('Enter the 6-digit PIN')
       return
     }
-
-    setStatus('submitting')
-    setServerError(null)
-
-    try {
-      await onVerify(pin.trim())
-    } catch (error) {
-      setServerError(
-        getErrorMessage(error, verifyErrorFallback),
-      )
-      setStatus('error')
-    }
+    void runVerify(pin.trim())
   }
 
   async function handleResendPin() {
     setResendStatus('sending')
     setServerError(null)
+    setCanRetry(false)
     try {
       await resendPin({ email })
       setResendStatus('sent')
       setTimeout(() => setResendStatus('idle'), 4000)
     } catch (error) {
-      setServerError(
-        getErrorMessage(error, 'Failed to resend PIN.'),
-      )
+      setServerError(getErrorMessage(error, 'Failed to resend PIN.'))
       setResendStatus('idle')
     }
   }
 
   return (
     <AuthCard title={title} subtitle={subtitle} footer={footer}>
-      {serverError && <FormAlert kind="error">{serverError}</FormAlert>}
+      {serverError && (
+        <FormAlert
+          kind="error"
+          action={
+            canRetry
+              ? {
+                  label: 'Try again',
+                  onClick: () => void runVerify(pin.trim()),
+                }
+              : undefined
+          }
+        >
+          {serverError}
+        </FormAlert>
+      )}
       {resendStatus === 'sent' && (
-        <FormAlert kind="success">A new 6-digit PIN has been generated!</FormAlert>
+        <FormAlert kind="success">
+          A new 6-digit PIN has been generated!
+        </FormAlert>
       )}
 
-      <form onSubmit={handleVerifyPin} noValidate className="flex flex-col gap-5">
+      <form
+        onSubmit={handleVerifyPin}
+        noValidate
+        className="flex flex-col gap-5"
+      >
         <TextField
           label="6-Digit Verification PIN"
           type="text"

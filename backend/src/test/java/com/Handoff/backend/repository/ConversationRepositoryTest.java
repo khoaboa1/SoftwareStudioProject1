@@ -16,32 +16,34 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 @DataJpaTest
 class ConversationRepositoryTest {
-  @Autowired private ConversationRepository conversationRepository;
-  @Autowired private ListingRepository listingRepository;
-  @Autowired private StudentRepository studentRepository;
+    @Autowired
+    private ConversationRepository conversationRepository;
+    @Autowired
+    private ListingRepository listingRepository;
+    @Autowired
+    private StudentRepository studentRepository;
 
-  @Test
-  void findByListingAndBuyer_returnsSavedConversation() {
-    Student seller = studentRepository.save(new Student("Seller", "seller@tulane.edu", "hash", null, null));
-    Student buyer = studentRepository.save(new Student("Buyer", "buyer@tulane.edu", "hash", null, null));
-    Listing listing = listingRepository.save(new Listing("Lamp", "Works", BigDecimal.TEN,
-        Condition.GOOD, Category.FURNITURE, seller));
-    Conversation saved = conversationRepository.saveAndFlush(new Conversation(listing, buyer));
+    @Test
+    void findByListingAndBuyer_returnsSavedConversation() {
+        Student seller = studentRepository.save(new Student("Seller", "seller@tulane.edu", "hash", null, null));
+        Student buyer = studentRepository.save(new Student("Buyer", "buyer@tulane.edu", "hash", null, null));
+        Listing listing = listingRepository
+                .save(new Listing("Lamp", "Works", BigDecimal.TEN, Condition.GOOD, Category.FURNITURE, seller));
+        Conversation saved = conversationRepository.saveAndFlush(new Conversation(listing, buyer));
 
-    assertThat(conversationRepository.findByListing_IdAndBuyer_Id(listing.getId(), buyer.getId()))
-        .contains(saved);
-    assertThat(saved.getCreatedAt()).isNotNull();
-  }
+        assertThat(conversationRepository.findByListing_IdAndBuyer_Id(listing.getId(), buyer.getId())).contains(saved);
+        assertThat(saved.getCreatedAt()).isNotNull();
+    }
 
-  @Test
-  void secondConversationForSameListingAndBuyer_isRejected() {
-    Student seller = studentRepository.save(new Student("Seller", "seller2@tulane.edu", "hash", null, null));
-    Student buyer = studentRepository.save(new Student("Buyer", "buyer2@tulane.edu", "hash", null, null));
-    Listing listing = listingRepository.save(new Listing("Lamp", "Works", BigDecimal.TEN,
-        Condition.GOOD, Category.FURNITURE, seller));
-    conversationRepository.saveAndFlush(new Conversation(listing, buyer));
+    @Test
+    void secondConversationForSameListingAndBuyer_isRejected() {
+        Student seller = studentRepository.save(new Student("Seller", "seller2@tulane.edu", "hash", null, null));
+        Student buyer = studentRepository.save(new Student("Buyer", "buyer2@tulane.edu", "hash", null, null));
+        Listing listing = listingRepository
+                .save(new Listing("Lamp", "Works", BigDecimal.TEN, Condition.GOOD, Category.FURNITURE, seller));
+        conversationRepository.saveAndFlush(new Conversation(listing, buyer));
 
-    assertThatThrownBy(() -> conversationRepository.saveAndFlush(new Conversation(listing, buyer)))
-        .isInstanceOf(DataIntegrityViolationException.class);
-  }
+        assertThatThrownBy(() -> conversationRepository.saveAndFlush(new Conversation(listing, buyer)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
 }

@@ -1,10 +1,10 @@
 package com.Handoff.backend.controller;
 
 import com.Handoff.backend.dto.CreateProfileRequest;
-import com.Handoff.backend.dto.UpdateProfileRequest;
 import com.Handoff.backend.dto.ErrorResponse;
 import com.Handoff.backend.dto.ProfileSearchPageResponse;
 import com.Handoff.backend.dto.ProfileSearchRequest;
+import com.Handoff.backend.dto.UpdateProfileRequest;
 import com.Handoff.backend.model.Profile;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.service.DuplicateProfileException;
@@ -19,151 +19,143 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Controller exposing REST endpoints for student profile management.
- */
+/** Controller exposing REST endpoints for student profile management. */
 @RestController
 @RequestMapping("/api/profiles")
 public class ProfileController {
 
-  private static final String NOT_AUTHENTICATED = "User must be authenticated to create a profile.";
-  private static final String SEARCH_NOT_AUTHENTICATED = "User must be authenticated to search profiles.";
+    private static final String NOT_AUTHENTICATED = "User must be authenticated to create a profile.";
+    private static final String SEARCH_NOT_AUTHENTICATED = "User must be authenticated to search profiles.";
 
-  private final ProfileService profileService;
-  private final CurrentStudentResolver currentStudentResolver;
+    private final ProfileService profileService;
+    private final CurrentStudentResolver currentStudentResolver;
 
-  public ProfileController(ProfileService profileService, CurrentStudentResolver currentStudentResolver) {
-    this.profileService = profileService;
-    this.currentStudentResolver = currentStudentResolver;
-  }
+    public ProfileController(ProfileService profileService, CurrentStudentResolver currentStudentResolver) {
+        this.profileService = profileService;
+        this.currentStudentResolver = currentStudentResolver;
+    }
 
-  /**
-   * Retrieves the profile of the currently authenticated student.
-   *
-   * @param httpRequest HTTP servlet request to access the user session
-   * @return 200 OK with the student's Profile, or 404 if no profile exists
-   */
-  @GetMapping("/me")
-  public ResponseEntity<Profile> getMyProfile(HttpServletRequest httpRequest) {
-    Student student = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED);
-    Profile profile = profileService.getMyProfile(student);
-    return ResponseEntity.ok(profile);
-  }
+    /**
+     * Retrieves the profile of the currently authenticated student.
+     *
+     * @param httpRequest
+     *            HTTP servlet request to access the user session
+     *
+     * @return 200 OK with the student's Profile, or 404 if no profile exists
+     */
+    @GetMapping("/me")
+    public ResponseEntity<Profile> getMyProfile(HttpServletRequest httpRequest) {
+        Student student = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED);
+        Profile profile = profileService.getMyProfile(student);
+        return ResponseEntity.ok(profile);
+    }
 
-  /** Search other students' public profile cards by display name. */
-  @GetMapping("/search")
-  public ProfileSearchPageResponse searchProfiles(
-      @RequestParam(required = false) String q,
-      @RequestParam(required = false) String page,
-      @RequestParam(required = false) String limit,
-      HttpServletRequest httpRequest) {
-    Student requester = currentStudentResolver.require(httpRequest, SEARCH_NOT_AUTHENTICATED);
-    ProfileSearchRequest searchRequest = ProfileSearchRequest.parse(q, page, limit);
-    return profileService.searchProfiles(requester, searchRequest);
-  }
+    /** Search other students' public profile cards by display name. */
+    @GetMapping("/search")
+    public ProfileSearchPageResponse searchProfiles(@RequestParam(required = false) String q,
+            @RequestParam(required = false) String page, @RequestParam(required = false) String limit,
+            HttpServletRequest httpRequest) {
+        Student requester = currentStudentResolver.require(httpRequest, SEARCH_NOT_AUTHENTICATED);
+        ProfileSearchRequest searchRequest = ProfileSearchRequest.parse(q, page, limit);
+        return profileService.searchProfiles(requester, searchRequest);
+    }
 
-  /**
-   * Generates a profile for the currently authenticated student.
-   *
-   * @param request     incoming payload containing name, major, and bio
-   * @param httpRequest HTTP servlet request to access the user session
-   * @return 201 Created status and newly created Profile
-   */
-  @PostMapping
-  public ResponseEntity<Profile> createProfile(@Valid @RequestBody CreateProfileRequest request,
-                                               HttpServletRequest httpRequest) {
-    // Authenticate and retrieve current session student
-    Student student = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED);
+    /**
+     * Generates a profile for the currently authenticated student.
+     *
+     * @param request
+     *            incoming payload containing name, major, and bio
+     * @param httpRequest
+     *            HTTP servlet request to access the user session
+     *
+     * @return 201 Created status and newly created Profile
+     */
+    @PostMapping
+    public ResponseEntity<Profile> createProfile(@Valid @RequestBody CreateProfileRequest request,
+            HttpServletRequest httpRequest) {
+        // Authenticate and retrieve current session student
+        Student student = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED);
 
-    // Delegate creation to service layer
-    Profile createdProfile = profileService.createProfile(
-        student,
-        request.name(),
-        request.major(),
-        request.bio()
-    );
+        // Delegate creation to service layer
+        Profile createdProfile = profileService.createProfile(student, request.name(), request.major(), request.bio());
 
-    return ResponseEntity.status(HttpStatus.CREATED).body(createdProfile);
-  }
+        return ResponseEntity.status(HttpStatus.CREATED).body(createdProfile);
+    }
 
-  /**
-   * Retrieves a specific profile by ID, enforcing IDOR ownership checks.
-   *
-   * @param id          profile ID to retrieve
-   * @param httpRequest HTTP servlet request to access the user session
-   * @return 200 OK with the Profile, 403 Forbidden if not the owner, or 404 Not Found
-   */
-  @GetMapping("/{id}")
-  public ResponseEntity<Profile> getProfileById(@PathVariable Long id, HttpServletRequest httpRequest) {
-    Student student = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED);
-    Profile profile = profileService.getProfileById(id, student);
-    return ResponseEntity.ok(profile);
-  }
+    /**
+     * Retrieves a specific profile by ID, enforcing IDOR ownership checks.
+     *
+     * @param id
+     *            profile ID to retrieve
+     * @param httpRequest
+     *            HTTP servlet request to access the user session
+     *
+     * @return 200 OK with the Profile, 403 Forbidden if not the owner, or 404 Not Found
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<Profile> getProfileById(@PathVariable Long id, HttpServletRequest httpRequest) {
+        Student student = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED);
+        Profile profile = profileService.getProfileById(id, student);
+        return ResponseEntity.ok(profile);
+    }
 
-  /**
-   * Updates a specific profile by ID, enforcing IDOR ownership checks.
-   *
-   * @param id          profile ID to update
-   * @param request     incoming update fields (name, major, bio)
-   * @param httpRequest HTTP servlet request to access the user session
-   * @return 200 OK with updated Profile, 403 Forbidden if not the owner, or 404 Not Found
-   */
-  @PutMapping("/{id}")
-  public ResponseEntity<Profile> updateProfile(@PathVariable Long id, 
-                                               @Valid @RequestBody UpdateProfileRequest request,
-                                               HttpServletRequest httpRequest) {
-    Student student = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED);
-    Profile profile = profileService.updateProfile(id, student, request.name(), request.major(), request.bio());
-    return ResponseEntity.ok(profile);
-  }
+    /**
+     * Updates a specific profile by ID, enforcing IDOR ownership checks.
+     *
+     * @param id
+     *            profile ID to update
+     * @param request
+     *            incoming update fields (name, major, bio)
+     * @param httpRequest
+     *            HTTP servlet request to access the user session
+     *
+     * @return 200 OK with updated Profile, 403 Forbidden if not the owner, or 404 Not Found
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<Profile> updateProfile(@PathVariable Long id,
+            @Valid @RequestBody UpdateProfileRequest request, HttpServletRequest httpRequest) {
+        Student student = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED);
+        Profile profile = profileService.updateProfile(id, student, request.name(), request.major(), request.bio());
+        return ResponseEntity.ok(profile);
+    }
 
-  /**
-   * Handles duplicate profile creations with HTTP 409 Conflict.
-   */
-  @ExceptionHandler(DuplicateProfileException.class)
-  public ResponseEntity<ErrorResponse> handleDuplicateProfile(DuplicateProfileException ex) {
-    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(ex.getMessage()));
-  }
+    /** Handles duplicate profile creations with HTTP 409 Conflict. */
+    @ExceptionHandler(DuplicateProfileException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateProfile(DuplicateProfileException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(ex.getMessage()));
+    }
 
-  /**
-   * Handles cross-user unauthorized access (IDOR) with HTTP 403 Forbidden.
-   */
-  @ExceptionHandler(ProfileAccessDeniedException.class)
-  public ResponseEntity<ErrorResponse> handleProfileAccessDenied(ProfileAccessDeniedException ex) {
-    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(ex.getMessage()));
-  }
+    /** Handles cross-user unauthorized access (IDOR) with HTTP 403 Forbidden. */
+    @ExceptionHandler(ProfileAccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleProfileAccessDenied(ProfileAccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(ex.getMessage()));
+    }
 
-  /**
-   * Handles bean validation constraint failures with HTTP 400 Bad Request.
-   */
-  @ExceptionHandler(MethodArgumentNotValidException.class)
-  public ResponseEntity<ErrorResponse> handleValidationFailure(MethodArgumentNotValidException ex) {
-    String errorMsg = ex.getBindingResult().getFieldErrors().stream()
-        .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
-        .findFirst()
-        .orElse("Validation failed");
-    return ResponseEntity.badRequest().body(new ErrorResponse(errorMsg));
-  }
+    /** Handles bean validation constraint failures with HTTP 400 Bad Request. */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidationFailure(MethodArgumentNotValidException ex) {
+        String errorMsg = ex.getBindingResult().getFieldErrors().stream()
+                .map(fe -> fe.getField() + ": " + fe.getDefaultMessage()).findFirst().orElse("Validation failed");
+        return ResponseEntity.badRequest().body(new ErrorResponse(errorMsg));
+    }
 
-  /**
-   * Handles missing or malformed JSON request bodies with HTTP 400 Bad Request.
-   */
-  @ExceptionHandler(HttpMessageNotReadableException.class)
-  public ResponseEntity<ErrorResponse> handleMalformedRequest(HttpMessageNotReadableException ex) {
-    return ResponseEntity.badRequest().body(new ErrorResponse("Request body is missing or malformed."));
-  }
+    /** Handles missing or malformed JSON request bodies with HTTP 400 Bad Request. */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleMalformedRequest(HttpMessageNotReadableException ex) {
+        return ResponseEntity.badRequest().body(new ErrorResponse("Request body is missing or malformed."));
+    }
 
-  /** Preserve the API's standard {"message":"..."} validation-error shape. */
-  @ExceptionHandler(InvalidProfileSearchException.class)
-  public ResponseEntity<ErrorResponse> handleInvalidProfileSearch(InvalidProfileSearchException ex) {
-    return ResponseEntity.badRequest().body(new ErrorResponse(ex.getMessage()));
-  }
+    /** Preserve the API's standard {"message":"..."} validation-error shape. */
+    @ExceptionHandler(InvalidProfileSearchException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidProfileSearch(InvalidProfileSearchException ex) {
+        return ResponseEntity.badRequest().body(new ErrorResponse(ex.getMessage()));
+    }
 }

@@ -1,10 +1,16 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { CATEGORY_OPTIONS } from '../lib/listingOptions'
-import { isBrowseActive, SORT_OPTIONS, type BrowseFilters } from '../lib/browseParams'
+import {
+  isBrowseActive,
+  SORT_OPTIONS,
+  type BrowseFilters,
+} from '../lib/browseParams'
 import { SelectField } from './ui/SelectField'
 import { TextField } from './ui/TextField'
 
-export type BrowseParamPatch = Partial<Record<'category' | 'minPrice' | 'maxPrice' | 'sort', string | null>>
+export type BrowseParamPatch = Partial<
+  Record<'category' | 'minPrice' | 'maxPrice' | 'sort', string | null>
+>
 
 type FilterBarProps = {
   filters: BrowseFilters
@@ -13,15 +19,28 @@ type FilterBarProps = {
   debounceMs?: number
 }
 
-export function FilterBar({ filters, onChange, onClear, debounceMs = 400 }: FilterBarProps) {
-  const [minText, setMinText] = useState(filters.minPrice === null ? '' : String(filters.minPrice))
-  const [maxText, setMaxText] = useState(filters.maxPrice === null ? '' : String(filters.maxPrice))
+export function FilterBar({
+  filters,
+  onChange,
+  onClear,
+  debounceMs = 400,
+}: FilterBarProps) {
+  const [minText, setMinText] = useState(
+    filters.minPrice === null ? '' : String(filters.minPrice)
+  )
+  const [maxText, setMaxText] = useState(
+    filters.maxPrice === null ? '' : String(filters.maxPrice)
+  )
   const [priceError, setPriceError] = useState('')
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const priceErrorId = useId()
   // The error is about the pair, so both boxes turn red. The message is overlaid below them so the row doesn't shift.
   const priceErrorProps = priceError
-    ? { 'aria-invalid': true, 'aria-describedby': priceErrorId, className: 'border-red-400! focus:border-red-500! focus:ring-red-100!' }
+    ? {
+        'aria-invalid': true,
+        'aria-describedby': priceErrorId,
+        className: 'border-red-400! focus:border-red-500! focus:ring-red-100!',
+      }
     : {}
 
   // oxlint-disable react-hooks/exhaustive-deps -- Local typing should only resync when the URL filters change.
@@ -37,9 +56,12 @@ export function FilterBar({ filters, onChange, onClear, debounceMs = 400 }: Filt
   }, [filters.minPrice, filters.maxPrice])
   // oxlint-enable react-hooks/exhaustive-deps
 
-  useEffect(() => () => {
-    if (timer.current !== null) clearTimeout(timer.current)
-  }, [])
+  useEffect(
+    () => () => {
+      if (timer.current !== null) clearTimeout(timer.current)
+    },
+    []
+  )
 
   function schedulePrices(min: string, max: string) {
     if (timer.current !== null) clearTimeout(timer.current)
@@ -66,8 +88,16 @@ export function FilterBar({ filters, onChange, onClear, debounceMs = 400 }: Filt
         <SelectField
           label="Category"
           value={filters.category?.toLowerCase() ?? ''}
-          options={[{ value: '', label: 'All categories' }, ...CATEGORY_OPTIONS.map(({ value, label }) => ({ value: value.toLowerCase(), label }))]}
-          onChange={(event) => onChange({ category: event.currentTarget.value || null })}
+          options={[
+            { value: '', label: 'All categories' },
+            ...CATEGORY_OPTIONS.map(({ value, label }) => ({
+              value: value.toLowerCase(),
+              label,
+            })),
+          ]}
+          onChange={(event) =>
+            onChange({ category: event.currentTarget.value || null })
+          }
         />
       </div>
       {/* Condition filter goes here once the backend supports it — see docs/backend-work-ssp1-86.md */}
@@ -86,7 +116,11 @@ export function FilterBar({ filters, onChange, onClear, debounceMs = 400 }: Filt
             schedulePrices(next, maxText)
           }}
         />
-        <p id={priceErrorId} aria-live="polite" className="absolute left-0 top-full mt-1 whitespace-nowrap text-xs text-red-600">
+        <p
+          id={priceErrorId}
+          aria-live="polite"
+          className="absolute left-0 top-full mt-1 whitespace-nowrap text-xs text-red-600"
+        >
           {priceError}
         </p>
       </div>
@@ -120,7 +154,14 @@ export function FilterBar({ filters, onChange, onClear, debounceMs = 400 }: Filt
           label="Sort by"
           options={SORT_OPTIONS}
           value={filters.sort}
-          onChange={(event) => onChange({ sort: event.currentTarget.value === 'newest' ? null : event.currentTarget.value })}
+          onChange={(event) =>
+            onChange({
+              sort:
+                event.currentTarget.value === 'newest'
+                  ? null
+                  : event.currentTarget.value,
+            })
+          }
         />
       </div>
     </div>

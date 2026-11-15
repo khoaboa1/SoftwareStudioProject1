@@ -1,5 +1,13 @@
 import { useState } from 'react'
-import { Armchair, CookingPot, Lamp, Laptop, Package, TShirt, type Icon } from '@phosphor-icons/react'
+import {
+  Armchair,
+  CookingPot,
+  Lamp,
+  Laptop,
+  Package,
+  TShirt,
+  type Icon,
+} from '@phosphor-icons/react'
 import { CATEGORY_LABELS } from '../lib/listingOptions'
 import type { Category } from '../services/listingService'
 
@@ -12,7 +20,12 @@ const CATEGORY_ICONS: Record<Category, Icon> = {
   OTHER: Package,
 }
 
-export function ListingThumbnail({ category, imageUrl, itemName, className }: {
+export function ListingThumbnail({
+  category,
+  imageUrl,
+  itemName,
+  className,
+}: {
   category: Category
   imageUrl?: string | null
   itemName?: string
@@ -23,7 +36,9 @@ export function ListingThumbnail({ category, imageUrl, itemName, className }: {
 
   if (imageUrl && failedUrl !== imageUrl) {
     return (
-      <div className={`flex aspect-[4/3] items-center justify-center bg-accent-50 ${className ?? ''}`}>
+      <div
+        className={`flex aspect-[4/3] items-center justify-center bg-accent-50 ${className ?? ''}`}
+      >
         <img
           src={imageUrl}
           alt={itemName ?? `${CATEGORY_LABELS[category]} listing`}
@@ -41,7 +56,11 @@ export function ListingThumbnail({ category, imageUrl, itemName, className }: {
       aria-label={`${CATEGORY_LABELS[category]} listing`}
       className={`flex aspect-[4/3] items-center justify-center bg-accent-50 ${className ?? ''}`}
     >
-      <CategoryIcon aria-hidden="true" className="h-16 w-16 text-accent-400" weight="duotone" />
+      <CategoryIcon
+        aria-hidden="true"
+        className="h-16 w-16 text-accent-400"
+        weight="duotone"
+      />
     </div>
   )
 }

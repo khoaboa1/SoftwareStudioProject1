@@ -8,13 +8,19 @@ import { FormAlert } from '../components/ui/FormAlert'
 import { useAuth } from '../lib/auth-context'
 import { getErrorMessage, hasApiStatus } from '../lib/apiError'
 import { useAsyncResource } from '../lib/useAsyncResource'
-import { getMyProfile, updateProfile, type ProfileUpdate } from '../services/profileService'
+import {
+  getMyProfile,
+  updateProfile,
+  type ProfileUpdate,
+} from '../services/profileService'
 
 export function ProfilePage() {
   const navigate = useNavigate()
   const { student, setStudent, markProfileMissing } = useAuth()
   const [editing, setEditing] = useState(false)
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'submitting' | 'error'>(
+    'idle'
+  )
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
@@ -35,7 +41,9 @@ export function ProfilePage() {
     return false
   }
 
-  const { state, setData } = useAsyncResource(getMyProfile, [], { onError: redirectOnAuthError })
+  const { state, setData } = useAsyncResource(getMyProfile, [], {
+    onError: redirectOnAuthError,
+  })
 
   function openEditor() {
     setSaved(false)
@@ -75,13 +83,23 @@ export function ProfilePage() {
             onCancel={() => setEditing(false)}
           />
         ) : state.status === 'ready' ? (
-          <ProfileView status="ready" profile={state.data} verified={student?.verified === true} onEdit={openEditor} />
+          <ProfileView
+            status="ready"
+            profile={state.data}
+            verified={student?.verified === true}
+            onEdit={openEditor}
+          />
         ) : state.status === 'error' ? (
-          <ProfileView status="error" error={getErrorMessage(state.error, 'Could not load your profile.')} />
+          <ProfileView
+            status="error"
+            error={getErrorMessage(state.error, 'Could not load your profile.')}
+          />
         ) : (
           <ProfileView status="loading" />
         )}
-        {state.status === 'ready' && <MyListings sellerId={state.data.studentId} />}
+        {state.status === 'ready' && (
+          <MyListings sellerId={state.data.studentId} />
+        )}
       </main>
     </div>
   )

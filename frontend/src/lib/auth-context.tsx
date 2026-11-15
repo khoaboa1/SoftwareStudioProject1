@@ -1,4 +1,10 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react'
 import { getCurrentStudent, type Student } from '../services/authService'
 import { getMyProfileOrNull } from '../services/profileService'
 
@@ -53,7 +59,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ student, hasProfile, loading, setStudent, markProfileComplete, markProfileMissing }}>
+    <AuthContext.Provider
+      value={{
+        student,
+        hasProfile,
+        loading,
+        setStudent,
+        markProfileComplete,
+        markProfileMissing,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

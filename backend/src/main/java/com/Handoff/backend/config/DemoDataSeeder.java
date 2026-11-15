@@ -18,45 +18,46 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @Profile("dev")
 public class DemoDataSeeder implements CommandLineRunner {
-  private static final Logger log = LoggerFactory.getLogger(DemoDataSeeder.class);
-  private final StudentRepository students;
-  private final ProfileRepository profiles;
-  private final ListingRepository listings;
-  private final PasswordEncoder passwordEncoder;
+    private static final Logger log = LoggerFactory.getLogger(DemoDataSeeder.class);
+    private final StudentRepository students;
+    private final ProfileRepository profiles;
+    private final ListingRepository listings;
+    private final PasswordEncoder passwordEncoder;
 
-  public DemoDataSeeder(StudentRepository students, ProfileRepository profiles,
-                        ListingRepository listings, PasswordEncoder passwordEncoder) {
-    this.students = students;
-    this.profiles = profiles;
-    this.listings = listings;
-    this.passwordEncoder = passwordEncoder;
-  }
-
-  @Override
-  @Transactional
-  public void run(String... args) {
-    String passwordHash = passwordEncoder.encode(DataSeeder.SEED_PASSWORD);
-    int created = 0;
-    int skipped = 0;
-    for (DemoSeedData.DemoStudent data : DemoSeedData.STUDENTS) {
-      if (students.findByEmail(data.email()).isPresent()) {
-        skipped++;
-        continue;
-      }
-      Student student = new Student(data.name(), data.email(), passwordHash, null, data.dormLocation());
-      student.setVerified(true);
-      student.setEmailVerified(true);
-      student = students.save(student);
-      profiles.save(new com.Handoff.backend.model.Profile(student, data.name(), data.major(), data.bio(), data.schoolDomain()));
-      for (DemoSeedData.DemoListing item : data.listings()) {
-        Listing listing = new Listing(item.itemName(), item.description(), item.price(),
-            item.condition(), item.category(), student);
-        listing.setImageUrl(item.imageUrl());
-        listing.setCreatedAt(Instant.now().minus(item.daysAgo(), ChronoUnit.DAYS));
-        listings.save(listing);
-      }
-      created++;
+    public DemoDataSeeder(StudentRepository students, ProfileRepository profiles, ListingRepository listings,
+            PasswordEncoder passwordEncoder) {
+        this.students = students;
+        this.profiles = profiles;
+        this.listings = listings;
+        this.passwordEncoder = passwordEncoder;
     }
-    log.info("Demo data: created {} students, skipped {} existing students", created, skipped);
-  }
+
+    @Override
+    @Transactional
+    public void run(String... args) {
+        String passwordHash = passwordEncoder.encode(DataSeeder.SEED_PASSWORD);
+        int created = 0;
+        int skipped = 0;
+        for (DemoSeedData.DemoStudent data : DemoSeedData.STUDENTS) {
+            if (students.findByEmail(data.email()).isPresent()) {
+                skipped++;
+                continue;
+            }
+            Student student = new Student(data.name(), data.email(), passwordHash, null, data.dormLocation());
+            student.setVerified(true);
+            student.setEmailVerified(true);
+            student = students.save(student);
+            profiles.save(new com.Handoff.backend.model.Profile(student, data.name(), data.major(), data.bio(),
+                    data.schoolDomain()));
+            for (DemoSeedData.DemoListing item : data.listings()) {
+                Listing listing = new Listing(item.itemName(), item.description(), item.price(), item.condition(),
+                        item.category(), student);
+                listing.setImageUrl(item.imageUrl());
+                listing.setCreatedAt(Instant.now().minus(item.daysAgo(), ChronoUnit.DAYS));
+                listings.save(listing);
+            }
+            created++;
+        }
+        log.info("Demo data: created {} students, skipped {} existing students", created, skipped);
+    }
 }
