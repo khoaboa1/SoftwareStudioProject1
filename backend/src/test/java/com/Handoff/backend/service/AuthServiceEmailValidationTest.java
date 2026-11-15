@@ -51,14 +51,15 @@ class AuthServiceEmailValidationTest {
     @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#acceptedEmails")
     void signup_acceptsEmailAndCreatesSupabaseUserWithoutNormalizing(String email) {
         when(studentRepository.findByEmail(email)).thenReturn(Optional.empty());
-        when(supabase.signUp(email, "Password123!")).thenReturn(USER_ID);
+        when(supabase.adminCreateUnconfirmedUser(email, "Password123!")).thenReturn(USER_ID);
         when(studentRepository.save(any(Student.class))).thenAnswer(invocation -> invocation.getArgument(0));
         Student student = authService.signup("Jane Doe", email, "Password123!");
         assertThat(student.getEmail()).isEqualTo(email);
         assertThat(student.getSupabaseUserId()).isEqualTo(USER_ID);
         assertThat(student.isVerified()).isFalse();
+        assertThat(student.getVerificationPin()).matches("\\d{6}");
         verify(studentRepository).findByEmail(email);
-        verifyNoInteractions(emailSender);
+        verify(emailSender).send(email, student.getVerificationPin());
     }
 
     @ParameterizedTest

@@ -55,12 +55,16 @@ class ListingControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private FakeSupabaseAuthClient supabase;
+
     @BeforeEach
     void cleanDatabase() {
         listingRepository.deleteAll();
         // Profiles reference students, so remove them before resetting student fixtures.
         profileRepository.deleteAll();
         studentRepository.deleteAll();
+        supabase.reset();
     }
 
     private Cookie loginAsNewStudent(String email) throws Exception {
@@ -68,13 +72,17 @@ class ListingControllerTest {
         mockMvc.perform(post("/auth/signup").contentType("application/json").content(signupBody))
                 .andExpect(status().isCreated());
 
-        VerificationRequest verifyBody = new VerificationRequest(email, FakeSupabaseAuthClient.SIGNUP_OTP,
-                "test-device");
-        MvcResult verifyResult = mockMvc.perform(post("/auth/verify-pin").contentType("application/json")
-                .content(objectMapper.writeValueAsString(verifyBody))).andExpect(status().isOk()).andReturn();
+        String pin = studentRepository.findByEmail(email).orElseThrow().getVerificationPin();
+        VerificationRequest verifyBody = new VerificationRequest(email, pin, "test-device");
+        mockMvc.perform(post("/auth/verify-pin").contentType("application/json")
+                .content(objectMapper.writeValueAsString(verifyBody))).andExpect(status().isOk());
 
-        Cookie session = verifyResult.getResponse().getCookie(AuthCookies.ACCESS);
-        return session;
+        MvcResult loginResult = mockMvc
+                .perform(post("/auth/login").contentType("application/json").content(
+                        objectMapper.writeValueAsString(new LoginRequest(email, "Password123!", "test-device"))))
+                .andExpect(status().isOk()).andReturn();
+
+        return loginResult.getResponse().getCookie(AuthCookies.ACCESS);
     }
 
     @Test

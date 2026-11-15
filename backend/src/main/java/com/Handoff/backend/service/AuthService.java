@@ -6,7 +6,9 @@ import com.Handoff.backend.repository.StudentRepository;
 import com.Handoff.backend.service.auth.EmailNotConfirmedException;
 import com.Handoff.backend.service.auth.LoginOutcome;
 import com.Handoff.backend.service.auth.PendingLoginStore;
+import com.Handoff.backend.service.auth.SupabaseAdminUser;
 import com.Handoff.backend.service.auth.SupabaseAuthClient;
+import com.Handoff.backend.service.auth.SupabaseAuthException;
 import com.Handoff.backend.service.auth.SupabaseSession;
 import com.Handoff.backend.service.auth.VerifiedLogin;
 import java.time.LocalDateTime;
@@ -17,7 +19,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * Sign-up and sign-in through Supabase Auth. The frontend only calls our /auth endpoints; this service is the only
- * place that asks Supabase to create users or issue tokens.
+ * place that asks Supabase to create users or issue tokens. Email ownership is proven with our own 6-digit PIN.
  */
 @Service
 public class AuthService {
@@ -52,19 +54,35 @@ public class AuthService {
         if (password == null || password.length() < 8) {
             throw new InvalidSignupException("Password must be at least 8 characters");
         }
-        // Supabase hides whether an email is taken, so check our own record first.
         Optional<Student> existing = studentRepository.findByEmail(email);
         if (existing.isPresent() && existing.get().isVerified()) {
             throw new EmailAlreadyRegisteredException("Email already registered");
         }
-        // Supabase creates the user, stores the password hash and emails the 6-digit
-        // code.
-        UUID supabaseUserId = supabase.signUp(email, password);
+        UUID supabaseUserId = prepareUnconfirmedSupabaseUser(existing.orElse(null), email, password);
         Student student = existing.orElseGet(() -> new Student(studentName, email, null, null, null));
         student.setStudentName(studentName);
         student.setSupabaseUserId(supabaseUserId);
         student.setCreatedAt(LocalDateTime.now());
-        return studentRepository.save(student);
+        Student saved = studentRepository.save(student);
+        verificationService.generateAndSendPin(saved);
+        return saved;
+    }
+
+    /** Creates the Supabase user without confirming it, or reuses one that is still unconfirmed. */
+    private UUID prepareUnconfirmedSupabaseUser(Student existing, String email, String password) {
+        if (existing != null && existing.getSupabaseUserId() != null) {
+            supabase.adminUpdateUser(existing.getSupabaseUserId(), password, false);
+            return existing.getSupabaseUserId();
+        }
+        try {
+            return supabase.adminCreateUnconfirmedUser(email, password);
+        } catch (EmailAlreadyRegisteredException taken) {
+            // A Supabase user can outlive our row, for example after an unverified sign-up was purged.
+            SupabaseAdminUser user = supabase.adminFindUserByEmail(email).filter(found -> !found.emailConfirmed())
+                    .orElseThrow(() -> taken);
+            supabase.adminUpdateUser(user.id(), password, false);
+            return user.id();
+        }
     }
 
     public LoginOutcome login(String email, String password, String deviceId) {
@@ -72,18 +90,21 @@ public class AuthService {
         SupabaseSession session;
         try {
             session = supabase.passwordGrant(email, password);
-        } catch (EmailNotConfirmedException ex) {
-            supabase.resendSignupOtp(email);
-            return new LoginOutcome(LoginResponse.requiresPin(email, UNVERIFIED_MESSAGE), null);
+        } catch (EmailNotConfirmedException unconfirmed) {
+            session = confirmEmailIfPinVerified(student, email, password);
+            if (session == null) {
+                verificationService.generateAndSendPin(student);
+                return new LoginOutcome(LoginResponse.requiresPin(email, UNVERIFIED_MESSAGE), null);
+            }
         } catch (InvalidCredentialsException ex) {
             session = migrateLegacyAccount(student, email, password).orElseThrow(() -> ex);
         }
         student.setSupabaseUserId(session.userId());
         if (!student.isVerified()) {
-            // Supabase already confirmed this email, for example through its own email
-            // link.
-            student.setVerified(true);
-            student.setEmailVerified(true);
+            // Supabase already confirmed this email, but our own PIN has not been entered yet.
+            studentRepository.save(student);
+            verificationService.generateAndSendPin(student);
+            return new LoginOutcome(LoginResponse.requiresPin(email, UNVERIFIED_MESSAGE), null);
         }
         if (deviceId == null || deviceId.isBlank() || !student.isDeviceTrusted(deviceId)) {
             Student saved = studentRepository.save(student);
@@ -93,6 +114,18 @@ public class AuthService {
         }
         Student saved = studentRepository.save(student);
         return new LoginOutcome(LoginResponse.success(saved), session);
+    }
+
+    /**
+     * A student who already entered our PIN but whose Supabase email was never confirmed (for example because the
+     * confirm call failed) gets it confirmed now. Returns null when the student has not verified our PIN yet.
+     */
+    private SupabaseSession confirmEmailIfPinVerified(Student student, String email, String password) {
+        if (!student.isVerified() || student.getSupabaseUserId() == null) {
+            return null;
+        }
+        supabase.adminUpdateUser(student.getSupabaseUserId(), null, true);
+        return supabase.passwordGrant(email, password);
     }
 
     /**
@@ -125,18 +158,12 @@ public class AuthService {
         Student student = studentRepository.findByEmail(email)
                 .orElseThrow(() -> new InvalidVerificationPinException("Student not found"));
         if (!student.isVerified()) {
-            // Sign-up: the code was emailed by Supabase, so Supabase checks it.
-            SupabaseSession session = supabase.verifySignupOtp(email, pin.trim());
-            student.setSupabaseUserId(session.userId());
-            student.setVerified(true);
-            student.setEmailVerified(true);
-            if (deviceId != null && !deviceId.isBlank()) {
-                student.trustDevice(deviceId);
-            }
-            return new VerifiedLogin(studentRepository.save(student), session);
+            // Sign-up: our own PIN proves the email. No tokens are issued here; the client signs in next.
+            Student verified = verificationService.verifyPin(email, pin, deviceId);
+            confirmSupabaseEmail(verified);
+            return new VerifiedLogin(verified, null);
         }
-        // New device: our own PIN must pass before the held Supabase session is
-        // released.
+        // New device: our own PIN must pass before the held Supabase session is released.
         SupabaseSession pending = pendingLogins.get(email, deviceId)
                 .orElseThrow(() -> new InvalidCredentialsException(LOGIN_EXPIRED_MESSAGE));
         Student verified = verificationService.verifyPin(email, pin, deviceId);
@@ -144,17 +171,22 @@ public class AuthService {
         return new VerifiedLogin(verified, pending);
     }
 
+    private void confirmSupabaseEmail(Student student) {
+        if (student.getSupabaseUserId() == null) {
+            return;
+        }
+        try {
+            supabase.adminUpdateUser(student.getSupabaseUserId(), null, true);
+        } catch (SupabaseAuthException ex) {
+            // Login confirms it later, because our own PIN has now been verified.
+        }
+    }
+
     public void resendPin(String email) {
         if (!universityEmailValidator.isValid(email)) {
             throw new InvalidSignupException("Use a valid .edu school email");
         }
-        Student student = studentRepository.findByEmail(email)
-                .orElseThrow(() -> new InvalidSignupException("Account not found with this email"));
-        if (student.isVerified()) {
-            verificationService.resendPin(email);
-        } else {
-            supabase.resendSignupOtp(email);
-        }
+        verificationService.resendPin(email);
     }
 
     public SupabaseSession refresh(String refreshToken) {

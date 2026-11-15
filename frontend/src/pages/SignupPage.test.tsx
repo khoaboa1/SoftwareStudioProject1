@@ -3,7 +3,13 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NetworkError } from '../services/httpClient'
-import { ApiError, resendPin, signup, verifyPin } from '../services/authService'
+import {
+  ApiError,
+  login,
+  resendPin,
+  signup,
+  verifyPin,
+} from '../services/authService'
 import { SignupPage } from './SignupPage'
 
 const { setStudent } = vi.hoisted(() => ({ setStudent: vi.fn() }))
@@ -19,6 +25,7 @@ vi.mock('../lib/device', () => ({
 vi.mock('../services/authService', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/authService')>()),
   signup: vi.fn(),
+  login: vi.fn(),
   verifyPin: vi.fn(),
   resendPin: vi.fn(),
 }))
@@ -54,6 +61,7 @@ describe('SignupPage PIN behavior', () => {
   beforeEach(() => {
     setStudent.mockReset()
     vi.mocked(signup).mockReset()
+    vi.mocked(login).mockReset()
     vi.mocked(verifyPin).mockReset()
     vi.mocked(resendPin).mockReset()
     vi.mocked(signup).mockResolvedValue({
@@ -99,16 +107,22 @@ describe('SignupPage PIN behavior', () => {
     )
   })
 
-  it('verifies a correct PIN, signs the student in and opens profile setup', async () => {
-    const student = {
+  it('verifies a correct PIN, then signs in and opens profile setup', async () => {
+    vi.mocked(verifyPin).mockResolvedValue({
       id: 1,
       studentName: 'Jane Doe',
       email: 'jane@tulane.edu',
       emailVerified: true,
       sellingItems: null,
       dormLocation: null,
-    }
-    vi.mocked(verifyPin).mockResolvedValue(student)
+    })
+    vi.mocked(login).mockResolvedValue({
+      requiresPin: false,
+      message: 'Login successful',
+      id: 1,
+      studentName: 'Jane Doe',
+      email: 'jane@tulane.edu',
+    })
     const user = await submitSignup()
     await user.type(screen.getByLabelText('6-Digit Verification PIN'), '123456')
     await user.click(
@@ -117,12 +131,46 @@ describe('SignupPage PIN behavior', () => {
     expect(
       await screen.findByText('Profile setup destination')
     ).toBeInTheDocument()
-    expect(setStudent).toHaveBeenCalledWith(student)
     expect(verifyPin).toHaveBeenCalledWith({
       email: 'jane@tulane.edu',
       pin: '123456',
       deviceId: 'existing-browser',
     })
+    expect(login).toHaveBeenCalledWith({
+      email: 'jane@tulane.edu',
+      password: 'Password123!',
+      deviceId: 'existing-browser',
+    })
+    expect(setStudent).toHaveBeenCalledWith({
+      id: 1,
+      studentName: 'Jane Doe',
+      email: 'jane@tulane.edu',
+      emailVerified: true,
+      sellingItems: null,
+      dormLocation: null,
+    })
+  })
+
+  it('sends the student to log in when signing in still needs a PIN', async () => {
+    vi.mocked(verifyPin).mockResolvedValue({
+      id: 1,
+      studentName: 'Jane Doe',
+      email: 'jane@tulane.edu',
+      emailVerified: true,
+      sellingItems: null,
+      dormLocation: null,
+    })
+    vi.mocked(login).mockResolvedValue({
+      requiresPin: true,
+      message: 'New device detected.',
+    })
+    const user = await submitSignup()
+    await user.type(screen.getByLabelText('6-Digit Verification PIN'), '123456')
+    await user.click(
+      screen.getByRole('button', { name: 'Verify PIN & Activate Account' })
+    )
+    expect(await screen.findByText('Login destination')).toBeInTheDocument()
+    expect(setStudent).not.toHaveBeenCalled()
   })
 
   it('shows a duplicate email on the email field with a link to log in', async () => {

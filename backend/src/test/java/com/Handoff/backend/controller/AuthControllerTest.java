@@ -1,5 +1,11 @@
 package com.Handoff.backend.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import com.Handoff.backend.dto.LoginRequest;
 import com.Handoff.backend.dto.SignupRequest;
 import com.Handoff.backend.dto.VerificationRequest;
@@ -8,6 +14,7 @@ import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.StudentRepository;
 import com.Handoff.backend.support.FakeSupabaseAuthClient;
 import jakarta.servlet.http.Cookie;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,13 +24,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.ObjectMapper;
-import java.util.UUID;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -56,50 +56,61 @@ class AuthControllerTest {
                 .andExpect(status().isCreated());
     }
 
+    private String currentPin() {
+        return studentRepository.findByEmail(EMAIL).orElseThrow().getVerificationPin();
+    }
+
+    /** Verifies the sign-up PIN. Our PIN is read from the database, the same value printed in the console. */
     private void verifySignup(String deviceId) throws Exception {
         mockMvc.perform(post("/auth/verify-pin").contentType("application/json")
-                .content(objectMapper.writeValueAsString(
-                        new VerificationRequest(EMAIL, FakeSupabaseAuthClient.SIGNUP_OTP, deviceId))))
+                .content(objectMapper.writeValueAsString(new VerificationRequest(EMAIL, currentPin(), deviceId))))
                 .andExpect(status().isOk());
     }
 
+    private LoginRequest login(String password, String deviceId) {
+        return new LoginRequest(EMAIL, password, deviceId);
+    }
+
     @Test
-    void signup_verify_me_login_logout_fullFlow() throws Exception {
+    void signup_verify_login_me_logout_fullFlow() throws Exception {
         MvcResult signupResult = mockMvc
                 .perform(post("/auth/signup").contentType("application/json")
                         .content(objectMapper.writeValueAsString(new SignupRequest("Jane Doe", EMAIL, PASSWORD))))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.email").value(EMAIL))
                 .andExpect(jsonPath("$.verified").value(false)).andExpect(jsonPath("$.passwordHash").doesNotExist())
-                .andExpect(jsonPath("$.supabaseUserId").doesNotExist()).andReturn();
+                .andExpect(jsonPath("$.supabaseUserId").doesNotExist())
+                .andExpect(jsonPath("$.verificationPin").doesNotExist()).andReturn();
         assertThat(signupResult.getResponse().getCookie(AuthCookies.ACCESS)).isNull();
-        assertThat(studentRepository.findByEmail(EMAIL).orElseThrow().getSupabaseUserId())
-                .isEqualTo(supabase.userIdFor(EMAIL));
-        // Logging in before the email is confirmed resends the Supabase code instead of
-        // signing in.
+        Student created = studentRepository.findByEmail(EMAIL).orElseThrow();
+        assertThat(created.getSupabaseUserId()).isEqualTo(supabase.userIdFor(EMAIL));
+        assertThat(created.getVerificationPin()).matches("\\d{6}");
+        assertThat(supabase.isConfirmed(EMAIL)).isFalse();
+        // Logging in before the PIN is entered sends a new PIN instead of signing in.
         mockMvc.perform(post("/auth/login").contentType("application/json")
-                .content(objectMapper.writeValueAsString(new LoginRequest(EMAIL, PASSWORD, "device-1"))))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.requiresPin").value(true))
+                .content(objectMapper.writeValueAsString(login(PASSWORD, "device-1")))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.requiresPin").value(true))
                 .andExpect(jsonPath("$.message")
                         .value("Account is unverified. A new verification PIN has been sent to your school email."))
                 .andExpect(cookie().doesNotExist(AuthCookies.ACCESS));
-        assertThat(supabase.resentSignupOtps()).containsExactly(EMAIL);
-        MvcResult verifyResult = mockMvc
-                .perform(post("/auth/verify-pin").contentType("application/json")
-                        .content(objectMapper.writeValueAsString(
-                                new VerificationRequest(EMAIL, FakeSupabaseAuthClient.SIGNUP_OTP, "device-1"))))
+        // Verifying our PIN confirms the account but issues no cookies: the client signs in next.
+        mockMvc.perform(post("/auth/verify-pin").contentType("application/json")
+                .content(objectMapper.writeValueAsString(new VerificationRequest(EMAIL, currentPin(), "device-1"))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.verified").value(true))
-                .andExpect(jsonPath("$.emailVerified").value(true))
+                .andExpect(jsonPath("$.emailVerified").value(true)).andExpect(cookie().doesNotExist(AuthCookies.ACCESS))
+                .andExpect(cookie().doesNotExist(AuthCookies.REFRESH));
+        assertThat(supabase.isConfirmed(EMAIL)).isTrue();
+        MvcResult loginResult = mockMvc
+                .perform(post("/auth/login").contentType("application/json")
+                        .content(objectMapper.writeValueAsString(login(PASSWORD, "device-1"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.requiresPin").value(false))
+                .andExpect(jsonPath("$.studentName").value("Jane Doe"))
                 .andExpect(cookie().httpOnly(AuthCookies.ACCESS, true))
                 .andExpect(cookie().httpOnly(AuthCookies.REFRESH, true))
                 .andExpect(cookie().path(AuthCookies.REFRESH, "/auth")).andReturn();
-        assertThat(verifyResult.getRequest().getSession(false)).isNull();
-        Cookie access = verifyResult.getResponse().getCookie(AuthCookies.ACCESS);
+        assertThat(loginResult.getRequest().getSession(false)).isNull();
+        Cookie access = loginResult.getResponse().getCookie(AuthCookies.ACCESS);
         mockMvc.perform(get("/auth/me").cookie(access)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value(EMAIL)).andExpect(jsonPath("$.verified").value(true));
-        mockMvc.perform(post("/auth/login").contentType("application/json")
-                .content(objectMapper.writeValueAsString(new LoginRequest(EMAIL, PASSWORD, "device-1"))))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.requiresPin").value(false))
-                .andExpect(jsonPath("$.studentName").value("Jane Doe")).andExpect(cookie().exists(AuthCookies.ACCESS));
         mockMvc.perform(post("/auth/logout").cookie(access)).andExpect(status().isNoContent())
                 .andExpect(cookie().maxAge(AuthCookies.ACCESS, 0)).andExpect(cookie().maxAge(AuthCookies.REFRESH, 0));
         mockMvc.perform(get("/auth/me")).andExpect(status().isUnauthorized());
@@ -115,22 +126,50 @@ class AuthControllerTest {
     }
 
     @Test
+    void signup_again_beforeVerifying_reusesTheSupabaseUserAndSendsANewPin() throws Exception {
+        signup();
+        UUID firstUserId = supabase.userIdFor(EMAIL);
+        signup();
+        assertThat(supabase.userIdFor(EMAIL)).isEqualTo(firstUserId);
+        assertThat(studentRepository.findByEmail(EMAIL).orElseThrow().getVerificationPin()).matches("\\d{6}");
+    }
+
+    @Test
+    void verifyPin_withWrongPin_returns400AndKeepsAccountUnconfirmed() throws Exception {
+        signup();
+        String wrongPin = "000000".equals(currentPin()) ? "111111" : "000000";
+        mockMvc.perform(post("/auth/verify-pin").contentType("application/json")
+                .content(objectMapper.writeValueAsString(new VerificationRequest(EMAIL, wrongPin, "device-1"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Incorrect verification PIN"));
+        assertThat(supabase.isConfirmed(EMAIL)).isFalse();
+    }
+
+    @Test
+    void resendPin_forUnverifiedAccount_returnsNoContent() throws Exception {
+        signup();
+        mockMvc.perform(
+                post("/auth/resend-pin").contentType("application/json").content("{\"email\":\"" + EMAIL + "\"}"))
+                .andExpect(status().isNoContent());
+        assertThat(currentPin()).matches("\\d{6}");
+    }
+
+    @Test
     void login_fromNewDevice_requiresDevicePin_thenTrustsDevice() throws Exception {
         signup();
         verifySignup("device-1");
         mockMvc.perform(post("/auth/login").contentType("application/json")
-                .content(objectMapper.writeValueAsString(new LoginRequest(EMAIL, PASSWORD, "device-2"))))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.requiresPin").value(true))
+                .content(objectMapper.writeValueAsString(login(PASSWORD, "device-2")))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.requiresPin").value(true))
                 .andExpect(
                         jsonPath("$.message").value("New device detected. We sent a 6-digit PIN to your school email."))
                 .andExpect(cookie().doesNotExist(AuthCookies.ACCESS));
-        String devicePin = studentRepository.findByEmail(EMAIL).orElseThrow().getVerificationPin();
         mockMvc.perform(post("/auth/verify-pin").contentType("application/json")
-                .content(objectMapper.writeValueAsString(new VerificationRequest(EMAIL, devicePin, "device-2"))))
+                .content(objectMapper.writeValueAsString(new VerificationRequest(EMAIL, currentPin(), "device-2"))))
                 .andExpect(status().isOk()).andExpect(cookie().exists(AuthCookies.ACCESS));
         mockMvc.perform(post("/auth/login").contentType("application/json")
-                .content(objectMapper.writeValueAsString(new LoginRequest(EMAIL, PASSWORD, "device-2"))))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.requiresPin").value(false));
+                .content(objectMapper.writeValueAsString(login(PASSWORD, "device-2")))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.requiresPin").value(false));
     }
 
     @Test
@@ -148,7 +187,7 @@ class AuthControllerTest {
         signup();
         verifySignup("device-1");
         mockMvc.perform(post("/auth/login").contentType("application/json")
-                .content(objectMapper.writeValueAsString(new LoginRequest(EMAIL, "WrongPassword1", "device-1"))))
+                .content(objectMapper.writeValueAsString(login("WrongPassword1", "device-1"))))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("Invalid email or password"));
     }
@@ -161,9 +200,8 @@ class AuthControllerTest {
         legacy.trustDevice("device-1");
         studentRepository.save(legacy);
         mockMvc.perform(post("/auth/login").contentType("application/json")
-                .content(objectMapper.writeValueAsString(new LoginRequest(EMAIL, PASSWORD, "device-1"))))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.requiresPin").value(false))
-                .andExpect(cookie().exists(AuthCookies.ACCESS));
+                .content(objectMapper.writeValueAsString(login(PASSWORD, "device-1")))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.requiresPin").value(false)).andExpect(cookie().exists(AuthCookies.ACCESS));
         Student migrated = studentRepository.findByEmail(EMAIL).orElseThrow();
         assertThat(migrated.getSupabaseUserId()).isEqualTo(supabase.userIdFor(EMAIL));
         assertThat(migrated.getPasswordHash()).isNull();
@@ -174,8 +212,7 @@ class AuthControllerTest {
         signup();
         verifySignup("device-1");
         mockMvc.perform(post("/auth/login").cookie(new Cookie(AuthCookies.ACCESS, "expired-token"))
-                .contentType("application/json")
-                .content(objectMapper.writeValueAsString(new LoginRequest(EMAIL, PASSWORD, "device-1"))))
+                .contentType("application/json").content(objectMapper.writeValueAsString(login(PASSWORD, "device-1"))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.requiresPin").value(false));
     }
 

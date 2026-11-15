@@ -11,7 +11,6 @@ import com.Handoff.backend.service.VerificationService;
 import com.Handoff.backend.service.email.EmailSender;
 import com.Handoff.backend.service.auth.PendingLoginStore;
 import com.Handoff.backend.service.auth.SupabaseAuthClient;
-import com.Handoff.backend.service.auth.SupabaseSession;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -31,6 +30,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -78,7 +79,7 @@ class AuthEmailValidationControllerTest {
     @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#acceptedEmails")
     void signup_returnsCreatedAndUnverifiedStudent(String email) throws Exception {
         when(studentRepository.findByEmail(email)).thenReturn(Optional.empty());
-        when(supabase.signUp(email, "Password123!")).thenReturn(USER_ID);
+        when(supabase.adminCreateUnconfirmedUser(email, "Password123!")).thenReturn(USER_ID);
         when(studentRepository.save(any(Student.class))).thenAnswer(invocation -> {
             Student student = invocation.getArgument(0);
             student.setId(42L);
@@ -94,16 +95,16 @@ class AuthEmailValidationControllerTest {
                 .andExpect(jsonPath("$.verificationPin").doesNotExist()).andReturn();
 
         assertThat(result.getResponse().getCookie(AuthCookies.ACCESS)).isNull();
+        verify(emailSender).send(eq(email), anyString());
     }
 
     @ParameterizedTest
     @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#acceptedEmails")
-    void verifyPin_returnsVerifiedStudentAndSetsAuthCookies(String email) throws Exception {
+    void verifyPin_returnsVerifiedStudentAndConfirmsSupabaseWithoutCookies(String email) throws Exception {
         Student student = studentWithPin(email);
+        student.setSupabaseUserId(USER_ID);
         when(studentRepository.findByEmail(email)).thenReturn(Optional.of(student));
         when(studentRepository.save(student)).thenReturn(student);
-        when(supabase.verifySignupOtp(email, "123456"))
-                .thenReturn(new SupabaseSession("access-token", "refresh-token", 3600, USER_ID));
 
         MvcResult result = mockMvc
                 .perform(post("/auth/verify-pin").contentType("application/json").content(
@@ -112,14 +113,15 @@ class AuthEmailValidationControllerTest {
                 .andExpect(jsonPath("$.verified").value(true)).andExpect(jsonPath("$.emailVerified").value(true))
                 .andReturn();
 
-        assertThat(result.getResponse().getCookie(AuthCookies.ACCESS).getValue()).isEqualTo("access-token");
+        assertThat(result.getResponse().getCookie(AuthCookies.ACCESS)).isNull();
         assertThat(student.isDeviceTrusted("browser-1")).isTrue();
+        verify(supabase).adminUpdateUser(USER_ID, null, true);
         verifyNoInteractions(emailSender);
     }
 
     @ParameterizedTest
     @MethodSource("com.Handoff.backend.support.UniversityEmailTestCases#acceptedEmails")
-    void resendPin_returnsNoContentAndResendsSupabaseCode(String email) throws Exception {
+    void resendPin_returnsNoContentAndEmailsOurPin(String email) throws Exception {
         Student student = studentWithPin(email);
         when(studentRepository.findByEmail(email)).thenReturn(Optional.of(student));
 
@@ -128,8 +130,8 @@ class AuthEmailValidationControllerTest {
                         .content(objectMapper.writeValueAsString(new ResendPinRequest(email))))
                 .andExpect(status().isNoContent()).andExpect(content().string("")).andReturn();
 
-        verify(supabase).resendSignupOtp(email);
-        verifyNoInteractions(emailSender);
+        verify(emailSender).send(email, student.getVerificationPin());
+        verifyNoInteractions(supabase);
         assertThat(result.getResponse().getCookie(AuthCookies.ACCESS)).isNull();
     }
 

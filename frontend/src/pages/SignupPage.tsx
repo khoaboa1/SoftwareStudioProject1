@@ -12,6 +12,7 @@ import {
   validatePassword,
 } from '../lib/validation'
 import { signup, verifyPin } from '../services/authService'
+import { createAuthFacade } from '../services/authFacade'
 import { getErrorMessage, hasApiStatus, isNetworkError } from '../lib/apiError'
 import { getOrCreateDeviceId } from '../lib/device'
 import { useAuth } from '../lib/auth-context'
@@ -25,6 +26,7 @@ const DUPLICATE_EMAIL_MESSAGE = 'An account with this email already exists.'
 export function SignupPage() {
   const navigate = useNavigate()
   const { setStudent } = useAuth()
+  const auth = createAuthFacade(setStudent)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -76,18 +78,16 @@ export function SignupPage() {
         email={email}
         title="Verify your school email"
         subtitle={`We generated a 6-digit PIN for ${email}`}
-        helperText="Check your university email for the 6-digit code"
+        helperText="Check your school email (or backend console during dev/demo)"
         submitLabel="Verify PIN & Activate Account"
         verifyErrorFallback="Failed to verify PIN. Please try again."
         onVerify={async (pin) => {
-          // The backend sets the HttpOnly auth cookies here, so the student is signed in.
-          const student = await verifyPin({
-            email,
-            pin,
-            deviceId: getOrCreateDeviceId(),
+          await verifyPin({ email, pin, deviceId: getOrCreateDeviceId() })
+          // The account is now verified and this device is trusted. Signing in sets the auth cookies.
+          const result = await auth.signIn({ email, password })
+          navigate(result.requiresPin ? '/login' : '/profile-setup', {
+            replace: true,
           })
-          setStudent(student)
-          navigate('/profile-setup', { replace: true })
         }}
         footer={
           <>

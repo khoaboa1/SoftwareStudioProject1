@@ -3,9 +3,9 @@ package com.Handoff.backend.service.auth;
 import com.Handoff.backend.service.EmailAlreadyRegisteredException;
 import com.Handoff.backend.service.InvalidCredentialsException;
 import com.Handoff.backend.service.InvalidSignupException;
-import com.Handoff.backend.service.InvalidVerificationPinException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -13,7 +13,9 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.json.JsonMapper;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /** Calls the Supabase Auth REST API (GoTrue) on behalf of the frontend. */
@@ -24,6 +26,8 @@ public class RestSupabaseAuthClient implements SupabaseAuthClient {
     private final String anonKey;
     private final String serviceKey;
     private final JsonMapper json = JsonMapper.builder().build();
+    private static final int USERS_PER_PAGE = 200;
+    private static final int MAX_USER_PAGES = 50;
 
     @Autowired
     public RestSupabaseAuthClient(@Value("${supabase.url:}") String baseUrl,
@@ -41,24 +45,6 @@ public class RestSupabaseAuthClient implements SupabaseAuthClient {
     @Override
     public boolean isConfigured() {
         return !baseUrl.isBlank() && !anonKey.isBlank();
-    }
-
-    @Override
-    public UUID signUp(String email, String password) {
-        try {
-            return userId(call("/auth/v1/signup", anonKey, null, Map.of("email", email, "password", password)));
-        } catch (SupabaseAuthException ex) {
-            if ("user_already_exists".equals(ex.getCode()) || "email_exists".equals(ex.getCode())) {
-                throw new EmailAlreadyRegisteredException("Email already registered");
-            }
-            if ("weak_password".equals(ex.getCode())) {
-                throw new InvalidSignupException(ex.getMessage());
-            }
-            if ("email_address_invalid".equals(ex.getCode())) {
-                throw new InvalidSignupException("Use a valid .edu school email");
-            }
-            throw ex;
-        }
     }
 
     @Override
@@ -91,24 +77,6 @@ public class RestSupabaseAuthClient implements SupabaseAuthClient {
     }
 
     @Override
-    public SupabaseSession verifySignupOtp(String email, String token) {
-        try {
-            return session(
-                    call("/auth/v1/verify", anonKey, null, Map.of("type", "email", "email", email, "token", token)));
-        } catch (SupabaseAuthException ex) {
-            if (isClientError(ex)) {
-                throw new InvalidVerificationPinException("Incorrect or expired verification PIN");
-            }
-            throw ex;
-        }
-    }
-
-    @Override
-    public void resendSignupOtp(String email) {
-        call("/auth/v1/resend", anonKey, null, Map.of("type", "signup", "email", email));
-    }
-
-    @Override
     public void logout(String accessToken) {
         call("/auth/v1/logout", anonKey, accessToken, Map.of());
     }
@@ -122,21 +90,81 @@ public class RestSupabaseAuthClient implements SupabaseAuthClient {
         return userId(call("/auth/v1/admin/users", serviceKey, serviceKey, body));
     }
 
+    @Override
+    public UUID adminCreateUnconfirmedUser(String email, String password) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("email", email);
+        body.put("password", password);
+        body.put("email_confirm", false);
+        try {
+            return userId(call("/auth/v1/admin/users", serviceKey, serviceKey, body));
+        } catch (SupabaseAuthException ex) {
+            if ("email_exists".equals(ex.getCode()) || "user_already_exists".equals(ex.getCode())) {
+                throw new EmailAlreadyRegisteredException("Email already registered");
+            }
+            if ("weak_password".equals(ex.getCode())) {
+                throw new InvalidSignupException(ex.getMessage());
+            }
+            throw ex;
+        }
+    }
+
+    @Override
+    public void adminUpdateUser(UUID userId, String password, Boolean emailConfirmed) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (password != null) {
+            body.put("password", password);
+        }
+        if (emailConfirmed != null) {
+            body.put("email_confirm", emailConfirmed);
+        }
+        callWithMethod(HttpMethod.PUT, "/auth/v1/admin/users/" + userId, serviceKey, serviceKey, body);
+    }
+
+    @Override
+    public Optional<SupabaseAdminUser> adminFindUserByEmail(String email) {
+        for (int page = 1; page <= MAX_USER_PAGES; page++) {
+            Map<String, Object> body = callWithMethod(HttpMethod.GET,
+                    "/auth/v1/admin/users?page=" + page + "&per_page=" + USERS_PER_PAGE, serviceKey, serviceKey, null);
+            if (!(body.get("users") instanceof List<?> users) || users.isEmpty()) {
+                return Optional.empty();
+            }
+            for (Object item : users) {
+                if (item instanceof Map<?, ?> user && email.equalsIgnoreCase(text(user.get("email")))) {
+                    return Optional.of(new SupabaseAdminUser(UUID.fromString(text(user.get("id"))),
+                            !text(user.get("email_confirmed_at")).isEmpty()));
+                }
+            }
+            if (users.size() < USERS_PER_PAGE) {
+                return Optional.empty();
+            }
+        }
+        return Optional.empty();
+    }
+
     private static boolean isClientError(SupabaseAuthException ex) {
         return ex.getStatus() >= 400 && ex.getStatus() < 500 && ex.getStatus() != 429;
     }
 
     private Map<String, Object> call(String path, String apiKey, String bearer, Map<String, ?> body) {
+        return callWithMethod(HttpMethod.POST, path, apiKey, bearer, body);
+    }
+
+    private Map<String, Object> callWithMethod(HttpMethod method, String path, String apiKey, String bearer,
+            Map<String, ?> body) {
         if (baseUrl.isBlank() || apiKey.isBlank()) {
             throw new SupabaseAuthException(503, "not_configured", "Supabase Auth is not configured");
         }
         try {
-            RestClient.RequestBodySpec request = rest.post().uri(baseUrl + path).header("apikey", apiKey)
+            RestClient.RequestBodySpec request = rest.method(method).uri(baseUrl + path).header("apikey", apiKey)
                     .contentType(MediaType.APPLICATION_JSON);
             if (bearer != null && !bearer.isBlank()) {
                 request = request.header("Authorization", "Bearer " + bearer);
             }
-            return parse(request.body(json.writeValueAsString(body)).retrieve().body(String.class));
+            if (body != null) {
+                request = request.body(json.writeValueAsString(body));
+            }
+            return parse(request.retrieve().body(String.class));
         } catch (RestClientResponseException ex) {
             Map<String, Object> error = parse(ex.getResponseBodyAsString());
             String code = text(error.get("error_code"));

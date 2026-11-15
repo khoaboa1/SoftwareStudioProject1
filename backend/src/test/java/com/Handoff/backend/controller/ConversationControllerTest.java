@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.Handoff.backend.dto.LoginRequest;
 import com.Handoff.backend.dto.SignupRequest;
 import com.Handoff.backend.dto.VerificationRequest;
 import com.Handoff.backend.model.Category;
@@ -46,6 +47,9 @@ class ConversationControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private FakeSupabaseAuthClient supabase;
+
     @BeforeEach
     void cleanDatabase() {
         sessions.clear();
@@ -53,17 +57,22 @@ class ConversationControllerTest {
         listingRepository.deleteAll();
         profileRepository.deleteAll();
         studentRepository.deleteAll();
+        supabase.reset();
     }
 
     private Cookie loginAsNewStudent(String email) throws Exception {
         String signupBody = objectMapper.writeValueAsString(new SignupRequest("Jane Doe", email, "Password123!"));
         mockMvc.perform(post("/auth/signup").contentType("application/json").content(signupBody))
                 .andExpect(status().isCreated());
-        VerificationRequest verifyBody = new VerificationRequest(email, FakeSupabaseAuthClient.SIGNUP_OTP,
-                "test-device");
-        MvcResult verifyResult = mockMvc.perform(post("/auth/verify-pin").contentType("application/json")
-                .content(objectMapper.writeValueAsString(verifyBody))).andExpect(status().isOk()).andReturn();
-        Cookie session = verifyResult.getResponse().getCookie(AuthCookies.ACCESS);
+        String pin = studentRepository.findByEmail(email).orElseThrow().getVerificationPin();
+        VerificationRequest verifyBody = new VerificationRequest(email, pin, "test-device");
+        mockMvc.perform(post("/auth/verify-pin").contentType("application/json")
+                .content(objectMapper.writeValueAsString(verifyBody))).andExpect(status().isOk());
+        MvcResult loginResult = mockMvc
+                .perform(post("/auth/login").contentType("application/json").content(
+                        objectMapper.writeValueAsString(new LoginRequest(email, "Password123!", "test-device"))))
+                .andExpect(status().isOk()).andReturn();
+        Cookie session = loginResult.getResponse().getCookie(AuthCookies.ACCESS);
         sessions.put(email, session);
         return session;
     }

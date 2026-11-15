@@ -5,10 +5,13 @@ import com.Handoff.backend.repository.StudentRepository;
 import com.Handoff.backend.service.auth.EmailNotConfirmedException;
 import com.Handoff.backend.service.auth.LoginOutcome;
 import com.Handoff.backend.service.auth.PendingLoginStore;
+import com.Handoff.backend.service.auth.SupabaseAdminUser;
 import com.Handoff.backend.service.auth.SupabaseAuthClient;
 import com.Handoff.backend.service.auth.SupabaseAuthException;
 import com.Handoff.backend.service.auth.SupabaseSession;
 import com.Handoff.backend.service.auth.VerifiedLogin;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,10 +19,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-
-import java.util.Optional;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -33,21 +32,19 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
-
     private static final String EMAIL = "jane@tulane.edu";
     private static final String PASSWORD = "Password123!";
     private static final UUID USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final SupabaseSession SESSION = new SupabaseSession("access", "refresh", 3600, USER_ID);
-
     @Mock
     private StudentRepository studentRepository;
     @Mock
     private VerificationService verificationService;
     @Mock
     private SupabaseAuthClient supabase;
+    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private PendingLoginStore pendingLogins;
     private AuthService authService;
-    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @BeforeEach
     void setUp() {
@@ -84,9 +81,9 @@ class AuthServiceTest {
     }
 
     @Test
-    void signup_createsUnverifiedStudentLinkedToSupabaseUser() {
+    void signup_createsUnconfirmedSupabaseUser_andSendsOurPin() {
         when(studentRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
-        when(supabase.signUp(EMAIL, PASSWORD)).thenReturn(USER_ID);
+        when(supabase.adminCreateUnconfirmedUser(EMAIL, PASSWORD)).thenReturn(USER_ID);
         saveReturnsArgument();
         Student student = authService.signup("Jane Doe", EMAIL, PASSWORD);
         assertThat(student.getEmail()).isEqualTo(EMAIL);
@@ -94,7 +91,7 @@ class AuthServiceTest {
         assertThat(student.getSupabaseUserId()).isEqualTo(USER_ID);
         assertThat(student.getPasswordHash()).isNull();
         assertThat(student.isVerified()).isFalse();
-        verifyNoInteractions(verificationService);
+        verify(verificationService).generateAndSendPin(student);
     }
 
     @Test
@@ -102,19 +99,47 @@ class AuthServiceTest {
         when(studentRepository.findByEmail(EMAIL)).thenReturn(Optional.of(verifiedStudent()));
         assertThatThrownBy(() -> authService.signup("Jane Doe", EMAIL, PASSWORD))
                 .isExactlyInstanceOf(EmailAlreadyRegisteredException.class).hasMessage("Email already registered");
-        verifyNoInteractions(supabase);
+        verifyNoInteractions(supabase, verificationService);
     }
 
     @Test
-    void signup_reusesUnverifiedStudentRow() {
+    void signup_reusesUnverifiedStudentAndItsSupabaseUser() {
         Student existing = unverifiedStudent();
+        existing.setSupabaseUserId(USER_ID);
         when(studentRepository.findByEmail(EMAIL)).thenReturn(Optional.of(existing));
-        when(supabase.signUp(EMAIL, PASSWORD)).thenReturn(USER_ID);
         saveReturnsArgument();
         Student student = authService.signup("Jane Q. Doe", EMAIL, PASSWORD);
         assertThat(student).isSameAs(existing);
         assertThat(student.getStudentName()).isEqualTo("Jane Q. Doe");
         assertThat(student.getSupabaseUserId()).isEqualTo(USER_ID);
+        verify(supabase).adminUpdateUser(USER_ID, PASSWORD, false);
+        verify(supabase, never()).adminCreateUnconfirmedUser(anyString(), anyString());
+        verify(verificationService).generateAndSendPin(student);
+    }
+
+    @Test
+    void signup_adoptsUnconfirmedSupabaseUserThatOutlivedOurRow() {
+        when(studentRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
+        when(supabase.adminCreateUnconfirmedUser(EMAIL, PASSWORD))
+                .thenThrow(new EmailAlreadyRegisteredException("Email already registered"));
+        when(supabase.adminFindUserByEmail(EMAIL)).thenReturn(Optional.of(new SupabaseAdminUser(USER_ID, false)));
+        saveReturnsArgument();
+        Student student = authService.signup("Jane Doe", EMAIL, PASSWORD);
+        assertThat(student.getSupabaseUserId()).isEqualTo(USER_ID);
+        verify(supabase).adminUpdateUser(USER_ID, PASSWORD, false);
+        verify(verificationService).generateAndSendPin(student);
+    }
+
+    @Test
+    void signup_rejectsEmailOfAConfirmedSupabaseUser() {
+        when(studentRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
+        when(supabase.adminCreateUnconfirmedUser(EMAIL, PASSWORD))
+                .thenThrow(new EmailAlreadyRegisteredException("Email already registered"));
+        when(supabase.adminFindUserByEmail(EMAIL)).thenReturn(Optional.of(new SupabaseAdminUser(USER_ID, true)));
+        assertThatThrownBy(() -> authService.signup("Jane Doe", EMAIL, PASSWORD))
+                .isExactlyInstanceOf(EmailAlreadyRegisteredException.class);
+        verify(supabase, never()).adminUpdateUser(any(), any(), any());
+        verifyNoInteractions(verificationService);
     }
 
     @Test
@@ -158,15 +183,45 @@ class AuthServiceTest {
     }
 
     @Test
-    void login_withUnconfirmedEmail_resendsSupabaseCode() {
-        when(studentRepository.findByEmail(EMAIL)).thenReturn(Optional.of(unverifiedStudent()));
+    void login_withUnconfirmedEmail_ofUnverifiedStudent_sendsOurPin() {
+        Student student = unverifiedStudent();
+        student.setSupabaseUserId(USER_ID);
+        when(studentRepository.findByEmail(EMAIL)).thenReturn(Optional.of(student));
         when(supabase.passwordGrant(EMAIL, PASSWORD)).thenThrow(new EmailNotConfirmedException());
         LoginOutcome outcome = authService.login(EMAIL, PASSWORD, "device-1");
         assertThat(outcome.session()).isNull();
         assertThat(outcome.response().isRequiresPin()).isTrue();
         assertThat(outcome.response().getMessage()).isEqualTo(AuthService.UNVERIFIED_MESSAGE);
-        verify(supabase).resendSignupOtp(EMAIL);
-        verifyNoInteractions(verificationService);
+        verify(verificationService).generateAndSendPin(student);
+        verify(supabase, never()).adminUpdateUser(any(), any(), any());
+    }
+
+    @Test
+    void login_confirmsSupabaseEmail_whenOurPinWasAlreadyVerified() {
+        Student student = verifiedStudent("device-1");
+        student.setSupabaseUserId(USER_ID);
+        when(studentRepository.findByEmail(EMAIL)).thenReturn(Optional.of(student));
+        when(supabase.passwordGrant(EMAIL, PASSWORD)).thenThrow(new EmailNotConfirmedException()).thenReturn(SESSION);
+        saveReturnsArgument();
+        LoginOutcome outcome = authService.login(EMAIL, PASSWORD, "device-1");
+        assertThat(outcome.session()).isEqualTo(SESSION);
+        assertThat(outcome.response().isRequiresPin()).isFalse();
+        verify(supabase).adminUpdateUser(USER_ID, null, true);
+    }
+
+    @Test
+    void login_ofUnverifiedStudentWhoseSupabaseUserIsConfirmed_stillRequiresOurPin() {
+        Student student = unverifiedStudent();
+        when(studentRepository.findByEmail(EMAIL)).thenReturn(Optional.of(student));
+        when(supabase.passwordGrant(EMAIL, PASSWORD)).thenReturn(SESSION);
+        saveReturnsArgument();
+        LoginOutcome outcome = authService.login(EMAIL, PASSWORD, "device-1");
+        assertThat(outcome.session()).isNull();
+        assertThat(outcome.response().isRequiresPin()).isTrue();
+        assertThat(outcome.response().getMessage()).isEqualTo(AuthService.UNVERIFIED_MESSAGE);
+        assertThat(student.isVerified()).isFalse();
+        assertThat(student.getSupabaseUserId()).isEqualTo(USER_ID);
+        verify(verificationService).generateAndSendPin(student);
     }
 
     @Test
@@ -243,18 +298,47 @@ class AuthServiceTest {
     }
 
     @Test
-    void verifyPin_forUnverifiedStudent_confirmsWithSupabaseAndTrustsDevice() {
+    void verifyPin_forUnverifiedStudent_checksOurPin_confirmsSupabase_andIssuesNoSession() {
         Student student = unverifiedStudent();
+        Student verified = verifiedStudent("device-1");
+        verified.setSupabaseUserId(USER_ID);
         when(studentRepository.findByEmail(EMAIL)).thenReturn(Optional.of(student));
-        when(supabase.verifySignupOtp(EMAIL, "123456")).thenReturn(SESSION);
-        saveReturnsArgument();
-        VerifiedLogin result = authService.verifyPin(EMAIL, " 123456 ", "device-1");
-        assertThat(result.session()).isEqualTo(SESSION);
-        assertThat(result.student().isVerified()).isTrue();
-        assertThat(result.student().isEmailVerified()).isTrue();
-        assertThat(result.student().getSupabaseUserId()).isEqualTo(USER_ID);
-        assertThat(result.student().isDeviceTrusted("device-1")).isTrue();
-        verifyNoInteractions(verificationService);
+        when(verificationService.verifyPin(EMAIL, "123456", "device-1")).thenReturn(verified);
+        VerifiedLogin result = authService.verifyPin(EMAIL, "123456", "device-1");
+        assertThat(result.session()).isNull();
+        assertThat(result.student()).isSameAs(verified);
+        verify(supabase).adminUpdateUser(USER_ID, null, true);
+    }
+
+    @Test
+    void verifyPin_forUnverifiedStudent_ignoresSupabaseConfirmFailure() {
+        Student verified = verifiedStudent("device-1");
+        verified.setSupabaseUserId(USER_ID);
+        when(studentRepository.findByEmail(EMAIL)).thenReturn(Optional.of(unverifiedStudent()));
+        when(verificationService.verifyPin(EMAIL, "123456", "device-1")).thenReturn(verified);
+        doThrow(new SupabaseAuthException(502, "unreachable", "down")).when(supabase).adminUpdateUser(USER_ID, null,
+                true);
+        assertThatCode(() -> authService.verifyPin(EMAIL, "123456", "device-1")).doesNotThrowAnyException();
+    }
+
+    @Test
+    void verifyPin_forUnverifiedStudentWithoutSupabaseUser_skipsTheConfirmCall() {
+        Student verified = verifiedStudent("device-1");
+        when(studentRepository.findByEmail(EMAIL)).thenReturn(Optional.of(unverifiedStudent()));
+        when(verificationService.verifyPin(EMAIL, "123456", "device-1")).thenReturn(verified);
+        VerifiedLogin result = authService.verifyPin(EMAIL, "123456", "device-1");
+        assertThat(result.session()).isNull();
+        verifyNoInteractions(supabase);
+    }
+
+    @Test
+    void verifyPin_forUnverifiedStudent_withWrongPin_doesNotConfirmSupabase() {
+        when(studentRepository.findByEmail(EMAIL)).thenReturn(Optional.of(unverifiedStudent()));
+        when(verificationService.verifyPin(EMAIL, "000000", "device-1"))
+                .thenThrow(new InvalidVerificationPinException("Incorrect verification PIN"));
+        assertThatThrownBy(() -> authService.verifyPin(EMAIL, "000000", "device-1"))
+                .isExactlyInstanceOf(InvalidVerificationPinException.class).hasMessage("Incorrect verification PIN");
+        verifyNoInteractions(supabase);
     }
 
     @Test
@@ -267,7 +351,7 @@ class AuthServiceTest {
         assertThat(result.session()).isEqualTo(SESSION);
         assertThat(result.student()).isSameAs(student);
         assertThat(pendingLogins.get(EMAIL, "device-2")).isEmpty();
-        verify(supabase, never()).verifySignupOtp(anyString(), anyString());
+        verifyNoInteractions(supabase);
     }
 
     @Test
@@ -297,19 +381,17 @@ class AuthServiceTest {
     }
 
     @Test
-    void resendPin_forUnverifiedStudent_usesSupabase() {
-        when(studentRepository.findByEmail(EMAIL)).thenReturn(Optional.of(unverifiedStudent()));
-        authService.resendPin(EMAIL);
-        verify(supabase).resendSignupOtp(EMAIL);
-        verifyNoInteractions(verificationService);
-    }
-
-    @Test
-    void resendPin_forVerifiedStudent_resendsDevicePin() {
-        when(studentRepository.findByEmail(EMAIL)).thenReturn(Optional.of(verifiedStudent("device-1")));
+    void resendPin_resendsOurPin() {
         authService.resendPin(EMAIL);
         verify(verificationService).resendPin(EMAIL);
         verifyNoInteractions(supabase);
+    }
+
+    @Test
+    void resendPin_rejectsNonSchoolEmail() {
+        assertThatThrownBy(() -> authService.resendPin("jane@gmail.com"))
+                .isExactlyInstanceOf(InvalidSignupException.class).hasMessage("Use a valid .edu school email");
+        verifyNoInteractions(verificationService, supabase);
     }
 
     @Test

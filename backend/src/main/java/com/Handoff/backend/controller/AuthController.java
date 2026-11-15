@@ -62,7 +62,9 @@ public class AuthController {
     @PostMapping("/verify-pin")
     public ResponseEntity<Student> verifyPin(@RequestBody VerificationRequest request, HttpServletResponse response) {
         VerifiedLogin verified = authService.verifyPin(request.email(), request.pin(), request.deviceId());
-        authCookies.write(response, verified.session());
+        if (verified.session() != null) {
+            authCookies.write(response, verified.session());
+        }
         return ResponseEntity.ok(verified.student());
     }
 

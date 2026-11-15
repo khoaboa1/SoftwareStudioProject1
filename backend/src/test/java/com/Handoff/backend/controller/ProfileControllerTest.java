@@ -1,6 +1,7 @@
 package com.Handoff.backend.controller;
 
 import com.Handoff.backend.dto.CreateProfileRequest;
+import com.Handoff.backend.dto.LoginRequest;
 import com.Handoff.backend.dto.SignupRequest;
 import com.Handoff.backend.dto.VerificationRequest;
 import com.Handoff.backend.model.Profile;
@@ -49,12 +50,16 @@ class ProfileControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private FakeSupabaseAuthClient supabase;
+
     @BeforeEach
     @AfterEach
     void cleanDatabase() {
         listingRepository.deleteAll();
         profileRepository.deleteAll();
         studentRepository.deleteAll();
+        supabase.reset();
     }
 
     /**
@@ -65,12 +70,17 @@ class ProfileControllerTest {
         mockMvc.perform(post("/auth/signup").contentType(MediaType.APPLICATION_JSON).content(signupBody))
                 .andExpect(status().isCreated());
 
-        VerificationRequest verifyBody = new VerificationRequest(email, FakeSupabaseAuthClient.SIGNUP_OTP,
-                "test-device");
-        MvcResult verifyResult = mockMvc.perform(post("/auth/verify-pin").contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(verifyBody))).andExpect(status().isOk()).andReturn();
+        String pin = studentRepository.findByEmail(email).orElseThrow().getVerificationPin();
+        VerificationRequest verifyBody = new VerificationRequest(email, pin, "test-device");
+        mockMvc.perform(post("/auth/verify-pin").contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(verifyBody))).andExpect(status().isOk());
 
-        return verifyResult.getResponse().getCookie(AuthCookies.ACCESS);
+        MvcResult loginResult = mockMvc
+                .perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON).content(
+                        objectMapper.writeValueAsString(new LoginRequest(email, "Password123!", "test-device"))))
+                .andExpect(status().isOk()).andReturn();
+
+        return loginResult.getResponse().getCookie(AuthCookies.ACCESS);
     }
 
     /** Looks up the student behind a fake access cookie (the cookie value carries the Supabase user id). */

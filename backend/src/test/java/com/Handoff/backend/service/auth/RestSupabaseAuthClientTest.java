@@ -2,7 +2,7 @@ package com.Handoff.backend.service.auth;
 
 import com.Handoff.backend.service.EmailAlreadyRegisteredException;
 import com.Handoff.backend.service.InvalidCredentialsException;
-import com.Handoff.backend.service.InvalidVerificationPinException;
+import com.Handoff.backend.service.InvalidSignupException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -43,24 +43,6 @@ class RestSupabaseAuthClientTest {
     }
 
     @Test
-    void signUp_postsCredentialsWithAnonKey_andReturnsUserId() {
-        server.expect(requestTo(BASE + "/auth/v1/signup")).andExpect(method(HttpMethod.POST))
-                .andExpect(header("apikey", "anon-key")).andExpect(jsonPath("$.email").value("jane@tulane.edu"))
-                .andExpect(jsonPath("$.password").value("Password123!")).andRespond(withSuccess(
-                        "{\"id\":\"" + USER_ID + "\",\"email\":\"jane@tulane.edu\"}", MediaType.APPLICATION_JSON));
-        assertThat(client.signUp("jane@tulane.edu", "Password123!")).isEqualTo(UUID.fromString(USER_ID));
-        server.verify();
-    }
-
-    @Test
-    void signUp_mapsExistingUserToConflict() {
-        expectError("/auth/v1/signup", HttpStatus.UNPROCESSABLE_ENTITY,
-                "{\"code\":422,\"error_code\":\"user_already_exists\",\"msg\":\"User already registered\"}");
-        assertThatThrownBy(() -> client.signUp("jane@tulane.edu", "Password123!"))
-                .isExactlyInstanceOf(EmailAlreadyRegisteredException.class).hasMessage("Email already registered");
-    }
-
-    @Test
     void passwordGrant_returnsSession() {
         server.expect(requestTo(BASE + "/auth/v1/token?grant_type=password")).andExpect(method(HttpMethod.POST))
                 .andExpect(header("apikey", "anon-key")).andExpect(jsonPath("$.email").value("jane@tulane.edu"))
@@ -96,25 +78,6 @@ class RestSupabaseAuthClientTest {
     }
 
     @Test
-    void verifySignupOtp_postsEmailCode_andReturnsSession() {
-        server.expect(requestTo(BASE + "/auth/v1/verify")).andExpect(method(HttpMethod.POST))
-                .andExpect(jsonPath("$.type").value("email")).andExpect(jsonPath("$.email").value("jane@tulane.edu"))
-                .andExpect(jsonPath("$.token").value("123456"))
-                .andRespond(withSuccess(SESSION_JSON, MediaType.APPLICATION_JSON));
-        assertThat(client.verifySignupOtp("jane@tulane.edu", "123456").accessToken()).isEqualTo("at");
-        server.verify();
-    }
-
-    @Test
-    void verifySignupOtp_mapsExpiredCode() {
-        expectError("/auth/v1/verify", HttpStatus.FORBIDDEN,
-                "{\"code\":403,\"error_code\":\"otp_expired\",\"msg\":\"Token has expired or is invalid\"}");
-        assertThatThrownBy(() -> client.verifySignupOtp("jane@tulane.edu", "000000"))
-                .isExactlyInstanceOf(InvalidVerificationPinException.class)
-                .hasMessage("Incorrect or expired verification PIN");
-    }
-
-    @Test
     void refreshGrant_mapsRejectedTokenToLogInAgain() {
         expectError("/auth/v1/token?grant_type=refresh_token", HttpStatus.BAD_REQUEST,
                 "{\"code\":400,\"error_code\":\"refresh_token_not_found\",\"msg\":\"Invalid Refresh Token\"}");
@@ -123,19 +86,83 @@ class RestSupabaseAuthClientTest {
     }
 
     @Test
-    void resendSignupOtp_postsSignupType() {
-        server.expect(requestTo(BASE + "/auth/v1/resend")).andExpect(jsonPath("$.type").value("signup"))
-                .andExpect(jsonPath("$.email").value("jane@tulane.edu"))
-                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
-        client.resendSignupOtp("jane@tulane.edu");
-        server.verify();
-    }
-
-    @Test
     void logout_sendsAccessTokenAsBearer() {
         server.expect(requestTo(BASE + "/auth/v1/logout")).andExpect(header("apikey", "anon-key"))
                 .andExpect(header("Authorization", "Bearer at")).andRespond(withNoContent());
         client.logout("at");
+        server.verify();
+    }
+
+    @Test
+    void adminCreateUnconfirmedUser_postsUnconfirmedUserWithServiceKey() {
+        server.expect(requestTo(BASE + "/auth/v1/admin/users")).andExpect(method(HttpMethod.POST))
+                .andExpect(header("apikey", "service-key")).andExpect(header("Authorization", "Bearer service-key"))
+                .andExpect(jsonPath("$.email").value("jane@tulane.edu"))
+                .andExpect(jsonPath("$.password").value("Password123!"))
+                .andExpect(jsonPath("$.email_confirm").value(false))
+                .andRespond(withSuccess("{\"id\":\"" + USER_ID + "\"}", MediaType.APPLICATION_JSON));
+        assertThat(client.adminCreateUnconfirmedUser("jane@tulane.edu", "Password123!"))
+                .isEqualTo(UUID.fromString(USER_ID));
+        server.verify();
+    }
+
+    @Test
+    void adminCreateUnconfirmedUser_mapsExistingEmailToConflict() {
+        expectError("/auth/v1/admin/users", HttpStatus.UNPROCESSABLE_ENTITY,
+                "{\"code\":422,\"error_code\":\"email_exists\",\"msg\":\"A user with this email already exists\"}");
+        assertThatThrownBy(() -> client.adminCreateUnconfirmedUser("jane@tulane.edu", "Password123!"))
+                .isExactlyInstanceOf(EmailAlreadyRegisteredException.class).hasMessage("Email already registered");
+    }
+
+    @Test
+    void adminCreateUnconfirmedUser_mapsWeakPasswordToInvalidSignup() {
+        expectError("/auth/v1/admin/users", HttpStatus.UNPROCESSABLE_ENTITY,
+                "{\"code\":422,\"error_code\":\"weak_password\",\"msg\":\"Password is too weak\"}");
+        assertThatThrownBy(() -> client.adminCreateUnconfirmedUser("jane@tulane.edu", "12345678"))
+                .isExactlyInstanceOf(InvalidSignupException.class).hasMessage("Password is too weak");
+    }
+
+    @Test
+    void adminUpdateUser_putsPasswordAndConfirmation() {
+        server.expect(requestTo(BASE + "/auth/v1/admin/users/" + USER_ID)).andExpect(method(HttpMethod.PUT))
+                .andExpect(header("apikey", "service-key")).andExpect(header("Authorization", "Bearer service-key"))
+                .andExpect(jsonPath("$.password").value("NewPassword1!"))
+                .andExpect(jsonPath("$.email_confirm").value(false))
+                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+        client.adminUpdateUser(UUID.fromString(USER_ID), "NewPassword1!", false);
+        server.verify();
+    }
+
+    @Test
+    void adminUpdateUser_omitsFieldsThatAreNull() {
+        server.expect(requestTo(BASE + "/auth/v1/admin/users/" + USER_ID)).andExpect(method(HttpMethod.PUT))
+                .andExpect(jsonPath("$.email_confirm").value(true)).andExpect(jsonPath("$.password").doesNotExist())
+                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+        client.adminUpdateUser(UUID.fromString(USER_ID), null, true);
+        server.verify();
+    }
+
+    @Test
+    void adminFindUserByEmail_matchesIgnoringCaseAndReadsConfirmation() {
+        server.expect(requestTo(BASE + "/auth/v1/admin/users?page=1&per_page=200")).andExpect(method(HttpMethod.GET))
+                .andExpect(header("apikey", "service-key"))
+                .andRespond(withSuccess("{\"users\":[{\"id\":\"22222222-2222-2222-2222-222222222222\","
+                        + "\"email\":\"other@tulane.edu\",\"email_confirmed_at\":null},{\"id\":\"" + USER_ID + "\","
+                        + "\"email\":\"Jane@Tulane.edu\",\"email_confirmed_at\":\"2026-11-14T10:00:00Z\"}]}",
+                        MediaType.APPLICATION_JSON));
+        assertThat(client.adminFindUserByEmail("jane@tulane.edu"))
+                .contains(new SupabaseAdminUser(UUID.fromString(USER_ID), true));
+        server.verify();
+    }
+
+    @Test
+    void adminFindUserByEmail_returnsEmptyWhenNoUserMatches() {
+        server.expect(requestTo(BASE + "/auth/v1/admin/users?page=1&per_page=200"))
+                .andRespond(withSuccess(
+                        "{\"users\":[{\"id\":\"" + USER_ID
+                                + "\",\"email\":\"other@tulane.edu\",\"email_confirmed_at\":null}]}",
+                        MediaType.APPLICATION_JSON));
+        assertThat(client.adminFindUserByEmail("jane@tulane.edu")).isEmpty();
         server.verify();
     }
 
