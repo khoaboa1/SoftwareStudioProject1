@@ -18,25 +18,26 @@
 - **Feature summary:** Supabase Auth now stores users, checks passwords and issues the JWTs. Only the Spring Boot backend talks to Supabase; React still calls only the existing `/auth/*` endpoints and never imports a Supabase SDK. The backend verifies every token against Supabase's JWKS keys (OAuth2 resource server) and reads it from the HttpOnly `sb-access` cookie. The server-side session and `SessionKeys` are gone.
 - **Important for every earlier note:** wherever a note below says to send the `JSESSIONID` cookie, send the `sb-access` / `sb-refresh` cookies instead. `credentials: 'include'` in `services/httpClient.ts` already does this, so no other client change is needed.
 - **Endpoints (paths and JSON shapes unchanged):**
-  - `POST /auth/signup` `{ studentName, email, password }` → `201` Student. No cookies yet. Supabase emails a 6-digit code to the school email.
-  - `POST /auth/verify-pin` `{ email, pin, deviceId }` → `200` Student and sets the auth cookies. For a new account the code is checked by Supabase; for a login from a new device it is our own PIN.
+  - `POST /auth/signup` `{ studentName, email, password }` → `201` Student. No cookies yet. Our own 6-digit PIN is emailed to the school email (and printed in the backend console during dev/demo). The Supabase user is created unconfirmed, which needs `SUPABASE_SERVICE_KEY`.
+  - `POST /auth/verify-pin` `{ email, pin, deviceId }` → `200` Student. For a new account it only verifies the email and sets **no cookies**; the client then calls `/auth/login` (the frontend does this automatically). For a login from a new device it sets the auth cookies. Both PINs are our own.
   - `POST /auth/login` `{ email, password, deviceId }` → `200` `{ requiresPin, message, ...student }`. Cookies are set only when `requiresPin` is `false`.
   - `POST /auth/resend-pin` `{ email }` → `204`.
   - `POST /auth/refresh`, with no body → `204` and new cookies, or `401` and cleared cookies.
   - `POST /auth/logout` → `204` and cleared cookies. `GET /auth/me` → `200` Student or `401`.
 - **Cookies:** `sb-access` (Path `/`, lives as long as the Supabase token, about 1 hour) and `sb-refresh` (Path `/auth`, 30 days). Both are `HttpOnly; SameSite=Lax`, and `Secure` when `AUTH_COOKIE_SECURE=true`.
 - **When a PIN is required:**
-  - The account's email is not confirmed yet, so login resends the Supabase code.
+  - The account's email is not verified yet, so login sends a new PIN.
   - The device is new or no `deviceId` was sent. The backend sends our own 6-digit PIN and holds the sign-in for 10 minutes. After `verify-pin` succeeds the device is trusted and the cookies are set.
 - **Errors:** `400` invalid sign-up input or wrong/expired PIN; `401 { "message": "Invalid email or password" }`; `401 { "message": "Your sign-in expired. Please log in again." }` when a new-device PIN is entered after the 10-minute hold; `409 { "message": "Email already registered" }`; `429` too many requests; `502` Supabase unreachable.
 - **Existing accounts:** migration `V7__add_supabase_user_id.sql` adds `students.supabase_user_id`. A verified account created before this change has no Supabase user, so on its first login with the right password the backend creates the confirmed Supabase user (this needs `SUPABASE_SERVICE_KEY`) and drops the old password hash. Seeded demo accounts are linked at startup when the keys are set.
 - **Setup:**
   - `backend/.env` needs `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY` and optionally `AUTH_COOKIE_SECURE`. Never put these in the frontend.
-  - In the Supabase dashboard: enable "Confirm email"; put `{{ .Token }}` in the "Confirm signup" email template so users get a 6-digit code; set up custom SMTP (the built-in sender is heavily rate limited); turn on asymmetric JWT signing keys, or the JWKS endpoint has no keys.
+  - In the Supabase dashboard: turn on asymmetric JWT signing keys, or the JWKS endpoint has no keys. Turn off "Allow new users to sign up" so nobody can create Supabase users that skip our `.edu` check. The email template and SMTP are not needed, because the PIN email is sent by our own sender (Gmail, webhook or Resend).
 - **Frontend (done in this change):** a failed network request shows "Try again"; a duplicate email shows an error on the email field with a "Log in instead" link; a verified sign-up PIN signs the student in and opens `/profile-setup`; the PIN step is titled "Verify it's you"; `httpClient` calls `/auth/refresh` once after a `401` and retries; oxlint blocks `@supabase/*` imports.
 - **Known gaps:**
   - It has not been tested against real Supabase. Tests use `FakeSupabaseAuthClient` and `FakeJwtDecoderConfig`, so the exact Supabase request formats and the JWKS issuer and audience settings in `application.properties` still need a manual check.
-  - An unverified sign-up is still purged from our table after 30 minutes by `AccountCleanupService`, but its Supabase user stays. Signing up again with the same email is expected to work but is not tested.
+  - An unverified sign-up is still purged from our table after 30 minutes by `AccountCleanupService`, but its unconfirmed Supabase user stays. Signing up again reuses it (found by email, which pages the admin user list).
+  - PIN guesses are not rate limited or locked out, and the PIN is logged at INFO. Both are follow-ups.
 
 ## Handoff Note: SSP1-123 Start Conversation API
 
