@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.Handoff.backend.dto.LoginRequest;
 import com.Handoff.backend.dto.SignupRequest;
 import com.Handoff.backend.dto.VerificationRequest;
+import com.Handoff.backend.model.Role;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.StudentRepository;
@@ -243,5 +244,48 @@ class AuthControllerTest {
     void me_withInvalidToken_returns401() throws Exception {
         mockMvc.perform(get("/auth/me").cookie(new Cookie(AuthCookies.ACCESS, "not-a-real-token")))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void role_isStudentInSignupVerifyLoginAndMe() throws Exception {
+        mockMvc.perform(post("/auth/signup").contentType("application/json")
+                .content(objectMapper.writeValueAsString(new SignupRequest("Jane Doe", EMAIL, PASSWORD))))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.role").value("STUDENT"));
+        mockMvc.perform(post("/auth/verify-pin").contentType("application/json")
+                .content(objectMapper.writeValueAsString(new VerificationRequest(EMAIL, currentPin(), "device-1"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("STUDENT"));
+        MvcResult loginResult = mockMvc
+                .perform(post("/auth/login").contentType("application/json")
+                        .content(objectMapper.writeValueAsString(login(PASSWORD, "device-1"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.requiresPin").value(false))
+                .andExpect(jsonPath("$.role").value("STUDENT")).andReturn();
+        Cookie access = loginResult.getResponse().getCookie(AuthCookies.ACCESS);
+        mockMvc.perform(get("/auth/me").cookie(access)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("STUDENT"));
+    }
+
+    @Test
+    void role_isAdminInLoginAndMe_whenStoredRoleIsAdmin() throws Exception {
+        signup();
+        verifySignup("device-1");
+        Student student = studentRepository.findByEmail(EMAIL).orElseThrow();
+        student.setRole(Role.ADMIN);
+        studentRepository.save(student);
+        MvcResult loginResult = mockMvc
+                .perform(post("/auth/login").contentType("application/json")
+                        .content(objectMapper.writeValueAsString(login(PASSWORD, "device-1"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("ADMIN")).andReturn();
+        Cookie access = loginResult.getResponse().getCookie(AuthCookies.ACCESS);
+        mockMvc.perform(get("/auth/me").cookie(access)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("ADMIN"));
+    }
+
+    @Test
+    void login_requiringPin_hasNoRole() throws Exception {
+        signup();
+        mockMvc.perform(post("/auth/login").contentType("application/json")
+                .content(objectMapper.writeValueAsString(login(PASSWORD, "device-1")))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.requiresPin").value(true)).andExpect(jsonPath("$.role").doesNotExist())
+                .andExpect(cookie().doesNotExist(AuthCookies.ACCESS));
     }
 }

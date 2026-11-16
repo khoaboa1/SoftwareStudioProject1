@@ -1,5 +1,6 @@
 package com.Handoff.backend.repository;
 
+import com.Handoff.backend.model.Role;
 import com.Handoff.backend.model.Student;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +17,9 @@ class StudentRepositoryTest {
 
     @Autowired
     private StudentRepository studentRepository;
+
+    @Autowired
+    private jakarta.persistence.EntityManager entityManager;
 
     @Test
     void findByEmail_returnsMatchingStudent() {
@@ -45,5 +49,31 @@ class StudentRepositoryTest {
         assertThat(studentRepository.findBySupabaseUserId(supabaseUserId)).get().extracting(Student::getEmail)
                 .isEqualTo("sarah@tulane.edu");
         assertThat(studentRepository.findBySupabaseUserId(UUID.randomUUID())).isEmpty();
+    }
+
+    @Test
+    void save_defaultsRoleToStudent() {
+        studentRepository.save(new Student("Sarah", "role1@tulane.edu", "h", null, null));
+        entityManager.flush();
+        entityManager.clear();
+
+        Optional<Student> found = studentRepository.findByEmail("role1@tulane.edu");
+
+        assertThat(found).isPresent();
+        assertThat(found.get().getRole()).isEqualTo(Role.STUDENT);
+    }
+
+    @Test
+    void save_persistsAdminRole() {
+        Student student = new Student("Sarah", "role2@tulane.edu", "h", null, null);
+        student.setRole(Role.ADMIN);
+        studentRepository.save(student);
+        entityManager.flush();
+        entityManager.clear();
+
+        Optional<Student> found = studentRepository.findByEmail("role2@tulane.edu");
+
+        assertThat(found).isPresent();
+        assertThat(found.get().getRole()).isEqualTo(Role.ADMIN);
     }
 }
