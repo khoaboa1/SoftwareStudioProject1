@@ -4,6 +4,8 @@ import com.Handoff.backend.model.Category;
 import com.Handoff.backend.model.Condition;
 import com.Handoff.backend.model.Listing;
 import com.Handoff.backend.model.Student;
+import com.Handoff.backend.model.Role;
+import com.Handoff.backend.model.Profile;
 import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.ProfileRepository;
 import com.Handoff.backend.dto.CreateListingRequest;
@@ -274,6 +276,34 @@ class ListingServiceTest {
         // Act & Assert
         assertThatThrownBy(() -> service.deleteListing(10L, otherStudent))
                 .isInstanceOf(ForbiddenListingActionException.class);
+        verify(listingRepository, never()).delete(any(Listing.class));
+    }
+
+
+    @Test
+    void delete_adminSameSchool_deletes() {
+        Student admin = newStudent(1L, "Admin");
+        admin.setRole(Role.ADMIN);
+        Listing item = newListing(10L, newStudent(2L, "Seller"));
+        when(listingRepository.findById(10L)).thenReturn(Optional.of(item));
+        when(profileRepository.findByStudent_Id(1L))
+                .thenReturn(Optional.of(new Profile(admin, "Admin", "CS", null, "tulane.edu")));
+        when(listingRepository.findByIdInSchoolForAdmin(10L, "tulane.edu")).thenReturn(Optional.of(item));
+        new ListingService(listingRepository, profileRepository).deleteListing(10L, admin);
+        verify(listingRepository).delete(item);
+    }
+
+    @Test
+    void delete_adminOtherSchool_throwsNotFound() {
+        Student admin = newStudent(1L, "Admin");
+        admin.setRole(Role.ADMIN);
+        Listing item = newListing(10L, newStudent(2L, "Seller"));
+        when(listingRepository.findById(10L)).thenReturn(Optional.of(item));
+        when(profileRepository.findByStudent_Id(1L))
+                .thenReturn(Optional.of(new Profile(admin, "Admin", "CS", null, "tulane.edu")));
+        when(listingRepository.findByIdInSchoolForAdmin(10L, "tulane.edu")).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> new ListingService(listingRepository, profileRepository).deleteListing(10L, admin))
+                .isInstanceOf(ListingNotFoundException.class);
         verify(listingRepository, never()).delete(any(Listing.class));
     }
 }

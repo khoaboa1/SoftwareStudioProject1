@@ -290,4 +290,57 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.requiresPin").value(true)).andExpect(jsonPath("$.role").doesNotExist())
                 .andExpect(cookie().doesNotExist(AuthCookies.ACCESS));
     }
+
+    private void suspend() {
+        Student student = studentRepository.findByEmail(EMAIL).orElseThrow();
+        student.setSuspended(true);
+        studentRepository.save(student);
+    }
+
+    @Test
+    void me_includesSuspendedFalse() throws Exception {
+        signup();
+        verifySignup("device-1");
+        Cookie access = mockMvc
+                .perform(post("/auth/login").contentType("application/json")
+                        .content(objectMapper.writeValueAsString(login(PASSWORD, "device-1"))))
+                .andExpect(status().isOk()).andReturn().getResponse().getCookie(AuthCookies.ACCESS);
+        mockMvc.perform(get("/auth/me").cookie(access)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.suspended").value(false));
+    }
+
+    @Test
+    void login_suspended_returns403WithMessage_andNoCookie() throws Exception {
+        signup();
+        verifySignup("device-1");
+        suspend();
+        mockMvc.perform(post("/auth/login").contentType("application/json")
+                .content(objectMapper.writeValueAsString(login(PASSWORD, "device-1"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("This account has been suspended"))
+                .andExpect(cookie().doesNotExist(AuthCookies.ACCESS));
+    }
+
+    @Test
+    void login_suspendedWrongPassword_isInvalidCredentials() throws Exception {
+        signup();
+        verifySignup("device-1");
+        suspend();
+        mockMvc.perform(post("/auth/login").contentType("application/json")
+                .content(objectMapper.writeValueAsString(login("WrongPassword1", "device-1"))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Invalid email or password"));
+    }
+
+    @Test
+    void me_afterSuspension_returns401() throws Exception {
+        signup();
+        verifySignup("device-1");
+        Cookie access = mockMvc
+                .perform(post("/auth/login").contentType("application/json")
+                        .content(objectMapper.writeValueAsString(login(PASSWORD, "device-1"))))
+                .andExpect(status().isOk()).andReturn().getResponse().getCookie(AuthCookies.ACCESS);
+        suspend();
+        mockMvc.perform(get("/auth/me").cookie(access)).andExpect(status().isUnauthorized());
+    }
 }

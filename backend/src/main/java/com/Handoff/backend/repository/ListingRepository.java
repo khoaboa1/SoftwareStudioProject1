@@ -21,7 +21,7 @@ public interface ListingRepository extends JpaRepository<Listing, Long>, JpaSpec
     @Query("""
             select listing from Listing listing
             join fetch listing.seller seller
-            where exists (
+            where seller.suspended = false and exists (
               select profile.id from Profile profile
               where profile.student = seller and profile.schoolDomain = :schoolDomain
             )
@@ -32,10 +32,21 @@ public interface ListingRepository extends JpaRepository<Listing, Long>, JpaSpec
     @Query("""
             select listing from Listing listing
             join fetch listing.seller seller
-            where listing.id = :id and exists (
+            where listing.id = :id and seller.suspended = false and exists (
               select profile.id from Profile profile
               where profile.student = seller and profile.schoolDomain = :schoolDomain
             )
             """)
     Optional<Listing> findByIdAndSchoolDomain(@Param("id") Long id, @Param("schoolDomain") String schoolDomain);
+
+    /** Same-school lookup for admins; unlike the public queries it still finds a suspended seller's listing. */
+    @Query("""
+            select listing from Listing listing
+            join fetch listing.seller seller
+            where listing.id = :id and exists (
+              select profile.id from Profile profile
+              where profile.student = seller and profile.schoolDomain = :schoolDomain
+            )
+            """)
+    Optional<Listing> findByIdInSchoolForAdmin(@Param("id") Long id, @Param("schoolDomain") String schoolDomain);
 }

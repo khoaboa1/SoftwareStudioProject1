@@ -1,6 +1,8 @@
 package com.Handoff.backend.controller;
 
 import com.Handoff.backend.model.Student;
+import com.Handoff.backend.model.Role;
+import com.Handoff.backend.service.AdminAccessDeniedException;
 import com.Handoff.backend.service.AuthService;
 import com.Handoff.backend.service.NotAuthenticatedException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,7 +40,9 @@ public class CurrentStudentResolver {
             return Optional.empty();
         }
         try {
-            return authService.findBySupabaseUserId(UUID.fromString(subject));
+            // A suspended student is treated as logged out, even with a still-valid token.
+            return authService.findBySupabaseUserId(UUID.fromString(subject))
+                    .filter(student -> !student.isSuspended());
         } catch (IllegalArgumentException ex) {
             return Optional.empty();
         }
@@ -50,5 +54,17 @@ public class CurrentStudentResolver {
      */
     public Student require(HttpServletRequest request, String errorMessage) {
         return find(request).orElseThrow(() -> new NotAuthenticatedException(errorMessage));
+    }
+
+    /**
+     * Returns the logged-in student if they are an admin. The role is read from the database on every request, so a
+     * demotion takes effect immediately. Throws NotAuthenticatedException (401) or AdminAccessDeniedException (403).
+     */
+    public Student requireAdmin(HttpServletRequest request) {
+        Student student = require(request, "You must be logged in");
+        if (student.getRole() != Role.ADMIN) {
+            throw new AdminAccessDeniedException();
+        }
+        return student;
     }
 }
