@@ -11,6 +11,8 @@ export type Student = {
   verified?: boolean
   sellingItems: string[] | null
   dormLocation: string | null
+  role?: 'STUDENT' | 'ADMIN'
+  suspended?: boolean
 }
 
 export type LoginResult = {
@@ -23,6 +25,8 @@ export type LoginResult = {
   verified?: boolean
   sellingItems?: string[] | null
   dormLocation?: string | null
+  role?: 'STUDENT' | 'ADMIN' | null
+  suspended?: boolean
 }
 
 export function signup(input: {

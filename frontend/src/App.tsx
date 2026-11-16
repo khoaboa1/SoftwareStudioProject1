@@ -9,6 +9,8 @@ import { ProfileSetupPage } from './pages/ProfileSetupPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { InboxPage } from './pages/InboxPage'
 import { ConversationPage } from './pages/ConversationPage'
+import { AdminPage } from './pages/AdminPage'
+import { isAdmin } from './lib/roles'
 
 function RequireAuth({ children }: { children: ReactElement }) {
   const { student, hasProfile, loading } = useAuth()
@@ -16,6 +18,16 @@ function RequireAuth({ children }: { children: ReactElement }) {
   if (!student) return <Navigate to="/login" replace />
   if (hasProfile === null) return null
   if (hasProfile === false) return <Navigate to="/profile-setup" replace />
+  return children
+}
+
+export function RequireAdmin({ children }: { children: ReactElement }) {
+  const { student, hasProfile, loading } = useAuth()
+  if (loading) return null
+  if (!student) return <Navigate to="/login" replace />
+  if (hasProfile === null) return null
+  if (hasProfile === false) return <Navigate to="/profile-setup" replace />
+  if (!isAdmin(student)) return <Navigate to="/feed" replace />
   return children
 }
 
@@ -101,6 +113,14 @@ function App() {
             <RequireAuth>
               <ConversationPage />
             </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <RequireAdmin>
+              <AdminPage />
+            </RequireAdmin>
           }
         />
       </Routes>

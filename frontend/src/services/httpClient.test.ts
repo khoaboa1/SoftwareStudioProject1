@@ -3,6 +3,7 @@ import {
   ApiError,
   NETWORK_ERROR_MESSAGE,
   NetworkError,
+  onSessionExpired,
   request,
 } from './httpClient'
 
@@ -86,4 +87,33 @@ it('does not refresh after a rejected auth action', async () => {
     request('/auth/login', { method: 'POST', body: '{}' })
   ).rejects.toMatchObject({ status: 401 })
   expect(fetchMock).toHaveBeenCalledTimes(1)
+})
+
+it('announces an ended session when a 401 survives the refresh', async () => {
+  const listener = vi.fn()
+  const unsubscribe = onSessionExpired(listener)
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+  )
+  await request('/listings').catch(() => undefined)
+  unsubscribe()
+  expect(listener).toHaveBeenCalledTimes(1)
+})
+
+it('does not announce an ended session for a rejected login', async () => {
+  const listener = vi.fn()
+  const unsubscribe = onSessionExpired(listener)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValueOnce(new Response(null, { status: 401 }))
+  )
+  await request('/auth/login', { method: 'POST', body: '{}' }).catch(
+    () => undefined
+  )
+  unsubscribe()
+  expect(listener).not.toHaveBeenCalled()
 })

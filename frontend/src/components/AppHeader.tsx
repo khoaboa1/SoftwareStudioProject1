@@ -4,14 +4,36 @@ import { MessagesMenu } from './MessagesMenu'
 import { Button } from './ui/Button'
 import { useAuth } from '../lib/auth-context'
 import { createAuthFacade } from '../services/authFacade'
+import { isAdmin } from '../lib/roles'
+import { useAsyncResource } from '../lib/useAsyncResource'
+import { getOpenReports } from '../services/adminService'
+import { CountBadge } from './ui/CountBadge'
 
 function navLinkClass({ isActive }: { isActive: boolean }) {
   return `whitespace-nowrap text-sm font-medium ${isActive ? 'text-accent-700' : 'text-zinc-600 hover:text-zinc-900'}`
 }
 
-export function AppHeader() {
+type AppHeaderProps = {
+  /**
+   * Live open-report count from a page that already loads reports (the admin page). When omitted, an admin's
+   * header loads the count itself; `null` means "still loading, don't fetch".
+   */
+  openReportCount?: number | null
+}
+
+export function AppHeader({ openReportCount }: AppHeaderProps = {}) {
   const navigate = useNavigate()
   const { student, setStudent } = useAuth()
+  const admin = isAdmin(student)
+  const ownCount = useAsyncResource(getOpenReports, [], {
+    enabled: admin && openReportCount === undefined,
+  })
+  const reportCount =
+    openReportCount !== undefined
+      ? openReportCount
+      : ownCount.state.status === 'ready'
+        ? ownCount.state.data.length
+        : null
   const auth = createAuthFacade(setStudent)
 
   async function handleLogout() {
@@ -36,6 +58,12 @@ export function AppHeader() {
             <NavLink to="/profile" className={navLinkClass}>
               My profile
             </NavLink>
+            {admin && (
+              <NavLink to="/admin" className={navLinkClass}>
+                Admin
+                <CountBadge count={reportCount} noun="open reports" />
+              </NavLink>
+            )}
           </nav>
         </div>
         <div className="flex items-center gap-4">
