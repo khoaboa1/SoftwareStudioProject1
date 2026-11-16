@@ -1,5 +1,13 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-114 Student Role Field (Backend → Frontend)
+
+- **Feature summary:** Every student now has a `role`: `STUDENT` or `ADMIN`. New and existing accounts are `STUDENT`. It is stored in `students.role` (migration `V8__add_role_to_students.sql`, `varchar(50) not null default 'STUDENT'` with a check that only allows those two values).
+- **Where it appears:** a new `"role"` string in the JSON of every response that returns the student: `POST /auth/signup` (`201`), `POST /auth/verify-pin` (`200`), `GET /auth/me` (`200`), and `POST /auth/login` (`200`) when `requiresPin` is `false`. Example: `{ "id": 7, "studentName": "Jane Doe", "email": "jane@tulane.edu", "role": "STUDENT", ... }`.
+- **When it is missing:** the `requiresPin: true` login response has no `role` (it is `null`), because the student has not signed in yet.
+- **Frontend:** nothing breaks if you ignore it. To use it, add `role: 'STUDENT' | 'ADMIN'` to the student type in the auth types. Treat it as display and routing only: the backend decides what each role may do, and that enforcement is SSP1-113.
+- **Known gaps:** nothing enforces the role yet, and there is no endpoint to change it. An admin has to be set in the database. The migration has only been checked by tests on H2 and a text check of the SQL; it has not been run against Supabase.
+
 ## Note: SSP1-116 Auth Token Storage (HttpOnly Cookies, Not localStorage)
 
 - **Decision:** The Supabase access token is stored in an **HttpOnly cookie** set by the backend, not in the browser's `localStorage` as the course tutorial shows.
