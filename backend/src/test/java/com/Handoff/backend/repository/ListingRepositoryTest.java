@@ -5,6 +5,7 @@ import com.Handoff.backend.model.Condition;
 import com.Handoff.backend.model.Listing;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.model.Profile;
+import com.Handoff.backend.dto.ListingBrowseRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -76,5 +77,20 @@ class ListingRepositoryTest {
 
     assertThat(listings).extracting(Listing::getItemName)
         .containsExactly("Mini Fridge", "Desk Lamp");
+  }
+
+  @Test
+  void suspendedSeller_isHiddenFromFeedAndDetail_butAdminLookupFindsIt() {
+    Student seller = studentRepository.save(new Student("Seller", "seller@tulane.edu", "hash", null, null));
+    profileRepository.save(new Profile(seller, "Seller", "CS", null, "tulane.edu"));
+    Listing listing = listingRepository.save(new Listing("Lamp", "Works", BigDecimal.TEN,
+        Condition.GOOD, Category.FURNITURE, seller));
+    seller.setSuspended(true);
+    studentRepository.saveAndFlush(seller);
+    assertThat(listingRepository.findBySchoolDomain("tulane.edu")).isEmpty();
+    assertThat(listingRepository.findByIdAndSchoolDomain(listing.getId(), "tulane.edu")).isEmpty();
+    assertThat(listingRepository.findByIdInSchoolForAdmin(listing.getId(), "tulane.edu")).isPresent();
+    assertThat(listingRepository.findAll(ListingSpecifications.visibleBrowseResults("tulane.edu",
+        ListingBrowseRequest.parse(null, null, null, null, null, null, null, null)))).isEmpty();
   }
 }

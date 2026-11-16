@@ -6,6 +6,9 @@ import java.math.BigDecimal;
 import java.util.List;
 
 final class DemoSeedData {
+  static final String ADMIN_EMAIL = "admin@tulane.edu";
+  static final String ADMIN_PASSWORD = "12345678";
+  static final String ADMIN_NAME = "Khoa Le";
   record DemoStudent(String name, String email, String dormLocation, String major,
                      String bio, String schoolDomain, List<DemoListing> listings) {}
 

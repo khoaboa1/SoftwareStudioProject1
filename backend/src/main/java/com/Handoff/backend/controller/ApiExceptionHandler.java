@@ -2,6 +2,8 @@ package com.Handoff.backend.controller;
 
 import com.Handoff.backend.dto.ErrorResponse;
 import com.Handoff.backend.service.NotAuthenticatedException;
+import com.Handoff.backend.service.AdminAccessDeniedException;
+import com.Handoff.backend.service.AccountSuspendedException;
 import com.Handoff.backend.service.ProfileNotFoundException;
 import com.Handoff.backend.service.InvalidImageException;
 import com.Handoff.backend.service.storage.ImageStorageException;
@@ -25,6 +27,11 @@ public class ApiExceptionHandler {
   @ExceptionHandler(NotAuthenticatedException.class)
   public ResponseEntity<ErrorResponse> handleNotAuthenticated(NotAuthenticatedException ex) {
     return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse(ex.getMessage()));
+  }
+
+  @ExceptionHandler({AdminAccessDeniedException.class, AccountSuspendedException.class})
+  public ResponseEntity<ErrorResponse> handleForbidden(RuntimeException ex) {
+    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(ex.getMessage()));
   }
 
   @ExceptionHandler(ProfileNotFoundException.class)

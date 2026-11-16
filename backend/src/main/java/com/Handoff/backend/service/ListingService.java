@@ -4,6 +4,7 @@ import com.Handoff.backend.model.Category;
 import com.Handoff.backend.model.Condition;
 import com.Handoff.backend.model.Listing;
 import com.Handoff.backend.model.Student;
+import com.Handoff.backend.model.Role;
 import com.Handoff.backend.dto.CreateListingRequest;
 import com.Handoff.backend.dto.ListingBrowseRequest;
 import com.Handoff.backend.dto.ListingPageResponse;
@@ -137,7 +138,14 @@ public class ListingService {
   }
 
   public void deleteListing(Long listingId, Student requester) {
-    Listing listing = getOwnedListing(listingId, requester);
+    Listing listing = listingRepository.findById(listingId).orElseThrow(ListingNotFoundException::new);
+    if (!listing.getSeller().getId().equals(requester.getId())) {
+      if (requester.getRole() != Role.ADMIN) throw new ForbiddenListingActionException();
+      var profile = profileRepository.findByStudent_Id(requester.getId())
+          .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
+      listing = listingRepository.findByIdInSchoolForAdmin(listingId, profile.getSchoolDomain())
+          .orElseThrow(ListingNotFoundException::new);
+    }
     listingRepository.delete(listing);
   }
 

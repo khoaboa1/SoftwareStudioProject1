@@ -25,6 +25,11 @@ public class StudentService {
 
   public Student updateStudent(Long id, Student updatedstudent) {
     updatedstudent.setId(id);
+    // The request body replaces the whole record; keep the stored role and suspension.
+    studentRepository.findById(id).ifPresent(existing -> {
+      updatedstudent.setRole(existing.getRole());
+      updatedstudent.setSuspended(existing.isSuspended());
+    });
     return studentRepository.save(updatedstudent);
   }
 

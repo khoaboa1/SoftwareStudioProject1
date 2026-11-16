@@ -80,6 +80,8 @@ public class AuthService {
       throw new InvalidCredentialsException();
     }
 
+    if (student.isSuspended()) throw new AccountSuspendedException();
+
     // Check verification status
     if (!student.isVerified()) {
       // If unverified and older than 30 minutes, purge zombie account

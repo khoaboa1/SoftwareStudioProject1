@@ -85,6 +85,7 @@ class AuthControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.requiresPin").value(false))
         .andExpect(jsonPath("$.verified").value(true))
+        .andExpect(jsonPath("$.role").value("STUDENT"))
         .andExpect(jsonPath("$.studentName").value("Jane Doe"))
         .andReturn();
 
@@ -93,7 +94,9 @@ class AuthControllerTest {
     mockMvc.perform(get("/auth/me").session((MockHttpSession) session))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.email").value("jane@tulane.edu"))
-        .andExpect(jsonPath("$.verified").value(true));
+        .andExpect(jsonPath("$.verified").value(true))
+        .andExpect(jsonPath("$.role").value("STUDENT"))
+        .andExpect(jsonPath("$.suspended").value(false));
 
     mockMvc.perform(post("/auth/logout").session((MockHttpSession) session))
         .andExpect(status().isNoContent());
@@ -268,6 +271,47 @@ class AuthControllerTest {
   }
 
   @Test
+  void login_suspended_returns403WithMessage() throws Exception {
+    Student student = studentRepository.save(new Student("Bob", "bob@tulane.edu", "", null, null));
+    student.setPasswordHash(new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode("Password123!"));
+    student.setVerified(true);
+    student.setSuspended(true);
+    studentRepository.save(student);
+    mockMvc.perform(post("/auth/login").contentType("application/json")
+        .content(objectMapper.writeValueAsString(new LoginRequest("bob@tulane.edu", "Password123!"))))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.message").value("This account has been suspended"));
+  }
+
+  @Test
+  void login_suspendedWrongPassword_isInvalidCredentials() throws Exception {
+    Student student = studentRepository.save(new Student("Bob", "bob@tulane.edu", "", null, null));
+    student.setPasswordHash(new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode("Password123!"));
+    student.setVerified(true);
+    student.setSuspended(true);
+    studentRepository.save(student);
+    mockMvc.perform(post("/auth/login").contentType("application/json")
+        .content(objectMapper.writeValueAsString(new LoginRequest("bob@tulane.edu", "wrong"))))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.message").value("Invalid email or password"));
+  }
+
+  @Test
+  void me_afterSuspension_returns401() throws Exception {
+    Student student = new Student("Bob", "bob@tulane.edu",
+        new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode("Password123!"), null, null);
+    student.setVerified(true);
+    student = studentRepository.save(student);
+    MvcResult login = mockMvc.perform(post("/auth/login").contentType("application/json")
+        .content(objectMapper.writeValueAsString(new LoginRequest("bob@tulane.edu", "Password123!"))))
+        .andExpect(status().isOk()).andReturn();
+    student.setSuspended(true);
+    studentRepository.save(student);
+    mockMvc.perform(get("/auth/me").session((MockHttpSession) login.getRequest().getSession(false)))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
   void login_unverifiedUserExpiredAfter30Minutes_deletesAccountAndReturnsError() throws Exception {
     String signupBody = objectMapper.writeValueAsString(
         new SignupRequest("Jane Doe", "jane@tulane.edu", "Password123!"));
@@ -289,4 +333,5 @@ class AuthControllerTest {
     // Verify account was deleted from database
     assertThat(studentRepository.findByEmail("jane@tulane.edu")).isEmpty();
   }
+
 }

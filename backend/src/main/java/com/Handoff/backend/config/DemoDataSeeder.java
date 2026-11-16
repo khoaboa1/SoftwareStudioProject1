@@ -2,6 +2,7 @@ package com.Handoff.backend.config;
 
 import com.Handoff.backend.model.Listing;
 import com.Handoff.backend.model.Student;
+import com.Handoff.backend.model.Role;
 import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.ProfileRepository;
 import com.Handoff.backend.repository.StudentRepository;
@@ -57,6 +58,26 @@ public class DemoDataSeeder implements CommandLineRunner {
       }
       created++;
     }
+    seedAdmin();
     log.info("Demo data: created {} students, skipped {} existing students", created, skipped);
+  }
+
+  private void seedAdmin() {
+    var existing = students.findByEmail(DemoSeedData.ADMIN_EMAIL);
+    if (existing.isPresent()) {
+      Student admin = existing.get();
+      if (admin.getRole() != Role.ADMIN) {
+        admin.setRole(Role.ADMIN);
+        students.save(admin);
+      }
+      return;
+    }
+    Student admin = new Student(DemoSeedData.ADMIN_NAME, DemoSeedData.ADMIN_EMAIL,
+        passwordEncoder.encode(DemoSeedData.ADMIN_PASSWORD), null, null);
+    admin.setVerified(true);
+    admin.setEmailVerified(true);
+    admin.setRole(Role.ADMIN);
+    admin = students.save(admin);
+    profiles.save(new com.Handoff.backend.model.Profile(admin, DemoSeedData.ADMIN_NAME, "Administration", null, "tulane.edu"));
   }
 }

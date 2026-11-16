@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.Handoff.backend.model.Category;
 import com.Handoff.backend.model.Condition;
 import com.Handoff.backend.model.Student;
+import com.Handoff.backend.model.Role;
 import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.ProfileRepository;
 import com.Handoff.backend.repository.StudentRepository;
@@ -49,8 +50,8 @@ class DemoDataSeederTest {
   @Test
   void run_seedsTenStudentsTwentyListings() throws Exception {
     seeder.run();
-    assertThat(students.count()).isEqualTo(10);
-    assertThat(profiles.count()).isEqualTo(10);
+    assertThat(students.count()).isEqualTo(11);
+    assertThat(profiles.count()).isEqualTo(11);
     assertThat(listings.count()).isEqualTo(20);
   }
 
@@ -59,7 +60,7 @@ class DemoDataSeederTest {
     seeder.run();
     assertThat(profiles.findAll().stream().collect(Collectors.groupingBy(
         profile -> profile.getSchoolDomain(), Collectors.counting())))
-        .containsEntry("tulane.edu", 6L).containsEntry("usf.edu", 2L).containsEntry("ucf.edu", 2L);
+        .containsEntry("tulane.edu", 7L).containsEntry("usf.edu", 2L).containsEntry("ucf.edu", 2L);
     assertThat(listings.findAll().stream().collect(Collectors.groupingBy(
         listing -> profiles.findByStudent_Id(listing.getSeller().getId()).orElseThrow().getSchoolDomain(),
         Collectors.counting())))
@@ -79,7 +80,7 @@ class DemoDataSeederTest {
     assertThat(students.findAll()).allSatisfy(student -> {
       assertThat(student.isVerified()).isTrue();
       assertThat(student.isEmailVerified()).isTrue();
-      assertThat(passwordEncoder.matches("Password123!", student.getPasswordHash())).isTrue();
+      assertThat(passwordEncoder.matches(student.getEmail().equals("admin@tulane.edu") ? "12345678" : "Password123!", student.getPasswordHash())).isTrue();
     });
   }
 
@@ -87,8 +88,8 @@ class DemoDataSeederTest {
   void run_isIdempotent_whenRunTwice() throws Exception {
     seeder.run();
     seeder.run();
-    assertThat(students.count()).isEqualTo(10);
-    assertThat(profiles.count()).isEqualTo(10);
+    assertThat(students.count()).isEqualTo(11);
+    assertThat(profiles.count()).isEqualTo(11);
     assertThat(listings.count()).isEqualTo(20);
   }
 
@@ -100,14 +101,38 @@ class DemoDataSeederTest {
     assertThat(students.findByEmail(existing.getEmail()).orElseThrow().getPasswordHash()).isEqualTo("different-hash");
     assertThat(profiles.findByStudent_Id(existing.getId())).isEmpty();
     assertThat(listings.findAll()).noneMatch(listing -> listing.getSeller().getId().equals(existing.getId()));
-    assertThat(students.count()).isEqualTo(10);
-    assertThat(profiles.count()).isEqualTo(9);
+    assertThat(students.count()).isEqualTo(11);
+    assertThat(profiles.count()).isEqualTo(10);
     assertThat(listings.count()).isEqualTo(18);
   }
 
   @Test
   void seeder_isRestrictedToDevProfile() {
     assertThat(DemoDataSeeder.class.getAnnotation(Profile.class).value()).containsExactly("dev");
+  }
+
+  @Test
+  void run_seedsAdminAccount() throws Exception {
+    seeder.run();
+    Student admin = students.findByEmail("admin@tulane.edu").orElseThrow();
+    assertThat(admin.getRole()).isEqualTo(Role.ADMIN);
+    assertThat(admin.isVerified()).isTrue();
+    assertThat(admin.isEmailVerified()).isTrue();
+    assertThat(passwordEncoder.matches("12345678", admin.getPasswordHash())).isTrue();
+    com.Handoff.backend.model.Profile profile = profiles.findByStudent_Id(admin.getId()).orElseThrow();
+    assertThat(profile.getName()).isEqualTo("Khoa Le");
+    assertThat(profile.getSchoolDomain()).isEqualTo("tulane.edu");
+    assertThat(listings.findAll()).noneMatch(listing -> listing.getSeller().getId().equals(admin.getId()));
+  }
+
+  @Test
+  void run_existingAdminAccount_isPromotedNotDuplicated() throws Exception {
+    Student existing = students.save(new Student("Khoa Le", "admin@tulane.edu", "old-hash", null, null));
+    profiles.save(new com.Handoff.backend.model.Profile(existing, "Khoa Le", "Administration", null, "tulane.edu"));
+    seeder.run();
+    assertThat(students.findByEmail("admin@tulane.edu").orElseThrow().getRole()).isEqualTo(Role.ADMIN);
+    assertThat(students.count()).isEqualTo(11);
+    assertThat(profiles.count()).isEqualTo(11);
   }
 
   @Test

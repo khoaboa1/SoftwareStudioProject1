@@ -2,6 +2,8 @@ package com.Handoff.backend.controller;
 
 import com.Handoff.backend.dto.ErrorResponse;
 import com.Handoff.backend.model.Student;
+import com.Handoff.backend.model.Role;
+import com.Handoff.backend.service.AdminAccessDeniedException;
 import com.Handoff.backend.service.AuthService;
 import com.Handoff.backend.service.NotAuthenticatedException;
 import com.Handoff.backend.service.ProfileNotFoundException;
@@ -71,6 +73,35 @@ class CurrentStudentResolverTest {
 
     assertThat(resolver.find(request)).isEmpty();
     verifyNoInteractions(authService);
+  }
+
+  @Test
+  void find_suspendedStudent_isEmpty() {
+    Student student = new Student("Bob", "bob@tulane.edu", "hash", null, null);
+    student.setSuspended(true);
+    when(authService.findById(7L)).thenReturn(Optional.of(student));
+    assertThat(new CurrentStudentResolver(authService).find(requestWithSession(7L))).isEmpty();
+  }
+
+  @Test
+  void requireAdmin_admin_returnsStudent() {
+    Student admin = new Student("Admin", "admin@tulane.edu", "hash", null, null);
+    admin.setRole(Role.ADMIN);
+    when(authService.findById(7L)).thenReturn(Optional.of(admin));
+    assertThat(new CurrentStudentResolver(authService).requireAdmin(requestWithSession(7L))).isSameAs(admin);
+  }
+
+  @Test
+  void requireAdmin_student_throwsAdminAccessDenied() {
+    when(authService.findById(7L)).thenReturn(Optional.of(new Student("Bob", "bob@tulane.edu", "hash", null, null)));
+    assertThatThrownBy(() -> new CurrentStudentResolver(authService).requireAdmin(requestWithSession(7L)))
+        .isInstanceOf(AdminAccessDeniedException.class).hasMessage("Admin access required");
+  }
+
+  @Test
+  void requireAdmin_noSession_throwsNotAuthenticated() {
+    assertThatThrownBy(() -> new CurrentStudentResolver(authService).requireAdmin(new MockHttpServletRequest()))
+        .isInstanceOf(NotAuthenticatedException.class).hasMessage("You must be logged in");
   }
 
   @Test

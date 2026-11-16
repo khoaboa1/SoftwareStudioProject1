@@ -13,6 +13,7 @@ public class LoginResponse {
   private String dormLocation;
   private boolean emailVerified;
   private boolean verified;
+  private String role;
   private String message;
 
   public LoginResponse() {
@@ -28,6 +29,7 @@ public class LoginResponse {
     res.dormLocation = student.getDormLocation();
     res.emailVerified = student.isEmailVerified();
     res.verified = student.isVerified();
+    res.role = student.getRole().name();
     res.message = "Login successful";
     return res;
   }
@@ -107,6 +109,8 @@ public class LoginResponse {
   public String getMessage() {
     return message;
   }
+
+  public String getRole() { return role; }
 
   public void setMessage(String message) {
     this.message = message;
