@@ -4,24 +4,40 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ListingDetailPage } from './ListingDetailPage'
 import { ApiError } from '../services/httpClient'
-import { getListing, type Listing } from '../services/listingService'
+import {
+  deleteListing,
+  getListing,
+  type Listing,
+} from '../services/listingService'
 import { startConversation } from '../services/conversationService'
+import { reportListing } from '../services/reportService'
 
+const authState = vi.hoisted(() => ({ role: 'STUDENT' as 'STUDENT' | 'ADMIN' }))
 vi.mock('../lib/auth-context', () => ({
   useAuth: () => ({
-    student: { id: 1, studentName: 'Jane Doe', email: 'jane@tulane.edu' },
+    student: {
+      id: 1,
+      studentName: 'Jane Doe',
+      email: 'jane@tulane.edu',
+      role: authState.role,
+    },
     setStudent: vi.fn(),
   }),
 }))
 
 vi.mock('../services/listingService', () => ({
   getListing: vi.fn(),
+  deleteListing: vi.fn(),
 }))
 
 vi.mock('../services/conversationService', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/conversationService')>()),
   getConversations: vi.fn().mockResolvedValue([]),
   startConversation: vi.fn(),
+}))
+vi.mock('../services/reportService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/reportService')>()),
+  reportListing: vi.fn(),
 }))
 
 const listing: Listing = {
@@ -42,6 +58,7 @@ function renderPage(path = '/listings/1') {
       <Routes>
         <Route path="/listings/:id" element={<ListingDetailPage />} />
         <Route path="/conversations/:id" element={<p>Chat screen</p>} />
+        <Route path="/feed" element={<p>Feed screen</p>} />
       </Routes>
     </MemoryRouter>
   )
@@ -49,8 +66,98 @@ function renderPage(path = '/listings/1') {
 
 describe('ListingDetailPage', () => {
   beforeEach(() => {
+    authState.role = 'STUDENT'
     vi.mocked(getListing).mockReset()
     vi.mocked(startConversation).mockReset()
+    vi.mocked(deleteListing).mockReset()
+    vi.mocked(reportListing).mockReset()
+  })
+
+  it('shows Report listing to another student but hides admin delete', async () => {
+    vi.mocked(getListing).mockResolvedValue(listing)
+    renderPage()
+    expect(
+      await screen.findByRole('button', { name: 'Report listing' })
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Delete listing (admin)' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('lets an admin confirm deletion and returns to feed', async () => {
+    authState.role = 'ADMIN'
+    vi.mocked(getListing).mockResolvedValue(listing)
+    vi.mocked(deleteListing).mockResolvedValue(undefined)
+    renderPage()
+    expect(
+      await screen.findByRole('button', { name: 'Delete listing (admin)' })
+    ).toBeInTheDocument()
+    // Admins act directly; reporting would only send the listing to their own queue.
+    expect(
+      screen.queryByRole('button', { name: 'Report listing' })
+    ).not.toBeInTheDocument()
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'Delete listing (admin)' }))
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'Delete' }))
+    expect(deleteListing).toHaveBeenCalledWith(1)
+    expect(await screen.findByText('Feed screen')).toBeInTheDocument()
+  })
+
+  it('hides both actions from the owner', async () => {
+    authState.role = 'ADMIN'
+    vi.mocked(getListing).mockResolvedValue({ ...listing, sellerId: 1 })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Desk Lamp' })
+    expect(
+      screen.queryByRole('button', { name: 'Report listing' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Delete listing (admin)' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows the report success message after sending', async () => {
+    vi.mocked(getListing).mockResolvedValue(listing)
+    vi.mocked(reportListing).mockResolvedValue({
+      id: 8,
+      listingId: 1,
+      reason: 'SPAM',
+      details: null,
+      status: 'OPEN',
+      createdAt: '',
+    })
+    renderPage()
+    await userEvent
+      .setup()
+      .click(await screen.findByRole('button', { name: 'Report listing' }))
+    await userEvent.setup().click(screen.getByRole('radio', { name: 'Spam' }))
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'Send report' }))
+    expect(
+      await screen.findByText('Thanks — an admin will review this listing.')
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Report listing' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('cancels admin deletion without calling the API', async () => {
+    authState.role = 'ADMIN'
+    vi.mocked(getListing).mockResolvedValue(listing)
+    renderPage()
+    await userEvent
+      .setup()
+      .click(
+        await screen.findByRole('button', { name: 'Delete listing (admin)' })
+      )
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(deleteListing).not.toHaveBeenCalled()
   })
 
   it('renders the listing details', async () => {
@@ -217,12 +324,20 @@ describe('ListingDetailPage', () => {
     it('starts the conversation and opens the chat page', async () => {
       vi.mocked(getListing).mockResolvedValue(listing)
       vi.mocked(startConversation).mockResolvedValue({
-        id: 42, listingId: 1, itemName: 'Desk Lamp', buyerId: 1, buyerName: 'Jane Doe',
-        sellerId: 7, sellerName: 'Sam Seller', createdAt: '2026-11-13T10:00:00Z',
+        id: 42,
+        listingId: 1,
+        itemName: 'Desk Lamp',
+        buyerId: 1,
+        buyerName: 'Jane Doe',
+        sellerId: 7,
+        sellerName: 'Sam Seller',
+        createdAt: '2026-11-13T10:00:00Z',
       })
       renderPage()
 
-      await userEvent.setup().click(await screen.findByRole('button', { name: 'Message seller' }))
+      await userEvent
+        .setup()
+        .click(await screen.findByRole('button', { name: 'Message seller' }))
 
       expect(startConversation).toHaveBeenCalledWith(1)
       expect(await screen.findByText('Chat screen')).toBeInTheDocument()
@@ -233,7 +348,9 @@ describe('ListingDetailPage', () => {
       vi.mocked(startConversation).mockReturnValue(new Promise(() => {}))
       renderPage()
 
-      const button = await screen.findByRole('button', { name: 'Message seller' })
+      const button = await screen.findByRole('button', {
+        name: 'Message seller',
+      })
       await userEvent.setup().click(button)
 
       expect(button).toBeDisabled()
@@ -243,16 +360,25 @@ describe('ListingDetailPage', () => {
     it.each([
       [409, 'This item has already been sold'],
       [403, 'You cannot message yourself about your own listing'],
-    ])('shows the backend message inline on %i and stays on the page', async (status, apiMessage) => {
-      vi.mocked(getListing).mockResolvedValue(listing)
-      vi.mocked(startConversation).mockRejectedValue(new ApiError(status, apiMessage))
-      renderPage()
+    ])(
+      'shows the backend message inline on %i and stays on the page',
+      async (status, apiMessage) => {
+        vi.mocked(getListing).mockResolvedValue(listing)
+        vi.mocked(startConversation).mockRejectedValue(
+          new ApiError(status, apiMessage)
+        )
+        renderPage()
 
-      await userEvent.setup().click(await screen.findByRole('button', { name: 'Message seller' }))
+        await userEvent
+          .setup()
+          .click(await screen.findByRole('button', { name: 'Message seller' }))
 
-      expect(await screen.findByText(apiMessage)).toBeInTheDocument()
-      expect(screen.queryByText('Chat screen')).not.toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Message seller' })).toBeEnabled()
-    })
+        expect(await screen.findByText(apiMessage)).toBeInTheDocument()
+        expect(screen.queryByText('Chat screen')).not.toBeInTheDocument()
+        expect(
+          screen.getByRole('button', { name: 'Message seller' })
+        ).toBeEnabled()
+      }
+    )
   })
 })

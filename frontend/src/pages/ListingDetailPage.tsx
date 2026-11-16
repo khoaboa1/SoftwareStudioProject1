@@ -10,6 +10,10 @@ import { getErrorMessage, hasApiStatus } from '../lib/apiError'
 import { useAsyncResource } from '../lib/useAsyncResource'
 import { getListing } from '../services/listingService'
 import { startConversation } from '../services/conversationService'
+import { deleteListing } from '../services/listingService'
+import { isAdmin } from '../lib/roles'
+import { ReportListingPanel } from '../components/ReportListingPanel'
+import { ConfirmInline } from '../components/ConfirmInline'
 
 export function ListingDetailPage() {
   const { id } = useParams()
@@ -23,6 +27,9 @@ export function ListingDetailPage() {
   const [selection, setSelection] = useState({ listingId, index: 0 })
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
+  const [showReport, setShowReport] = useState(false)
+  const [reported, setReported] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
   const selectedPhoto = selection.listingId === listingId ? selection.index : 0
   const photoUrls =
     state.status === 'ready'
@@ -34,6 +41,11 @@ export function ListingDetailPage() {
     state.status === 'ready' &&
     state.data.sellerId !== student?.id &&
     (state.data.status == null || state.data.status === 'ACTIVE')
+  const isOthersListing =
+    state.status === 'ready' && state.data.sellerId !== student?.id
+  // Admins delete directly; reporting would only send the listing to their own queue.
+  const canReport = isOthersListing && !isAdmin(student)
+  const canAdminDelete = isOthersListing && isAdmin(student)
 
   async function handleMessageSeller() {
     setStartError(null)
@@ -152,8 +164,59 @@ export function ListingDetailPage() {
                   >
                     Message seller
                   </Button>
-                  {startError && <FormAlert kind="error">{startError}</FormAlert>}
+                  {startError && (
+                    <FormAlert kind="error">{startError}</FormAlert>
+                  )}
                 </>
+              )}
+              {canReport && (
+                <div className="mt-5 space-y-3">
+                  {reported ? (
+                    <FormAlert kind="success">
+                      Thanks — an admin will review this listing.
+                    </FormAlert>
+                  ) : showReport ? (
+                    <ReportListingPanel
+                      listingId={listingId}
+                      onDone={() => {
+                        setShowReport(false)
+                        setReported(true)
+                      }}
+                      onCancel={() => setShowReport(false)}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowReport(true)}
+                      className="text-sm font-medium text-accent-700 hover:text-accent-800"
+                    >
+                      Report listing
+                    </button>
+                  )}
+                </div>
+              )}
+              {canAdminDelete && (
+                <div className="mt-3">
+                  {showDelete ? (
+                    <ConfirmInline
+                      message="Delete this listing for everyone?"
+                      confirmLabel="Delete"
+                      onConfirm={async () => {
+                        await deleteListing(listingId)
+                        navigate('/feed', { replace: true })
+                      }}
+                      onCancel={() => setShowDelete(false)}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowDelete(true)}
+                      className="text-sm font-medium text-accent-700 hover:text-accent-800"
+                    >
+                      Delete listing (admin)
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </div>
