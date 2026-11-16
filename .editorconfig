@@ -14,5 +14,9 @@ trim_trailing_whitespace = false
 [*.py]
 indent_size = 4
 
+# Matches formatter-maven-plugin (Eclipse default) so VS Code's Java formatter agrees with ./mvnw verify.
+[*.java]
+indent_size = 4
+
 [Makefile]
 indent_style = tab

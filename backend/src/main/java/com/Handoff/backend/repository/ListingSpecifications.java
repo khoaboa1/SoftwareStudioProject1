@@ -32,6 +32,7 @@ public final class ListingSpecifications {
             matchingProfile.where(criteriaBuilder.equal(profile.get("student"), root.get("seller")),
                     criteriaBuilder.equal(profile.get("schoolDomain"), schoolDomain));
             predicates.add(criteriaBuilder.exists(matchingProfile));
+            predicates.add(criteriaBuilder.isFalse(root.get("seller").get("suspended")));
 
             // Existing rows predate the status column; null is treated as ACTIVE during migration.
             predicates.add(criteriaBuilder.or(criteriaBuilder.equal(root.get("status"), ListingStatus.ACTIVE),

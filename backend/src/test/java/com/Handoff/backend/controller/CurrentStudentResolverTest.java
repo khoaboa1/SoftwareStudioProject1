@@ -2,6 +2,8 @@ package com.Handoff.backend.controller;
 
 import com.Handoff.backend.dto.ErrorResponse;
 import com.Handoff.backend.model.Student;
+import com.Handoff.backend.model.Role;
+import com.Handoff.backend.service.AdminAccessDeniedException;
 import com.Handoff.backend.service.AuthService;
 import com.Handoff.backend.service.NotAuthenticatedException;
 import com.Handoff.backend.service.ProfileNotFoundException;
@@ -96,5 +98,38 @@ class CurrentStudentResolverTest {
         assertThat(unauthorized.getBody().message()).isEqualTo("Log in first");
         assertThat(notFound.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(notFound.getBody().message()).isEqualTo("Profile not found");
+    }
+
+    @Test
+    void find_suspendedStudent_isEmpty() {
+        Student bob = new Student("Bob", "bob@tulane.edu", null, null, null);
+        bob.setSuspended(true);
+        authenticateAs(USER_ID.toString());
+        when(authService.findBySupabaseUserId(USER_ID)).thenReturn(Optional.of(bob));
+        assertThat(new CurrentStudentResolver(authService).find(new MockHttpServletRequest())).isEmpty();
+    }
+
+    @Test
+    void requireAdmin_admin_returnsStudent() {
+        Student admin = new Student("Admin", "admin@tulane.edu", null, null, null);
+        admin.setRole(Role.ADMIN);
+        authenticateAs(USER_ID.toString());
+        when(authService.findBySupabaseUserId(USER_ID)).thenReturn(Optional.of(admin));
+        assertThat(new CurrentStudentResolver(authService).requireAdmin(new MockHttpServletRequest())).isSameAs(admin);
+    }
+
+    @Test
+    void requireAdmin_student_throwsAdminAccessDenied() {
+        authenticateAs(USER_ID.toString());
+        when(authService.findBySupabaseUserId(USER_ID))
+                .thenReturn(Optional.of(new Student("Bob", "bob@tulane.edu", null, null, null)));
+        assertThatThrownBy(() -> new CurrentStudentResolver(authService).requireAdmin(new MockHttpServletRequest()))
+                .isInstanceOf(AdminAccessDeniedException.class).hasMessage("Admin access required");
+    }
+
+    @Test
+    void requireAdmin_notAuthenticated_throwsNotAuthenticated() {
+        assertThatThrownBy(() -> new CurrentStudentResolver(authService).requireAdmin(new MockHttpServletRequest()))
+                .isInstanceOf(NotAuthenticatedException.class).hasMessage("You must be logged in");
     }
 }

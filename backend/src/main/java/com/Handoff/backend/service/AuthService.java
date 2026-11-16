@@ -99,6 +99,10 @@ public class AuthService {
         } catch (InvalidCredentialsException ex) {
             session = migrateLegacyAccount(student, email, password).orElseThrow(() -> ex);
         }
+        // Only reached with the right password, so a wrong guess never reveals that an account is suspended.
+        if (student.isSuspended()) {
+            throw new AccountSuspendedException();
+        }
         student.setSupabaseUserId(session.userId());
         if (!student.isVerified()) {
             // Supabase already confirmed this email, but our own PIN has not been entered yet.
