@@ -2,6 +2,7 @@ package com.Handoff.backend.service;
 
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.StudentRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,11 @@ class AccountCleanupServiceTest {
 
     @BeforeEach
     void setUp() {
+        studentRepository.deleteAll();
+    }
+
+    @AfterEach
+    void tearDown() {
         studentRepository.deleteAll();
     }
 

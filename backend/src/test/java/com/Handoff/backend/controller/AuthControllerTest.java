@@ -16,6 +16,7 @@ import com.Handoff.backend.repository.StudentRepository;
 import com.Handoff.backend.support.FakeSupabaseAuthClient;
 import jakarta.servlet.http.Cookie;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,6 +46,7 @@ class AuthControllerTest {
     private PasswordEncoder passwordEncoder;
 
     @BeforeEach
+    @AfterEach
     void cleanDatabase() {
         listingRepository.deleteAll();
         studentRepository.deleteAll();

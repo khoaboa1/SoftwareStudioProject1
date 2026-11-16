@@ -6,6 +6,7 @@ import com.Handoff.backend.repository.ProfileRepository;
 import com.Handoff.backend.repository.StudentRepository;
 import com.Handoff.backend.support.FakeSupabaseAuthClient;
 import jakarta.servlet.http.Cookie;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,7 @@ class ProfileSearchControllerTest {
     private StudentRepository studentRepository;
 
     @BeforeEach
+    @AfterEach
     void cleanDatabase() {
         profileRepository.deleteAll();
         studentRepository.deleteAll();
