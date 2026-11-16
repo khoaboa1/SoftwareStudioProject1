@@ -14,6 +14,7 @@ import com.Handoff.backend.model.Profile;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ProfileRepository;
 import jakarta.servlet.http.Cookie;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -59,6 +60,7 @@ class ListingControllerTest {
     private FakeSupabaseAuthClient supabase;
 
     @BeforeEach
+    @AfterEach
     void cleanDatabase() {
         listingRepository.deleteAll();
         // Profiles reference students, so remove them before resetting student fixtures.
