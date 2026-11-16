@@ -7,6 +7,7 @@
 - **When it is missing:** the `requiresPin: true` login response has no `role` (it is `null`), because the student has not signed in yet.
 - **Frontend:** nothing breaks if you ignore it. To use it, add `role: 'STUDENT' | 'ADMIN'` to the student type in the auth types. Treat it as display and routing only: the backend decides what each role may do, and that enforcement is SSP1-113.
 - **Known gaps:** nothing enforces the role yet, and there is no endpoint to change it. An admin has to be set in the database. The migration has only been checked by tests on H2 and a text check of the SQL; it has not been run against Supabase.
+- **How to check it:** log in through the app with DevTools → Network open and read `role` in the `login` and `me` responses (the PIN prints in the backend console when `AUTH_LOG_PIN=true`). `AuthControllerTest` has `role_isStudentInSignupVerifyLoginAndMe`, `role_isAdminInLoginAndMe_whenStoredRoleIsAdmin` and `login_requiringPin_hasNoRole`; `StudentRoleTest`, `LoginResponseTest` and `RoleMigrationContractTest` cover the entity, the response and the V8 SQL.
 
 ## Note: SSP1-116 Auth Token Storage (HttpOnly Cookies, Not localStorage)
 
