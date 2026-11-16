@@ -10,6 +10,8 @@ import com.Handoff.backend.dto.VerificationRequest;
 import com.Handoff.backend.model.Category;
 import com.Handoff.backend.model.Condition;
 import com.Handoff.backend.model.Listing;
+import com.Handoff.backend.model.ListingStatus;
+import com.Handoff.backend.model.Role;
 import com.Handoff.backend.model.Profile;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ProfileRepository;
@@ -27,11 +29,13 @@ import tools.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -402,5 +406,123 @@ class ListingControllerTest {
 
         assertTrue(body.contains("sellerVerified"), "sellerVerified must be present in listing JSON");
         assertTrue(body.contains("Bob Smith"), "seller name must be present in listing JSON");
+    }
+
+    // SSP1-147: listing status
+
+    private Long createListingWithProfile(Cookie session, String email) throws Exception {
+        Student seller = studentRepository.findByEmail(email).orElseThrow();
+        if (profileRepository.findByStudent_Id(seller.getId()).isEmpty()) {
+            profileRepository.save(new Profile(seller, "Jane Doe", "CS", null, "tulane.edu"));
+        }
+        String body = objectMapper.writeValueAsString(
+                new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE"));
+        MvcResult result = mockMvc
+                .perform(post("/listings").cookie(session).contentType("application/json").content(body))
+                .andExpect(status().isCreated()).andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asLong();
+    }
+
+    private String statusBody(String value) {
+        return value == null ? "{}" : "{\"status\":\"" + value + "\"}";
+    }
+
+    private ListingStatus storedStatus(Long listingId) {
+        return listingRepository.findById(listingId).orElseThrow().getStatus();
+    }
+
+    @Test
+    void getListing_includesStatus() throws Exception {
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
+        Long listingId = createListingWithProfile(session, "jane@tulane.edu");
+
+        mockMvc.perform(get("/listings/" + listingId).cookie(session)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+
+        Listing listing = listingRepository.findById(listingId).orElseThrow();
+        listing.setStatus(ListingStatus.PENDING);
+        listingRepository.save(listing);
+        mockMvc.perform(get("/listings/" + listingId).cookie(session)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING"));
+
+        listing = listingRepository.findById(listingId).orElseThrow();
+        listing.setStatus(null);
+        listingRepository.save(listing);
+        mockMvc.perform(get("/listings/" + listingId).cookie(session)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
+    @Test
+    void updateStatus_ownerCanMarkPendingSoldAndBackToActive() throws Exception {
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
+        Long listingId = createListingWithProfile(session, "jane@tulane.edu");
+
+        for (String value : new String[] { "PENDING", "SOLD", "ACTIVE" }) {
+            mockMvc.perform(patch("/listings/" + listingId + "/status").cookie(session).contentType("application/json")
+                    .content(statusBody(value))).andExpect(status().isOk()).andExpect(jsonPath("$.status").value(value))
+                    .andExpect(jsonPath("$.id").value(listingId));
+            assertEquals(ListingStatus.valueOf(value), storedStatus(listingId));
+        }
+    }
+
+    @Test
+    void updateStatus_acceptsLowercase() throws Exception {
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
+        Long listingId = createListingWithProfile(session, "jane@tulane.edu");
+
+        mockMvc.perform(patch("/listings/" + listingId + "/status").cookie(session).contentType("application/json")
+                .content(statusBody("sold"))).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("SOLD"));
+        assertEquals(ListingStatus.SOLD, storedStatus(listingId));
+    }
+
+    @Test
+    void updateStatus_rejectsInternalAndUnknownValues() throws Exception {
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
+        Long listingId = createListingWithProfile(session, "jane@tulane.edu");
+
+        for (String value : new String[] { "DELETED", "DRAFT", "INACTIVE", "BANANA", "", "  ", null }) {
+            mockMvc.perform(patch("/listings/" + listingId + "/status").cookie(session).contentType("application/json")
+                    .content(statusBody(value))).andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message").value("status must be one of ACTIVE, PENDING, SOLD"));
+            assertEquals(ListingStatus.ACTIVE, storedStatus(listingId));
+        }
+    }
+
+    @Test
+    void updateStatus_nonOwnerIs403() throws Exception {
+        Cookie ownerSession = loginAsNewStudent("jane@tulane.edu");
+        Long listingId = createListingWithProfile(ownerSession, "jane@tulane.edu");
+
+        Cookie otherSession = loginAsNewStudent("bob@tulane.edu");
+        Student bob = studentRepository.findByEmail("bob@tulane.edu").orElseThrow();
+        profileRepository.save(new Profile(bob, "Bob", "CS", null, "tulane.edu"));
+        mockMvc.perform(patch("/listings/" + listingId + "/status").cookie(otherSession).contentType("application/json")
+                .content(statusBody("SOLD"))).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("You do not have permission to modify this listing"));
+
+        bob = studentRepository.findByEmail("bob@tulane.edu").orElseThrow();
+        bob.setRole(Role.ADMIN);
+        studentRepository.save(bob);
+        mockMvc.perform(patch("/listings/" + listingId + "/status").cookie(otherSession).contentType("application/json")
+                .content(statusBody("SOLD"))).andExpect(status().isForbidden());
+
+        // A non-owner gets 403 even for an invalid value, so the value check never leaks ahead of ownership.
+        mockMvc.perform(patch("/listings/" + listingId + "/status").cookie(otherSession).contentType("application/json")
+                .content(statusBody("BANANA"))).andExpect(status().isForbidden());
+        assertEquals(ListingStatus.ACTIVE, storedStatus(listingId));
+    }
+
+    @Test
+    void updateStatus_missingListingIs404() throws Exception {
+        Cookie session = loginAsNewStudent("jane@tulane.edu");
+
+        mockMvc.perform(patch("/listings/999999/status").cookie(session).contentType("application/json")
+                .content(statusBody("SOLD"))).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void updateStatus_requiresLogin() throws Exception {
+        mockMvc.perform(patch("/listings/1/status").contentType("application/json").content(statusBody("SOLD")))
+                .andExpect(status().isUnauthorized());
     }
 }

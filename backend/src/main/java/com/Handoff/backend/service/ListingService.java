@@ -7,12 +7,16 @@ import com.Handoff.backend.dto.ListingResponse;
 import com.Handoff.backend.model.Category;
 import com.Handoff.backend.model.Condition;
 import com.Handoff.backend.model.Listing;
+import com.Handoff.backend.model.ListingStatus;
 import com.Handoff.backend.model.Role;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ListingRepository;
 import com.Handoff.backend.repository.ListingSpecifications;
 import com.Handoff.backend.repository.ProfileRepository;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -21,6 +25,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ListingService {
+
+    /** The statuses a seller may choose. INACTIVE, DRAFT and DELETED stay internal. */
+    private static final Set<ListingStatus> SELLER_STATUSES = EnumSet.of(ListingStatus.ACTIVE, ListingStatus.PENDING,
+            ListingStatus.SOLD);
+    static final String INVALID_STATUS_MESSAGE = "status must be one of ACTIVE, PENDING, SOLD";
 
     private final ListingRepository listingRepository;
     private final ProfileRepository profileRepository;
@@ -137,7 +146,34 @@ public class ListingService {
         return listingRepository.save(listing);
     }
 
-    /** The owner can delete their listing; a same-school admin can delete any listing, including a suspended seller's. */
+    /**
+     * Only the seller can change a listing's status, and any of ACTIVE, PENDING and SOLD can change to any other.
+     * Ownership is checked first, so a non-owner gets 403 whatever value they send.
+     */
+    public Listing updateStatus(Long listingId, Student requester, String rawStatus) {
+        Listing listing = getOwnedListing(listingId, requester);
+        listing.setStatus(parseSellerStatus(rawStatus));
+        return listingRepository.save(listing);
+    }
+
+    private ListingStatus parseSellerStatus(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new InvalidListingException(INVALID_STATUS_MESSAGE);
+        }
+        try {
+            ListingStatus status = ListingStatus.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+            if (SELLER_STATUSES.contains(status)) {
+                return status;
+            }
+        } catch (IllegalArgumentException ex) {
+            // Falls through to the same message as an internal status.
+        }
+        throw new InvalidListingException(INVALID_STATUS_MESSAGE);
+    }
+
+    /**
+     * The owner can delete their listing; a same-school admin can delete any listing, including a suspended seller's.
+     */
     public void deleteListing(Long listingId, Student requester) {
         Listing listing = listingRepository.findById(listingId).orElseThrow(ListingNotFoundException::new);
         if (!listing.getSeller().getId().equals(requester.getId())) {
