@@ -21,7 +21,7 @@ export function validateName(value: string): string | undefined {
 
 export function validateConfirmPassword(
   value: string,
-  password: string,
+  password: string
 ): string | undefined {
   if (!value) return 'Confirm your password'
   if (value !== password) return 'Passwords do not match'

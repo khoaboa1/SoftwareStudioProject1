@@ -19,82 +19,80 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 class VerificationServicePinDispatchTest {
 
-  @Mock
-  private StudentRepository studentRepository;
+    @Mock
+    private StudentRepository studentRepository;
 
-  /** Test double that records every call and answers with a fixed result. */
-  private static class RecordingSender implements EmailSender {
-    private final boolean result;
-    private final List<String> calls;
-    private final String name;
+    /** Test double that records every call and answers with a fixed result. */
+    private static class RecordingSender implements EmailSender {
+        private final boolean result;
+        private final List<String> calls;
+        private final String name;
 
-    RecordingSender(String name, boolean result, List<String> calls) {
-      this.name = name;
-      this.result = result;
-      this.calls = calls;
+        RecordingSender(String name, boolean result, List<String> calls) {
+            this.name = name;
+            this.result = result;
+            this.calls = calls;
+        }
+
+        @Override
+        public boolean send(String to, String pin) {
+            calls.add(name + ":" + to + ":" + pin);
+            return result;
+        }
     }
 
-    @Override
-    public boolean send(String to, String pin) {
-      calls.add(name + ":" + to + ":" + pin);
-      return result;
+    private Student student() {
+        return new Student("Bob", "bob@tulane.edu", "hashed", null, null);
     }
-  }
 
-  private Student student() {
-    return new Student("Bob", "bob@tulane.edu", "hashed", null, null);
-  }
+    @Test
+    void generateAndSendPin_stopsAtFirstSenderThatSucceeds() {
+        List<String> calls = new ArrayList<>();
+        VerificationService service = new VerificationService(
+                studentRepository, List.of(new RecordingSender("webhook", false, calls),
+                        new RecordingSender("resend", true, calls), new RecordingSender("smtp", true, calls)),
+                new UniversityEmailValidator());
+        Student student = student();
 
-  @Test
-  void generateAndSendPin_stopsAtFirstSenderThatSucceeds() {
-    List<String> calls = new ArrayList<>();
-    VerificationService service = new VerificationService(studentRepository, List.of(
-        new RecordingSender("webhook", false, calls),
-        new RecordingSender("resend", true, calls),
-        new RecordingSender("smtp", true, calls)), new UniversityEmailValidator());
-    Student student = student();
+        String pin = service.generateAndSendPin(student);
 
-    String pin = service.generateAndSendPin(student);
+        assertThat(calls).containsExactly("webhook:bob@tulane.edu:" + pin, "resend:bob@tulane.edu:" + pin);
+    }
 
-    assertThat(calls).containsExactly(
-        "webhook:bob@tulane.edu:" + pin,
-        "resend:bob@tulane.edu:" + pin);
-  }
+    @Test
+    void generateAndSendPin_savesSixDigitPinWithExpiry_evenWhenEverySenderFails() {
+        List<String> calls = new ArrayList<>();
+        VerificationService service = new VerificationService(studentRepository,
+                List.of(new RecordingSender("webhook", false, calls), new RecordingSender("smtp", false, calls)),
+                new UniversityEmailValidator());
+        Student student = student();
 
-  @Test
-  void generateAndSendPin_savesSixDigitPinWithExpiry_evenWhenEverySenderFails() {
-    List<String> calls = new ArrayList<>();
-    VerificationService service = new VerificationService(studentRepository, List.of(
-        new RecordingSender("webhook", false, calls),
-        new RecordingSender("smtp", false, calls)), new UniversityEmailValidator());
-    Student student = student();
+        String pin = service.generateAndSendPin(student);
 
-    String pin = service.generateAndSendPin(student);
+        assertThat(pin).matches("\\d{6}");
+        assertThat(student.getVerificationPin()).isEqualTo(pin);
+        assertThat(student.getVerificationPinExpiry()).isNotNull();
+        assertThat(calls).hasSize(2);
+        verify(studentRepository).save(student);
+    }
 
-    assertThat(pin).matches("\\d{6}");
-    assertThat(student.getVerificationPin()).isEqualTo(pin);
-    assertThat(student.getVerificationPinExpiry()).isNotNull();
-    assertThat(calls).hasSize(2);
-    verify(studentRepository).save(student);
-  }
+    @Test
+    void generateAndSendPin_worksWithNoSendersConfigured() {
+        VerificationService service = new VerificationService(studentRepository, List.of(),
+                new UniversityEmailValidator());
 
-  @Test
-  void generateAndSendPin_worksWithNoSendersConfigured() {
-    VerificationService service = new VerificationService(studentRepository, List.of(), new UniversityEmailValidator());
+        assertThat(service.generateAndSendPin(student())).matches("\\d{6}");
+    }
 
-    assertThat(service.generateAndSendPin(student())).matches("\\d{6}");
-  }
+    @Test
+    void generateAndSendPin_rejectsNonEduEmailBeforeSending() {
+        List<String> calls = new ArrayList<>();
+        VerificationService service = new VerificationService(studentRepository,
+                List.of(new RecordingSender("webhook", true, calls)), new UniversityEmailValidator());
+        Student student = new Student("Bob", "bob@gmail.com", "hashed", null, null);
 
-  @Test
-  void generateAndSendPin_rejectsNonEduEmailBeforeSending() {
-    List<String> calls = new ArrayList<>();
-    VerificationService service = new VerificationService(studentRepository, List.of(
-        new RecordingSender("webhook", true, calls)), new UniversityEmailValidator());
-    Student student = new Student("Bob", "bob@gmail.com", "hashed", null, null);
-
-    assertThatThrownBy(() -> service.generateAndSendPin(student))
-        .isInstanceOf(InvalidSignupException.class);
-    assertThat(calls).isEmpty();
-    verify(studentRepository, never()).save(student);
-  }
+        assertThatThrownBy(() -> service.generateAndSendPin(student)).isInstanceOf(InvalidSignupException.class);
+        assertThat(calls).isEmpty();
+        verify(studentRepository, never()).save(student);
+    }
 }

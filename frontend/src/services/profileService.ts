@@ -45,7 +45,10 @@ export type ProfileUpdate = {
   bio: string
 }
 
-export function updateProfile(id: number, input: ProfileUpdate): Promise<Profile> {
+export function updateProfile(
+  id: number,
+  input: ProfileUpdate
+): Promise<Profile> {
   return request<Profile>(`/api/profiles/${id}`, {
     method: 'PUT',
     body: JSON.stringify(input),

@@ -11,12 +11,23 @@ export async function resizeImage(file: File, maxEdge = 1600): Promise<Blob> {
     const canvas = document.createElement('canvas')
     canvas.width = Math.round(bitmap.width * scale)
     canvas.height = Math.round(bitmap.height * scale)
-    canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    canvas
+      .getContext('2d')
+      ?.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
     return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (blob) resolve(blob)
-        else reject(new Error("This photo format isn't supported. Use JPEG, PNG or WebP."))
-      }, 'image/jpeg', 0.85)
+      canvas.toBlob(
+        (blob) => {
+          if (blob) resolve(blob)
+          else
+            reject(
+              new Error(
+                "This photo format isn't supported. Use JPEG, PNG or WebP."
+              )
+            )
+        },
+        'image/jpeg',
+        0.85
+      )
     })
   } finally {
     bitmap.close()

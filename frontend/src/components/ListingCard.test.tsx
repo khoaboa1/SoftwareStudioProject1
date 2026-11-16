@@ -25,13 +25,17 @@ function LocationProbe() {
 function renderCard(
   onEdit?: () => void,
   onDelete?: () => void,
-  overrides: Partial<Listing> = {},
+  overrides: Partial<Listing> = {}
 ) {
   return render(
     <MemoryRouter initialEntries={['/feed']}>
-      <ListingCard listing={{ ...listing, ...overrides }} onEdit={onEdit} onDelete={onDelete} />
+      <ListingCard
+        listing={{ ...listing, ...overrides }}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />
       <LocationProbe />
-    </MemoryRouter>,
+    </MemoryRouter>
   )
 }
 
@@ -39,7 +43,10 @@ describe('ListingCard', () => {
   it('shows the listing photo when imageUrl is present', () => {
     const url = 'https://images.unsplash.com/photo-1?w=800'
     renderCard(undefined, undefined, { imageUrl: url })
-    expect(screen.getByRole('img', { name: 'Desk Lamp' })).toHaveAttribute('src', url)
+    expect(screen.getByRole('img', { name: 'Desk Lamp' })).toHaveAttribute(
+      'src',
+      url
+    )
   })
   it('renders the listing details', () => {
     renderCard()
@@ -55,14 +62,21 @@ describe('ListingCard', () => {
   it('links the card to the listing detail page', () => {
     renderCard()
 
-    expect(screen.getByRole('link', { name: 'Desk Lamp' })).toHaveAttribute('href', '/listings/1')
+    expect(screen.getByRole('link', { name: 'Desk Lamp' })).toHaveAttribute(
+      'href',
+      '/listings/1'
+    )
   })
 
   it('does not render edit or delete buttons when the handlers are not provided', () => {
     renderCard()
 
-    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Delete' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Edit' })
+    ).not.toBeInTheDocument()
   })
 
   it('calls onDelete without navigating', async () => {
@@ -115,7 +129,9 @@ describe('ListingCard', () => {
     })
 
     it('does not show the badge for a non-boolean truthy sellerVerified value', () => {
-      renderCard(undefined, undefined, { sellerVerified: 'true' as unknown as boolean })
+      renderCard(undefined, undefined, {
+        sellerVerified: 'true' as unknown as boolean,
+      })
 
       expect(screen.queryByText('Verified Student')).not.toBeInTheDocument()
     })
@@ -123,7 +139,10 @@ describe('ListingCard', () => {
     it('keeps the card link name unchanged when verified', () => {
       renderCard(undefined, undefined, { sellerVerified: true })
 
-      expect(screen.getByRole('link', { name: 'Desk Lamp' })).toHaveAttribute('href', '/listings/1')
+      expect(screen.getByRole('link', { name: 'Desk Lamp' })).toHaveAttribute(
+        'href',
+        '/listings/1'
+      )
     })
   })
 })
