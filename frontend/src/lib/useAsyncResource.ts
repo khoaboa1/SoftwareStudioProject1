@@ -19,7 +19,7 @@ export function useAsyncResource<T>(
 ): {
   state: AsyncState<T>
   reload: () => void
-  setData: (data: T) => void
+  setData: (data: T | ((current: T) => T)) => void
 } {
   const enabled = options?.enabled ?? true
   const [state, setState] = useState<AsyncState<T>>(
@@ -67,6 +67,16 @@ export function useAsyncResource<T>(
   return {
     state,
     reload: () => setReloadToken((token) => token + 1),
-    setData: (data) => setState({ status: 'ready', data }),
+    setData: (update) =>
+      setState((current) => {
+        if (typeof update === 'function') {
+          if (current.status !== 'ready') return current
+          return {
+            status: 'ready',
+            data: (update as (data: T) => T)(current.data),
+          }
+        }
+        return { status: 'ready', data: update }
+      }),
   }
 }
