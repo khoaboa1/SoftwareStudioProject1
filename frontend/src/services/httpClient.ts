@@ -24,6 +24,19 @@ export class NetworkError extends ApiError {
   }
 }
 let refreshInFlight: Promise<boolean> | null = null
+
+const sessionExpiredListeners = new Set<() => void>()
+
+/**
+ * Called when a request is still 401 after a refresh: the session is gone (logged out elsewhere, expired,
+ * or the account was suspended). Returns an unsubscribe function.
+ */
+export function onSessionExpired(listener: () => void): () => void {
+  sessionExpiredListeners.add(listener)
+  return () => {
+    sessionExpiredListeners.delete(listener)
+  }
+}
 async function send(path: string, options: RequestInit): Promise<Response> {
   try {
     return await fetch(`${API_BASE_URL}${path}`, {
@@ -64,6 +77,9 @@ export async function request<T>(
     (await refreshSession())
   ) {
     response = await send(path, options)
+  }
+  if (response.status === 401 && !NO_REFRESH_PATHS.has(path)) {
+    sessionExpiredListeners.forEach((listener) => listener())
   }
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`

@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from 'react'
 import { getCurrentStudent, type Student } from '../services/authService'
+import { onSessionExpired } from '../services/httpClient'
 import { getMyProfileOrNull } from '../services/profileService'
 
 type AuthContextValue = {
@@ -39,6 +40,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true
     }
   }, [])
+
+  // When the backend stops accepting the session (for example after a suspension), log out here too.
+  // RequireAuth then sends the student to /login, where a suspended account sees why.
+  useEffect(
+    () =>
+      onSessionExpired(() => {
+        setStudentState(null)
+        setHasProfile(null)
+      }),
+    []
+  )
 
   function setStudent(next: Student | null) {
     setStudentState(next)
