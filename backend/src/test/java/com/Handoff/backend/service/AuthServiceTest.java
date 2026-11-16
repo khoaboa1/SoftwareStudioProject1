@@ -1,5 +1,6 @@
 package com.Handoff.backend.service;
 
+import com.Handoff.backend.model.Role;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.StudentRepository;
 import com.Handoff.backend.service.auth.EmailNotConfirmedException;
@@ -92,6 +93,15 @@ class AuthServiceTest {
         assertThat(student.getPasswordHash()).isNull();
         assertThat(student.isVerified()).isFalse();
         verify(verificationService).generateAndSendPin(student);
+    }
+
+    @Test
+    void signup_newStudentHasStudentRole() {
+        when(studentRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
+        when(supabase.adminCreateUnconfirmedUser(EMAIL, PASSWORD)).thenReturn(USER_ID);
+        saveReturnsArgument();
+        Student student = authService.signup("Jane Doe", EMAIL, PASSWORD);
+        assertThat(student.getRole()).isEqualTo(Role.STUDENT);
     }
 
     @Test

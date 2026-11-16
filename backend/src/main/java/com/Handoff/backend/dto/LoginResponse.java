@@ -1,5 +1,6 @@
 package com.Handoff.backend.dto;
 
+import com.Handoff.backend.model.Role;
 import com.Handoff.backend.model.Student;
 import java.util.List;
 
@@ -12,6 +13,7 @@ public class LoginResponse {
     private String dormLocation;
     private boolean emailVerified;
     private boolean verified;
+    private Role role;
     private String message;
 
     public LoginResponse() {
@@ -27,6 +29,7 @@ public class LoginResponse {
         res.dormLocation = student.getDormLocation();
         res.emailVerified = student.isEmailVerified();
         res.verified = student.isVerified();
+        res.role = student.getRole();
         res.message = "Login successful";
         return res;
     }
@@ -101,6 +104,14 @@ public class LoginResponse {
 
     public void setVerified(boolean verified) {
         this.verified = verified;
+    }
+
+    public Role getRole() {
+        return role;
+    }
+
+    public void setRole(Role role) {
+        this.role = role;
     }
 
     public String getMessage() {
