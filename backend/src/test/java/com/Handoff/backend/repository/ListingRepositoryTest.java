@@ -77,6 +77,7 @@ class ListingRepositoryTest {
         assertThat(listings).extracting(Listing::getItemName).containsExactly("Mini Fridge", "Desk Lamp");
     }
 
+
     @Test
     void suspendedSeller_isHiddenFromFeedDetailAndBrowse_butAdminLookupFindsIt() {
         Student seller = studentRepository.save(new Student("Seller", "seller@tulane.edu", "hash", null, null));

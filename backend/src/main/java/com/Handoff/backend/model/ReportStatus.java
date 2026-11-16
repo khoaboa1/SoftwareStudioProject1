@@ -1,5 +1,3 @@
 package com.Handoff.backend.model;
 
-public enum ReportStatus {
-    OPEN, DISMISSED
-}
+public enum ReportStatus { OPEN, DISMISSED }

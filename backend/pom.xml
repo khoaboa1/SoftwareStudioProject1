@@ -143,6 +143,15 @@
 						<sourceDir>${project.build.testSourceDirectory}</sourceDir>
 					</testSourceDirs>
 				</configuration>
+				<executions>
+					<execution>
+						<id>format-validate</id>
+						<goals>
+							<goal>validate</goal>
+						</goals>
+						<phase>verify</phase>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>

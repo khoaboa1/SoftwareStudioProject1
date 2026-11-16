@@ -41,7 +41,8 @@ public class CurrentStudentResolver {
         }
         try {
             // A suspended student is treated as logged out, even with a still-valid token.
-            return authService.findBySupabaseUserId(UUID.fromString(subject)).filter(student -> !student.isSuspended());
+            return authService.findBySupabaseUserId(UUID.fromString(subject))
+                    .filter(student -> !student.isSuspended());
         } catch (IllegalArgumentException ex) {
             return Optional.empty();
         }

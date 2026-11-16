@@ -137,9 +137,7 @@ public class ListingService {
         return listingRepository.save(listing);
     }
 
-    /**
-     * The owner can delete their listing; a same-school admin can delete any listing, including a suspended seller's.
-     */
+    /** The owner can delete their listing; a same-school admin can delete any listing, including a suspended seller's. */
     public void deleteListing(Long listingId, Student requester) {
         Listing listing = listingRepository.findById(listingId).orElseThrow(ListingNotFoundException::new);
         if (!listing.getSeller().getId().equals(requester.getId())) {

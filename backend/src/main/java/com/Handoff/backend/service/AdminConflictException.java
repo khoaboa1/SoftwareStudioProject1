@@ -1,7 +1,5 @@
 package com.Handoff.backend.service;
 
 public class AdminConflictException extends RuntimeException {
-    public AdminConflictException(String message) {
-        super(message);
-    }
+  public AdminConflictException(String message) { super(message); }
 }
