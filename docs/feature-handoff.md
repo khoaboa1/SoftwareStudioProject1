@@ -1,5 +1,15 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-117 Admin UI (Frontend)
+
+- **Role visibility:** Only `role === 'ADMIN'` shows the header's Admin link and can open `/admin`; a non-admin is redirected to `/feed` before any admin request. A listing's owner sees neither Report listing nor Delete listing (admin). Other students see Report listing; admins see Delete listing (admin) instead, since reporting would only send it to their own queue. The backend remains the authority for every action.
+- **Admin routes:** `/admin` opens Reports by default; `/admin?tab=students` opens Students. Tabs update the query string. Reports lists open reports and lets an admin dismiss a report or delete its listing; both actions remove affected rows in place. Students supports search and paging, and updates role and suspension badges in place. An admin's own row has no actions. Another admin's Suspend action is disabled with `Remove admin role first` until their role is removed.
+- **Endpoints:** Listing detail uses `POST /listings/{id}/reports` and the existing `DELETE /listings/{id}`. Reports uses `GET /api/admin/reports`, `POST /api/admin/reports/{id}/dismiss`, and `DELETE /listings/{id}`. Students uses `GET /api/admin/students?q=&page=&limit=`, `POST /api/admin/students/{id}/suspend`, `POST /api/admin/students/{id}/unsuspend`, and `PUT /api/admin/students/{id}/role`.
+- **Dependency:** These screens need the SSP1-115 backend contract (PR #72). Until that backend is available, the new requests cannot succeed.
+- **Open-report badge:** admins see the open-report count as a badge on the header's `Admin` link and on the `Reports` tab (hidden at zero). Outside `/admin` the header loads `GET /api/admin/reports` once per page for admins only; on `/admin` both badges share the Reports tab's live count, so a dismiss or delete updates them together.
+- **Suspended students are fully locked out:** any request that is still `401` after the automatic refresh (`onSessionExpired` in `services/httpClient.ts`) logs the student out in `AuthProvider`, so `RequireAuth` sends them to `/login`. Logging in again shows the backend's `This account has been suspended`. Auth actions such as a wrong-password login never trigger it.
+- **Known gaps:** There is no undo for admin actions and no admin view of dismissed reports.
+
 ## Handoff Note: SSP1-114 Student Role Field (Backend → Frontend)
 
 - **Feature summary:** Every student now has a `role`: `STUDENT` or `ADMIN`. New and existing accounts are `STUDENT`. It is stored in `students.role` (migration `V8__add_role_to_students.sql`, `varchar(50) not null default 'STUDENT'` with a check that only allows those two values).
