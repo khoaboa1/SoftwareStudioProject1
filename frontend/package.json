@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run lint:format && tsc -b && vite build",
+    "format": "prettier --write .",
     "lint": "oxlint",
+    "lint:format": "prettier --check .",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -30,6 +32,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "jsdom": "^30.1.1",
     "oxlint": "^1.81.0",
+    "prettier": "^3.10.1",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
     "vitest": "^5.0.1"

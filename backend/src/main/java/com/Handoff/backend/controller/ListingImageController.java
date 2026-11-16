@@ -17,19 +17,19 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/listings/images")
 public class ListingImageController {
-  private final ListingImageService imageService;
-  private final CurrentStudentResolver currentStudentResolver;
+    private final ListingImageService imageService;
+    private final CurrentStudentResolver currentStudentResolver;
 
-  public ListingImageController(ListingImageService imageService, CurrentStudentResolver currentStudentResolver) {
-    this.imageService = imageService;
-    this.currentStudentResolver = currentStudentResolver;
-  }
+    public ListingImageController(ListingImageService imageService, CurrentStudentResolver currentStudentResolver) {
+        this.imageService = imageService;
+        this.currentStudentResolver = currentStudentResolver;
+    }
 
-  @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  public ResponseEntity<ImageUploadResponse> upload(@RequestParam("file") MultipartFile file,
-                                                     HttpServletRequest request) throws IOException {
-    Student uploader = currentStudentResolver.require(request, "You must be logged in to upload photos");
-    return ResponseEntity.status(HttpStatus.CREATED)
-        .body(new ImageUploadResponse(imageService.upload(uploader, file.getBytes())));
-  }
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ImageUploadResponse> upload(@RequestParam("file") MultipartFile file,
+            HttpServletRequest request) throws IOException {
+        Student uploader = currentStudentResolver.require(request, "You must be logged in to upload photos");
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(new ImageUploadResponse(imageService.upload(uploader, file.getBytes())));
+    }
 }

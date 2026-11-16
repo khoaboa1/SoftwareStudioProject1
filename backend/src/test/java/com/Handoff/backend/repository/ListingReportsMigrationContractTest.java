@@ -8,12 +8,13 @@ import org.springframework.core.io.ClassPathResource;
 
 class ListingReportsMigrationContractTest {
   @Test
-  void v7CreatesReportsWithCascadeAndIndex() throws Exception {
-    var resource = new ClassPathResource("db/migration/V7__create_listing_reports.sql");
+  void v10CreatesReportsWithCascadeIndexAndRowLevelSecurity() throws Exception {
+    var resource = new ClassPathResource("db/migration/V10__create_listing_reports.sql");
     assertThat(resource.exists()).isTrue();
     String sql = resource.getContentAsString(StandardCharsets.UTF_8)
         .toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
     assertThat(sql).contains("create table listing_reports", "references listings", "on delete cascade",
-        "references students", "status varchar(20) not null default 'open'", "created_at", "(status, listing_id)");
+        "references students", "status varchar(20) not null default 'open'", "created_at", "(status, listing_id)",
+        "alter table listing_reports enable row level security");
   }
 }

@@ -12,11 +12,14 @@ import com.Handoff.backend.service.EmailAlreadyRegisteredException;
 import com.Handoff.backend.service.InvalidCredentialsException;
 import com.Handoff.backend.service.InvalidSignupException;
 import com.Handoff.backend.service.InvalidVerificationPinException;
-import com.Handoff.backend.service.VerificationService;
+import com.Handoff.backend.service.auth.LoginOutcome;
+import com.Handoff.backend.service.auth.SupabaseAuthException;
+import com.Handoff.backend.service.auth.VerifiedLogin;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,84 +27,106 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Every sign-up and sign-in request from React goes through here; the browser never calls Supabase.
+ */
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
+    private final AuthService authService;
+    private final CurrentStudentResolver currentStudentResolver;
+    private final AuthCookies authCookies;
 
-  private final AuthService authService;
-  private final VerificationService verificationService;
-  private final CurrentStudentResolver currentStudentResolver;
-
-  public AuthController(AuthService authService, VerificationService verificationService,
-                        CurrentStudentResolver currentStudentResolver) {
-    this.authService = authService;
-    this.verificationService = verificationService;
-    this.currentStudentResolver = currentStudentResolver;
-  }
-
-  @PostMapping("/signup")
-  public ResponseEntity<Student> signup(@RequestBody SignupRequest request) {
-    Student created = authService.signup(request.studentName(), request.email(), request.password());
-    return ResponseEntity.status(HttpStatus.CREATED).body(created);
-  }
-
-  @PostMapping("/login")
-  public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request, HttpServletRequest httpRequest) {
-    LoginResponse response = authService.login(request.email(), request.password(), request.deviceId());
-    if (!response.isRequiresPin()) {
-      HttpSession session = httpRequest.getSession(true);
-      session.setAttribute(SessionKeys.STUDENT_ID, response.getId());
+    public AuthController(AuthService authService, CurrentStudentResolver currentStudentResolver,
+            AuthCookies authCookies) {
+        this.authService = authService;
+        this.currentStudentResolver = currentStudentResolver;
+        this.authCookies = authCookies;
     }
-    return ResponseEntity.ok(response);
-  }
 
-  @PostMapping("/verify-pin")
-  public ResponseEntity<Student> verifyPin(@RequestBody VerificationRequest request, HttpServletRequest httpRequest) {
-    Student verified = verificationService.verifyPin(request.email(), request.pin(), request.deviceId());
-    HttpSession session = httpRequest.getSession(true);
-    session.setAttribute(SessionKeys.STUDENT_ID, verified.getId());
-    return ResponseEntity.ok(verified);
-  }
-
-  @PostMapping("/resend-pin")
-  public ResponseEntity<Void> resendPin(@RequestBody ResendPinRequest request) {
-    verificationService.resendPin(request.email());
-    return ResponseEntity.noContent().build();
-  }
-
-  @PostMapping("/logout")
-  public ResponseEntity<Void> logout(HttpServletRequest httpRequest) {
-    HttpSession session = httpRequest.getSession(false);
-    if (session != null) {
-      session.invalidate();
+    @PostMapping("/signup")
+    public ResponseEntity<Student> signup(@RequestBody SignupRequest request) {
+        Student created = authService.signup(request.studentName(), request.email(), request.password());
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
-    return ResponseEntity.noContent().build();
-  }
 
-  @GetMapping("/me")
-  public ResponseEntity<Student> me(HttpServletRequest httpRequest) {
-    return currentStudentResolver.find(httpRequest)
-        .map(ResponseEntity::ok)
-        .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
-  }
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request, HttpServletResponse response) {
+        LoginOutcome outcome = authService.login(request.email(), request.password(), request.deviceId());
+        if (outcome.session() != null) {
+            authCookies.write(response, outcome.session());
+        }
+        return ResponseEntity.ok(outcome.response());
+    }
 
-  @ExceptionHandler(InvalidSignupException.class)
-  public ResponseEntity<ErrorResponse> handleInvalidSignup(InvalidSignupException ex) {
-    return ResponseEntity.badRequest().body(new ErrorResponse(ex.getMessage()));
-  }
+    @PostMapping("/verify-pin")
+    public ResponseEntity<Student> verifyPin(@RequestBody VerificationRequest request, HttpServletResponse response) {
+        VerifiedLogin verified = authService.verifyPin(request.email(), request.pin(), request.deviceId());
+        if (verified.session() != null) {
+            authCookies.write(response, verified.session());
+        }
+        return ResponseEntity.ok(verified.student());
+    }
 
-  @ExceptionHandler(EmailAlreadyRegisteredException.class)
-  public ResponseEntity<ErrorResponse> handleEmailTaken(EmailAlreadyRegisteredException ex) {
-    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(ex.getMessage()));
-  }
+    @PostMapping("/resend-pin")
+    public ResponseEntity<Void> resendPin(@RequestBody ResendPinRequest request) {
+        authService.resendPin(request.email());
+        return ResponseEntity.noContent().build();
+    }
 
-  @ExceptionHandler(InvalidCredentialsException.class)
-  public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {
-    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse(ex.getMessage()));
-  }
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refresh(@CookieValue(name = AuthCookies.REFRESH, required = false) String refreshToken,
+            HttpServletResponse response) {
+        try {
+            authCookies.write(response, authService.refresh(refreshToken));
+            return ResponseEntity.noContent().build();
+        } catch (InvalidCredentialsException ex) {
+            authCookies.clear(response);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse(ex.getMessage()));
+        }
+    }
 
-  @ExceptionHandler(InvalidVerificationPinException.class)
-  public ResponseEntity<ErrorResponse> handleInvalidVerificationPin(InvalidVerificationPinException ex) {
-    return ResponseEntity.badRequest().body(new ErrorResponse(ex.getMessage()));
-  }
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@CookieValue(name = AuthCookies.ACCESS, required = false) String accessToken,
+            HttpServletResponse response) {
+        authService.logout(accessToken);
+        authCookies.clear(response);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<Student> me(HttpServletRequest httpRequest) {
+        return currentStudentResolver.find(httpRequest).map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+    }
+
+    @ExceptionHandler(InvalidSignupException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidSignup(InvalidSignupException ex) {
+        return ResponseEntity.badRequest().body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(EmailAlreadyRegisteredException.class)
+    public ResponseEntity<ErrorResponse> handleEmailTaken(EmailAlreadyRegisteredException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidVerificationPinException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidVerificationPin(InvalidVerificationPinException ex) {
+        return ResponseEntity.badRequest().body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(SupabaseAuthException.class)
+    public ResponseEntity<ErrorResponse> handleSupabaseAuth(SupabaseAuthException ex) {
+        if (ex.getStatus() == 429) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(new ErrorResponse("Too many requests. Please wait a minute and try again."));
+        }
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(new ErrorResponse("Authentication service is unavailable. Please try again."));
+    }
 }

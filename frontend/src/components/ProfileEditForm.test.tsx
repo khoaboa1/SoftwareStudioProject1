@@ -14,7 +14,9 @@ const profile: Profile = {
   createdAt: '2026-09-22T00:00:00',
 }
 
-function renderForm(overrides: Partial<Parameters<typeof ProfileEditForm>[0]> = {}) {
+function renderForm(
+  overrides: Partial<Parameters<typeof ProfileEditForm>[0]> = {}
+) {
   const props = {
     profile,
     status: 'idle' as const,
@@ -33,7 +35,9 @@ describe('ProfileEditForm', () => {
 
     expect(screen.getByLabelText('Name')).toHaveValue('Jane Doe')
     expect(screen.getByLabelText('Major')).toHaveValue('Computer Science')
-    expect(screen.getByLabelText('Bio')).toHaveValue('Junior studying CS and Math.')
+    expect(screen.getByLabelText('Bio')).toHaveValue(
+      'Junior studying CS and Math.'
+    )
   })
 
   it('starts with an empty bio when the profile has none', () => {
@@ -52,7 +56,11 @@ describe('ProfileEditForm', () => {
     await user.type(screen.getByLabelText('Bio'), '  Senior now.  ')
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    expect(onSubmit).toHaveBeenCalledWith({ name: 'Jane Doe', major: 'Data Science', bio: 'Senior now.' })
+    expect(onSubmit).toHaveBeenCalledWith({
+      name: 'Jane Doe',
+      major: 'Data Science',
+      bio: 'Senior now.',
+    })
   })
 
   it('submits an empty bio so it can be cleared', async () => {
@@ -62,7 +70,11 @@ describe('ProfileEditForm', () => {
     await user.clear(screen.getByLabelText('Bio'))
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    expect(onSubmit).toHaveBeenCalledWith({ name: 'Jane Doe', major: 'Computer Science', bio: '' })
+    expect(onSubmit).toHaveBeenCalledWith({
+      name: 'Jane Doe',
+      major: 'Computer Science',
+      bio: '',
+    })
   })
 
   it('requires a name', async () => {
@@ -96,11 +108,15 @@ describe('ProfileEditForm', () => {
 
   it('rejects a bio over 1000 characters', async () => {
     const user = userEvent.setup()
-    const { onSubmit } = renderForm({ profile: { ...profile, bio: 'a'.repeat(1001) } })
+    const { onSubmit } = renderForm({
+      profile: { ...profile, bio: 'a'.repeat(1001) },
+    })
 
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    expect(screen.getByText('Bio cannot exceed 1000 characters')).toBeInTheDocument()
+    expect(
+      screen.getByText('Bio cannot exceed 1000 characters')
+    ).toBeInTheDocument()
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
@@ -115,9 +131,14 @@ describe('ProfileEditForm', () => {
   })
 
   it('shows the server error', () => {
-    renderForm({ status: 'error', error: 'You do not have permission to modify this profile.' })
+    renderForm({
+      status: 'error',
+      error: 'You do not have permission to modify this profile.',
+    })
 
-    expect(screen.getByRole('status')).toHaveTextContent('You do not have permission to modify this profile.')
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'You do not have permission to modify this profile.'
+    )
   })
 
   it('disables saving while submitting', () => {

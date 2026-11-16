@@ -30,279 +30,280 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ListingServiceTest {
 
-  private CreateListingRequest request(String imageUrl) {
-    return new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"),
-        "GOOD", "FURNITURE", imageUrl);
-  }
+    private CreateListingRequest request(String imageUrl) {
+        return new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE",
+                imageUrl);
+    }
 
-  private CreateListingRequest photoRequest(List<String> imageUrls) {
-    return new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"),
-        "GOOD", "FURNITURE", null, imageUrls);
-  }
+    private CreateListingRequest photoRequest(List<String> imageUrls) {
+        return new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE", null,
+                imageUrls);
+    }
 
-  @Test
-  void createListing_storesImageUrlsInOrder_andCoverIsFirst() {
-    when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
-    Listing listing = new ListingService(listingRepository, profileRepository)
-        .createListing(newStudent(1L, "Jane"), photoRequest(List.of("https://a", "https://b", "https://c")));
-    assertThat(listing.getImageUrls()).containsExactly("https://a", "https://b", "https://c");
-    assertThat(listing.getImageUrl()).isEqualTo("https://a");
-  }
+    @Test
+    void createListing_storesImageUrlsInOrder_andCoverIsFirst() {
+        when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        Listing listing = new ListingService(listingRepository, profileRepository).createListing(newStudent(1L, "Jane"),
+                photoRequest(List.of("https://a", "https://b", "https://c")));
+        assertThat(listing.getImageUrls()).containsExactly("https://a", "https://b", "https://c");
+        assertThat(listing.getImageUrl()).isEqualTo("https://a");
+    }
 
-  @Test
-  void createListing_rejectsMoreThanEightPhotos() {
-    assertThatThrownBy(() -> new ListingService(listingRepository, profileRepository)
-        .createListing(newStudent(1L, "Jane"), photoRequest(java.util.stream.IntStream.range(0, 9)
-            .mapToObj(i -> "https://photo/" + i).toList())))
-        .isInstanceOf(InvalidListingException.class).hasMessage("A listing can have at most 8 photos");
-  }
+    @Test
+    void createListing_rejectsMoreThanEightPhotos() {
+        assertThatThrownBy(
+                () -> new ListingService(listingRepository, profileRepository).createListing(newStudent(1L, "Jane"),
+                        photoRequest(
+                                java.util.stream.IntStream.range(0, 9).mapToObj(i -> "https://photo/" + i).toList())))
+                                        .isInstanceOf(InvalidListingException.class)
+                                        .hasMessage("A listing can have at most 8 photos");
+    }
 
-  @Test
-  void createListing_rejectsNonHttpsEntryInImageUrls() {
-    assertThatThrownBy(() -> new ListingService(listingRepository, profileRepository)
-        .createListing(newStudent(1L, "Jane"), photoRequest(List.of("https://a", "http://b"))))
-        .isInstanceOf(InvalidListingException.class)
-        .hasMessage("imageUrl must be an https URL of at most 1000 characters");
-  }
+    @Test
+    void createListing_rejectsNonHttpsEntryInImageUrls() {
+        assertThatThrownBy(() -> new ListingService(listingRepository, profileRepository)
+                .createListing(newStudent(1L, "Jane"), photoRequest(List.of("https://a", "http://b"))))
+                        .isInstanceOf(InvalidListingException.class)
+                        .hasMessage("imageUrl must be an https URL of at most 1000 characters");
+    }
 
-  @Test
-  void createListing_dropsBlankEntries() {
-    when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
-    Listing listing = new ListingService(listingRepository, profileRepository)
-        .createListing(newStudent(1L, "Jane"), photoRequest(List.of("https://a", "  ", "https://b")));
-    assertThat(listing.getImageUrls()).containsExactly("https://a", "https://b");
-  }
+    @Test
+    void createListing_dropsBlankEntries() {
+        when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        Listing listing = new ListingService(listingRepository, profileRepository).createListing(newStudent(1L, "Jane"),
+                photoRequest(List.of("https://a", "  ", "https://b")));
+        assertThat(listing.getImageUrls()).containsExactly("https://a", "https://b");
+    }
 
-  @Test
-  void createListing_legacyImageUrlBecomesSinglePhoto() {
-    when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
-    Listing listing = new ListingService(listingRepository, profileRepository)
-        .createListing(newStudent(1L, "Jane"), request("https://a"));
-    assertThat(listing.getImageUrls()).containsExactly("https://a");
-  }
+    @Test
+    void createListing_legacyImageUrlBecomesSinglePhoto() {
+        when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        Listing listing = new ListingService(listingRepository, profileRepository).createListing(newStudent(1L, "Jane"),
+                request("https://a"));
+        assertThat(listing.getImageUrls()).containsExactly("https://a");
+    }
 
-  @Test
-  void updateListing_reordersAndRemovesPhotos() {
-    Student owner = newStudent(1L, "Jane");
-    Listing listing = newListing(10L, owner);
-    listing.replaceImages(List.of("https://a", "https://b", "https://c"));
-    when(listingRepository.findById(10L)).thenReturn(Optional.of(listing));
-    when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
-    Listing updated = new ListingService(listingRepository, profileRepository)
-        .updateListing(10L, owner, photoRequest(List.of("https://c", "https://a")));
-    assertThat(updated.getImageUrls()).containsExactly("https://c", "https://a");
-    assertThat(updated.getImageUrl()).isEqualTo("https://c");
-  }
+    @Test
+    void updateListing_reordersAndRemovesPhotos() {
+        Student owner = newStudent(1L, "Jane");
+        Listing listing = newListing(10L, owner);
+        listing.replaceImages(List.of("https://a", "https://b", "https://c"));
+        when(listingRepository.findById(10L)).thenReturn(Optional.of(listing));
+        when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        Listing updated = new ListingService(listingRepository, profileRepository).updateListing(10L, owner,
+                photoRequest(List.of("https://c", "https://a")));
+        assertThat(updated.getImageUrls()).containsExactly("https://c", "https://a");
+        assertThat(updated.getImageUrl()).isEqualTo("https://c");
+    }
 
-  @Test
-  void updateListing_withEmptyImageUrls_clearsPhotosAndCover() {
-    Student owner = newStudent(1L, "Jane");
-    Listing listing = newListing(10L, owner);
-    listing.replaceImages(List.of("https://a"));
-    when(listingRepository.findById(10L)).thenReturn(Optional.of(listing));
-    when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
-    Listing updated = new ListingService(listingRepository, profileRepository)
-        .updateListing(10L, owner, photoRequest(List.of()));
-    assertThat(updated.getImageUrls()).isEmpty();
-    assertThat(updated.getImageUrl()).isNull();
-  }
+    @Test
+    void updateListing_withEmptyImageUrls_clearsPhotosAndCover() {
+        Student owner = newStudent(1L, "Jane");
+        Listing listing = newListing(10L, owner);
+        listing.replaceImages(List.of("https://a"));
+        when(listingRepository.findById(10L)).thenReturn(Optional.of(listing));
+        when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        Listing updated = new ListingService(listingRepository, profileRepository).updateListing(10L, owner,
+                photoRequest(List.of()));
+        assertThat(updated.getImageUrls()).isEmpty();
+        assertThat(updated.getImageUrl()).isNull();
+    }
 
-  @Test
-  void createListing_storesImageUrl() {
-    when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
-    Listing listing = new ListingService(listingRepository, profileRepository)
-        .createListing(newStudent(1L, "Jane"), request("https://images.unsplash.com/photo-1?w=800"));
-    assertThat(listing.getImageUrl()).isEqualTo("https://images.unsplash.com/photo-1?w=800");
-  }
+    @Test
+    void createListing_storesImageUrl() {
+        when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        Listing listing = new ListingService(listingRepository, profileRepository).createListing(newStudent(1L, "Jane"),
+                request("https://images.unsplash.com/photo-1?w=800"));
+        assertThat(listing.getImageUrl()).isEqualTo("https://images.unsplash.com/photo-1?w=800");
+    }
 
-  @Test
-  void createListing_storesNullForBlankImageUrl() {
-    when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
-    Listing listing = new ListingService(listingRepository, profileRepository)
-        .createListing(newStudent(1L, "Jane"), request("   "));
-    assertThat(listing.getImageUrl()).isNull();
-  }
+    @Test
+    void createListing_storesNullForBlankImageUrl() {
+        when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        Listing listing = new ListingService(listingRepository, profileRepository).createListing(newStudent(1L, "Jane"),
+                request("   "));
+        assertThat(listing.getImageUrl()).isNull();
+    }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"http://x.com/a.jpg", "javascript:alert(1)", "ftp://x/a.jpg"})
-  void createListing_rejectsNonHttpsImageUrl(String imageUrl) {
-    assertThatThrownBy(() -> new ListingService(listingRepository, profileRepository)
-        .createListing(newStudent(1L, "Jane"), request(imageUrl)))
-        .isInstanceOf(InvalidListingException.class)
-        .hasMessage("imageUrl must be an https URL of at most 1000 characters");
-  }
+    @ParameterizedTest
+    @ValueSource(strings = { "http://x.com/a.jpg", "javascript:alert(1)", "ftp://x/a.jpg" })
+    void createListing_rejectsNonHttpsImageUrl(String imageUrl) {
+        assertThatThrownBy(() -> new ListingService(listingRepository, profileRepository)
+                .createListing(newStudent(1L, "Jane"), request(imageUrl))).isInstanceOf(InvalidListingException.class)
+                        .hasMessage("imageUrl must be an https URL of at most 1000 characters");
+    }
 
-  @Test
-  void createListing_rejectsTooLongImageUrl() {
-    assertThatThrownBy(() -> new ListingService(listingRepository, profileRepository)
-        .createListing(newStudent(1L, "Jane"), request("https://" + "a".repeat(993))))
-        .isInstanceOf(InvalidListingException.class)
-        .hasMessage("imageUrl must be an https URL of at most 1000 characters");
-  }
+    @Test
+    void createListing_rejectsTooLongImageUrl() {
+        assertThatThrownBy(() -> new ListingService(listingRepository, profileRepository)
+                .createListing(newStudent(1L, "Jane"), request("https://" + "a".repeat(993))))
+                        .isInstanceOf(InvalidListingException.class)
+                        .hasMessage("imageUrl must be an https URL of at most 1000 characters");
+    }
 
-  @Test
-  void updateListing_replacesImageUrl() {
-    Student owner = newStudent(1L, "Jane");
-    Listing existing = newListing(10L, owner);
-    existing.setImageUrl("https://old.example/photo.jpg");
-    when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
-    when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
-    ListingService service = new ListingService(listingRepository, profileRepository);
-    assertThat(service.updateListing(10L, owner, request("https://new.example/photo.jpg"))
-        .getImageUrl()).isEqualTo("https://new.example/photo.jpg");
-    assertThat(service.updateListing(10L, owner, request(null)).getImageUrl()).isNull();
-  }
+    @Test
+    void updateListing_replacesImageUrl() {
+        Student owner = newStudent(1L, "Jane");
+        Listing existing = newListing(10L, owner);
+        existing.setImageUrl("https://old.example/photo.jpg");
+        when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
+        when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        ListingService service = new ListingService(listingRepository, profileRepository);
+        assertThat(service.updateListing(10L, owner, request("https://new.example/photo.jpg")).getImageUrl())
+                .isEqualTo("https://new.example/photo.jpg");
+        assertThat(service.updateListing(10L, owner, request(null)).getImageUrl()).isNull();
+    }
 
-  @Mock
-  private ListingRepository listingRepository;
+    @Mock
+    private ListingRepository listingRepository;
 
-  // Feed queries resolve their tenant through the server-owned profile repository.
-  @Mock
-  private ProfileRepository profileRepository;
+    // Feed queries resolve their tenant through the server-owned profile repository.
+    @Mock
+    private ProfileRepository profileRepository;
 
-  private Student newStudent(long id, String name) {
-    Student student = new Student(name, name.toLowerCase() + "@tulane.edu", "hashed", null, null);
-    student.setId(id);
-    return student;
-  }
+    private Student newStudent(long id, String name) {
+        Student student = new Student(name, name.toLowerCase() + "@tulane.edu", "hashed", null, null);
+        student.setId(id);
+        return student;
+    }
 
-  private Listing newListing(long id, Student seller) {
-    Listing listing = new Listing("Desk Lamp", "Works great", new BigDecimal("10.00"),
-        Condition.GOOD, Category.FURNITURE, seller);
-    listing.setId(id);
-    return listing;
-  }
+    private Listing newListing(long id, Student seller) {
+        Listing listing = new Listing("Desk Lamp", "Works great", new BigDecimal("10.00"), Condition.GOOD,
+                Category.FURNITURE, seller);
+        listing.setId(id);
+        return listing;
+    }
 
-  @Test
-  void updateListing_ownerProvidesValidData_savesUpdatedFields() {
-    // Arrange
-    Student owner = newStudent(1L, "Jane");
-    Listing existing = newListing(10L, owner);
-    when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
-    when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
-    ListingService service = new ListingService(listingRepository, profileRepository);
+    @Test
+    void updateListing_ownerProvidesValidData_savesUpdatedFields() {
+        // Arrange
+        Student owner = newStudent(1L, "Jane");
+        Listing existing = newListing(10L, owner);
+        when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
+        when(listingRepository.save(any(Listing.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        ListingService service = new ListingService(listingRepository, profileRepository);
 
-    // Act
-    Listing updated = service.updateListing(existing.getId(), owner, new CreateListingRequest("Mini Fridge", "Barely used",
-        new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
+        // Act
+        Listing updated = service.updateListing(existing.getId(), owner,
+                new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN"));
 
-    // Assert
-    assertThat(updated.getItemName()).isEqualTo("Mini Fridge");
-    assertThat(updated.getDescription()).isEqualTo("Barely used");
-    assertThat(updated.getPrice()).isEqualByComparingTo("40.00");
-    assertThat(updated.getCondition()).isEqualTo(Condition.LIKE_NEW);
-    assertThat(updated.getCategory()).isEqualTo(Category.KITCHEN);
-  }
+        // Assert
+        assertThat(updated.getItemName()).isEqualTo("Mini Fridge");
+        assertThat(updated.getDescription()).isEqualTo("Barely used");
+        assertThat(updated.getPrice()).isEqualByComparingTo("40.00");
+        assertThat(updated.getCondition()).isEqualTo(Condition.LIKE_NEW);
+        assertThat(updated.getCategory()).isEqualTo(Category.KITCHEN);
+    }
 
-  @Test
-  void updateListing_listingDoesNotExist_throwsListingNotFound() {
-    // Arrange
-    Student requester = newStudent(1L, "Jane");
-    when(listingRepository.findById(99L)).thenReturn(Optional.empty());
-    ListingService service = new ListingService(listingRepository, profileRepository);
+    @Test
+    void updateListing_listingDoesNotExist_throwsListingNotFound() {
+        // Arrange
+        Student requester = newStudent(1L, "Jane");
+        when(listingRepository.findById(99L)).thenReturn(Optional.empty());
+        ListingService service = new ListingService(listingRepository, profileRepository);
 
-    // Act & Assert
-    assertThatThrownBy(() -> service.updateListing(99L, requester, new CreateListingRequest("Desk Lamp", "Works great",
-        new BigDecimal("10.00"), "GOOD", "FURNITURE")))
-        .isInstanceOf(ListingNotFoundException.class);
-  }
+        // Act & Assert
+        assertThatThrownBy(() -> service.updateListing(99L, requester,
+                new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("10.00"), "GOOD", "FURNITURE")))
+                        .isInstanceOf(ListingNotFoundException.class);
+    }
 
-  @Test
-  void updateListing_requesterIsNotSeller_throwsForbidden() {
-    // Arrange
-    Student owner = newStudent(1L, "Jane");
-    Student otherStudent = newStudent(2L, "Bob");
-    Listing existing = newListing(10L, owner);
-    when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
-    ListingService service = new ListingService(listingRepository, profileRepository);
+    @Test
+    void updateListing_requesterIsNotSeller_throwsForbidden() {
+        // Arrange
+        Student owner = newStudent(1L, "Jane");
+        Student otherStudent = newStudent(2L, "Bob");
+        Listing existing = newListing(10L, owner);
+        when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
+        ListingService service = new ListingService(listingRepository, profileRepository);
 
-    // Act & Assert
-    assertThatThrownBy(() -> service.updateListing(existing.getId(), otherStudent, new CreateListingRequest("Mini Fridge", "Barely used",
-        new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN")))
-        .isInstanceOf(ForbiddenListingActionException.class);
-  }
+        // Act & Assert
+        assertThatThrownBy(() -> service.updateListing(existing.getId(), otherStudent,
+                new CreateListingRequest("Mini Fridge", "Barely used", new BigDecimal("40.00"), "LIKE_NEW", "KITCHEN")))
+                        .isInstanceOf(ForbiddenListingActionException.class);
+    }
 
-  @Test
-  void updateListing_nonPositivePrice_throwsInvalidListing() {
-    // Arrange
-    Student owner = newStudent(1L, "Jane");
-    Listing existing = newListing(10L, owner);
-    when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
-    ListingService service = new ListingService(listingRepository, profileRepository);
+    @Test
+    void updateListing_nonPositivePrice_throwsInvalidListing() {
+        // Arrange
+        Student owner = newStudent(1L, "Jane");
+        Listing existing = newListing(10L, owner);
+        when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
+        ListingService service = new ListingService(listingRepository, profileRepository);
 
-    // Act & Assert
-    assertThatThrownBy(() -> service.updateListing(existing.getId(), owner, new CreateListingRequest("Desk Lamp", "Works great",
-        new BigDecimal("0"), "GOOD", "FURNITURE")))
-        .isInstanceOf(InvalidListingException.class);
-  }
+        // Act & Assert
+        assertThatThrownBy(() -> service.updateListing(existing.getId(), owner,
+                new CreateListingRequest("Desk Lamp", "Works great", new BigDecimal("0"), "GOOD", "FURNITURE")))
+                        .isInstanceOf(InvalidListingException.class);
+    }
 
-  @Test
-  void deleteListing_owner_deletesListing() {
-    // Arrange
-    Student owner = newStudent(1L, "Jane");
-    Listing existing = newListing(10L, owner);
-    when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
-    ListingService service = new ListingService(listingRepository, profileRepository);
+    @Test
+    void deleteListing_owner_deletesListing() {
+        // Arrange
+        Student owner = newStudent(1L, "Jane");
+        Listing existing = newListing(10L, owner);
+        when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
+        ListingService service = new ListingService(listingRepository, profileRepository);
 
-    // Act
-    service.deleteListing(10L, owner);
+        // Act
+        service.deleteListing(10L, owner);
 
-    // Assert
-    verify(listingRepository).delete(existing);
-  }
+        // Assert
+        verify(listingRepository).delete(existing);
+    }
 
-  @Test
-  void deleteListing_listingDoesNotExist_throwsListingNotFound() {
-    // Arrange
-    Student requester = newStudent(1L, "Jane");
-    when(listingRepository.findById(99L)).thenReturn(Optional.empty());
-    ListingService service = new ListingService(listingRepository, profileRepository);
+    @Test
+    void deleteListing_listingDoesNotExist_throwsListingNotFound() {
+        // Arrange
+        Student requester = newStudent(1L, "Jane");
+        when(listingRepository.findById(99L)).thenReturn(Optional.empty());
+        ListingService service = new ListingService(listingRepository, profileRepository);
 
-    // Act & Assert
-    assertThatThrownBy(() -> service.deleteListing(99L, requester))
-        .isInstanceOf(ListingNotFoundException.class);
-    verify(listingRepository, never()).delete(any(Listing.class));
-  }
+        // Act & Assert
+        assertThatThrownBy(() -> service.deleteListing(99L, requester)).isInstanceOf(ListingNotFoundException.class);
+        verify(listingRepository, never()).delete(any(Listing.class));
+    }
 
-  @Test
-  void deleteListing_requesterIsNotSeller_throwsForbidden() {
-    // Arrange
-    Student owner = newStudent(1L, "Jane");
-    Student otherStudent = newStudent(2L, "Bob");
-    Listing existing = newListing(10L, owner);
-    when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
-    ListingService service = new ListingService(listingRepository, profileRepository);
+    @Test
+    void deleteListing_requesterIsNotSeller_throwsForbidden() {
+        // Arrange
+        Student owner = newStudent(1L, "Jane");
+        Student otherStudent = newStudent(2L, "Bob");
+        Listing existing = newListing(10L, owner);
+        when(listingRepository.findById(10L)).thenReturn(Optional.of(existing));
+        ListingService service = new ListingService(listingRepository, profileRepository);
 
-    // Act & Assert
-    assertThatThrownBy(() -> service.deleteListing(10L, otherStudent))
-        .isInstanceOf(ForbiddenListingActionException.class);
-    verify(listingRepository, never()).delete(any(Listing.class));
-  }
+        // Act & Assert
+        assertThatThrownBy(() -> service.deleteListing(10L, otherStudent))
+                .isInstanceOf(ForbiddenListingActionException.class);
+        verify(listingRepository, never()).delete(any(Listing.class));
+    }
 
-  @Test
-  void delete_adminSameSchool_deletes() {
-    Student admin = newStudent(1L, "Admin");
-    admin.setRole(Role.ADMIN);
-    Listing item = newListing(10L, newStudent(2L, "Seller"));
-    when(listingRepository.findById(10L)).thenReturn(Optional.of(item));
-    when(profileRepository.findByStudent_Id(1L)).thenReturn(Optional.of(
-        new Profile(admin, "Admin", "CS", null, "tulane.edu")));
-    when(listingRepository.findByIdInSchoolForAdmin(10L, "tulane.edu")).thenReturn(Optional.of(item));
-    new ListingService(listingRepository, profileRepository).deleteListing(10L, admin);
-    verify(listingRepository).delete(item);
-  }
 
-  @Test
-  void delete_adminOtherSchool_throwsNotFound() {
-    Student admin = newStudent(1L, "Admin");
-    admin.setRole(Role.ADMIN);
-    Listing item = newListing(10L, newStudent(2L, "Seller"));
-    when(listingRepository.findById(10L)).thenReturn(Optional.of(item));
-    when(profileRepository.findByStudent_Id(1L)).thenReturn(Optional.of(
-        new Profile(admin, "Admin", "CS", null, "tulane.edu")));
-    when(listingRepository.findByIdInSchoolForAdmin(10L, "tulane.edu")).thenReturn(Optional.empty());
-    assertThatThrownBy(() -> new ListingService(listingRepository, profileRepository).deleteListing(10L, admin))
-        .isInstanceOf(ListingNotFoundException.class);
-    verify(listingRepository, never()).delete(any(Listing.class));
-  }
+    @Test
+    void delete_adminSameSchool_deletes() {
+        Student admin = newStudent(1L, "Admin");
+        admin.setRole(Role.ADMIN);
+        Listing item = newListing(10L, newStudent(2L, "Seller"));
+        when(listingRepository.findById(10L)).thenReturn(Optional.of(item));
+        when(profileRepository.findByStudent_Id(1L))
+                .thenReturn(Optional.of(new Profile(admin, "Admin", "CS", null, "tulane.edu")));
+        when(listingRepository.findByIdInSchoolForAdmin(10L, "tulane.edu")).thenReturn(Optional.of(item));
+        new ListingService(listingRepository, profileRepository).deleteListing(10L, admin);
+        verify(listingRepository).delete(item);
+    }
+
+    @Test
+    void delete_adminOtherSchool_throwsNotFound() {
+        Student admin = newStudent(1L, "Admin");
+        admin.setRole(Role.ADMIN);
+        Listing item = newListing(10L, newStudent(2L, "Seller"));
+        when(listingRepository.findById(10L)).thenReturn(Optional.of(item));
+        when(profileRepository.findByStudent_Id(1L))
+                .thenReturn(Optional.of(new Profile(admin, "Admin", "CS", null, "tulane.edu")));
+        when(listingRepository.findByIdInSchoolForAdmin(10L, "tulane.edu")).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> new ListingService(listingRepository, profileRepository).deleteListing(10L, admin))
+                .isInstanceOf(ListingNotFoundException.class);
+        verify(listingRepository, never()).delete(any(Listing.class));
+    }
 }

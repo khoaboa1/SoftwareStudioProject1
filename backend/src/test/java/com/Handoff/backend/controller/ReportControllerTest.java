@@ -23,7 +23,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.mock.web.MockHttpSession;
+import com.Handoff.backend.support.FakeSupabaseAuthClient;
+import jakarta.servlet.http.Cookie;
+import java.util.UUID;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
@@ -36,7 +38,7 @@ class ReportControllerTest {
   @Autowired ListingReportRepository reports;
   @Autowired ConversationRepository conversations;
 
-  @BeforeEach void clean() {
+  @BeforeEach @AfterEach void clean() {
     reports.deleteAll();
     conversations.deleteAll();
     listings.deleteAll();
@@ -49,10 +51,15 @@ class ReportControllerTest {
     profiles.save(new Profile(student, name, "CS", null, domain));
     return student;
   }
-  private MockHttpSession session(Student student) {
-    MockHttpSession session = new MockHttpSession();
-    session.setAttribute(SessionKeys.STUDENT_ID, student.getId());
-    return session;
+  /** Logs the student in the SSP1-116 way: a Supabase user id plus the matching access-token cookie. */
+  private Cookie session(Student student) {
+    // Update a fresh copy: saving the caller's (possibly stale) object would undo role or suspension changes.
+    Student fresh = students.findById(student.getId()).orElseThrow();
+    if (fresh.getSupabaseUserId() == null) {
+      fresh.setSupabaseUserId(UUID.randomUUID());
+      fresh = students.save(fresh);
+    }
+    return new Cookie(AuthCookies.ACCESS, FakeSupabaseAuthClient.accessTokenFor(fresh.getSupabaseUserId()));
   }
   private Listing listing(Student seller) {
     return listings.save(new Listing("Lamp", "Works", BigDecimal.TEN, Condition.GOOD, Category.FURNITURE, seller));
@@ -65,14 +72,14 @@ class ReportControllerTest {
     String url = "/listings/" + item.getId() + "/reports";
     mvc.perform(post(url).contentType("application/json").content("{\"reason\":\"SCAM\",\"details\":\" suspicious \"}"))
         .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.message").value("You must be logged in to report a listing"));
-    mvc.perform(post(url).session(session(reporter)).contentType("application/json")
+    mvc.perform(post(url).cookie(session(reporter)).contentType("application/json")
         .content("{\"reason\":\"SCAM\",\"details\":\" suspicious \"}"))
         .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("OPEN"))
         .andExpect(jsonPath("$.details").value("suspicious"));
-    mvc.perform(post(url).session(session(reporter)).contentType("application/json")
+    mvc.perform(post(url).cookie(session(reporter)).contentType("application/json")
         .content("{\"reason\":\"SCAM\"}"))
         .andExpect(status().isConflict()).andExpect(jsonPath("$.message").value("You have already reported this listing"));
-    mvc.perform(delete("/listings/" + item.getId()).session(session(seller)))
+    mvc.perform(delete("/listings/" + item.getId()).cookie(session(seller)))
         .andExpect(status().isNoContent());
     assertThat(reports.count()).isZero();
   }
@@ -82,13 +89,13 @@ class ReportControllerTest {
     Student other = student("Other", "other@usf.edu", "usf.edu");
     Listing item = listing(seller);
     String url = "/listings/" + item.getId() + "/reports";
-    mvc.perform(post(url).session(session(seller)).contentType("application/json")
+    mvc.perform(post(url).cookie(session(seller)).contentType("application/json")
         .content("{\"reason\":\"SPAM\"}"))
         .andExpect(status().isForbidden()).andExpect(jsonPath("$.message").value("You cannot report your own listing"));
-    mvc.perform(post(url).session(session(other)).contentType("application/json")
+    mvc.perform(post(url).cookie(session(other)).contentType("application/json")
         .content("{\"reason\":\"SPAM\"}"))
         .andExpect(status().isNotFound()).andExpect(jsonPath("$.message").value("Listing not found"));
-    mvc.perform(post(url).session(session(seller)).contentType("application/json")
+    mvc.perform(post(url).cookie(session(seller)).contentType("application/json")
         .content("{\"reason\":\"bad\"}"))
         .andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").value("reason must be one of SCAM, PROHIBITED_ITEM, SPAM, OFFENSIVE, OTHER"));
   }

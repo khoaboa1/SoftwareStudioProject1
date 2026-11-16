@@ -2,6 +2,7 @@ package com.Handoff.backend.service;
 
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.StudentRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,50 +16,54 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @SpringBootTest
 class VerificationServiceTest {
 
-  @Autowired
-  private StudentRepository studentRepository;
+    @Autowired
+    private StudentRepository studentRepository;
 
-  @Autowired
-  private VerificationService verificationService;
+    @Autowired
+    private VerificationService verificationService;
 
-  @BeforeEach
-  void setUp() {
-    studentRepository.deleteAll();
-  }
+    @BeforeEach
+    void setUp() {
+        studentRepository.deleteAll();
+    }
 
-  @Test
-  void verifyPin_marksAccountVerifiedAndClearsPin() {
-    Student student = new Student("Bob", "bob@tulane.edu", "pass12345", null, null);
-    student.setVerified(false);
-    student.setVerificationPin("654321");
-    student.setVerificationPinExpiry(LocalDateTime.now().plusMinutes(15));
-    studentRepository.save(student);
+    @AfterEach
+    void tearDown() {
+        studentRepository.deleteAll();
+    }
 
-    Student verifiedStudent = verificationService.verifyPin("bob@tulane.edu", "654321", "test-device");
+    @Test
+    void verifyPin_marksAccountVerifiedAndClearsPin() {
+        Student student = new Student("Bob", "bob@tulane.edu", "pass12345", null, null);
+        student.setVerified(false);
+        student.setVerificationPin("654321");
+        student.setVerificationPinExpiry(LocalDateTime.now().plusMinutes(15));
+        studentRepository.save(student);
 
-    assertThat(verifiedStudent.isVerified()).isTrue();
-    assertThat(verifiedStudent.isEmailVerified()).isTrue();
-    assertThat(verifiedStudent.getVerificationPin()).isNull();
-    assertThat(verifiedStudent.getVerificationPinExpiry()).isNull();
-    assertThat(verifiedStudent.isDeviceTrusted("test-device")).isTrue();
+        Student verifiedStudent = verificationService.verifyPin("bob@tulane.edu", "654321", "test-device");
 
-    Student reloaded = studentRepository.findByEmail("bob@tulane.edu").orElseThrow();
-    assertThat(reloaded.isVerified()).isTrue();
-  }
+        assertThat(verifiedStudent.isVerified()).isTrue();
+        assertThat(verifiedStudent.isEmailVerified()).isTrue();
+        assertThat(verifiedStudent.getVerificationPin()).isNull();
+        assertThat(verifiedStudent.getVerificationPinExpiry()).isNull();
+        assertThat(verifiedStudent.isDeviceTrusted("test-device")).isTrue();
 
-  @Test
-  void verifyPin_throwsException_whenPinIncorrect() {
-    Student student = new Student("Bob", "bob@tulane.edu", "pass12345", null, null);
-    student.setVerified(false);
-    student.setVerificationPin("654321");
-    student.setVerificationPinExpiry(LocalDateTime.now().plusMinutes(15));
-    studentRepository.save(student);
+        Student reloaded = studentRepository.findByEmail("bob@tulane.edu").orElseThrow();
+        assertThat(reloaded.isVerified()).isTrue();
+    }
 
-    assertThatThrownBy(() -> verificationService.verifyPin("bob@tulane.edu", "111111", null))
-        .isInstanceOf(InvalidVerificationPinException.class)
-        .hasMessageContaining("Incorrect verification PIN");
+    @Test
+    void verifyPin_throwsException_whenPinIncorrect() {
+        Student student = new Student("Bob", "bob@tulane.edu", "pass12345", null, null);
+        student.setVerified(false);
+        student.setVerificationPin("654321");
+        student.setVerificationPinExpiry(LocalDateTime.now().plusMinutes(15));
+        studentRepository.save(student);
 
-    Student reloaded = studentRepository.findByEmail("bob@tulane.edu").orElseThrow();
-    assertThat(reloaded.isVerified()).isFalse();
-  }
+        assertThatThrownBy(() -> verificationService.verifyPin("bob@tulane.edu", "111111", null))
+                .isInstanceOf(InvalidVerificationPinException.class).hasMessageContaining("Incorrect verification PIN");
+
+        Student reloaded = studentRepository.findByEmail("bob@tulane.edu").orElseThrow();
+        assertThat(reloaded.isVerified()).isFalse();
+    }
 }

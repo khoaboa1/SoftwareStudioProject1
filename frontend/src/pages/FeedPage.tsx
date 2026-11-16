@@ -48,12 +48,18 @@ export function FeedPage() {
     [filtersKey],
     {
       onSuccess: ({ items, meta }) => {
-        if (items.length === 0 && meta.totalPages > 0 && filters.page > meta.totalPages) {
-          updateParams({ page: meta.totalPages > 1 ? String(meta.totalPages) : null })
+        if (
+          items.length === 0 &&
+          meta.totalPages > 0 &&
+          filters.page > meta.totalPages
+        ) {
+          updateParams({
+            page: meta.totalPages > 1 ? String(meta.totalPages) : null,
+          })
           return true
         }
       },
-    },
+    }
   )
   const [clearVersion, setClearVersion] = useState(0)
   const [categoryOptions, setCategoryOptions] = useState<Category[]>([])
@@ -67,7 +73,9 @@ export function FeedPage() {
   const [condition, setCondition] = useState<Condition>('GOOD')
   const [category, setCategory] = useState<Category>('OTHER')
   const [photos, setPhotos] = useState<ListingPhoto[]>([])
-  const [formStatus, setFormStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
+  const [formStatus, setFormStatus] = useState<'idle' | 'submitting' | 'error'>(
+    'idle'
+  )
   const [formError, setFormError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -80,15 +88,18 @@ export function FeedPage() {
   }, [])
 
   function updateParams(patch: Record<string, string | null>) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev)
-      for (const [key, value] of Object.entries(patch)) {
-        if (value === null) next.delete(key)
-        else next.set(key, value)
-      }
-      if (!('page' in patch)) next.delete('page')
-      return next
-    }, { replace: true })
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        for (const [key, value] of Object.entries(patch)) {
+          if (value === null) next.delete(key)
+          else next.set(key, value)
+        }
+        if (!('page' in patch)) next.delete('page')
+        return next
+      },
+      { replace: true }
+    )
   }
 
   function handlePageChange(page: number) {
@@ -135,9 +146,16 @@ export function FeedPage() {
     setPrice(String(listing.price))
     setCondition(listing.condition)
     setCategory(listing.category)
-    setPhotos((listing.imageUrls ?? (listing.imageUrl ? [listing.imageUrl] : [])).map((url, index) => ({
-      id: `${listing.id}-${index}`, url, previewUrl: url, status: 'ready',
-    })))
+    setPhotos(
+      (listing.imageUrls ?? (listing.imageUrl ? [listing.imageUrl] : [])).map(
+        (url, index) => ({
+          id: `${listing.id}-${index}`,
+          url,
+          previewUrl: url,
+          status: 'ready',
+        })
+      )
+    )
     setFormError(null)
     setFormStatus('idle')
     setShowForm(true)
@@ -147,8 +165,15 @@ export function FeedPage() {
     event.preventDefault()
 
     const parsedPrice = Number(price)
-    if (!itemName.trim() || !description.trim() || !Number.isFinite(parsedPrice) || parsedPrice <= 0) {
-      setFormError('Fill in an item name, description, and a price greater than $0.')
+    if (
+      !itemName.trim() ||
+      !description.trim() ||
+      !Number.isFinite(parsedPrice) ||
+      parsedPrice <= 0
+    ) {
+      setFormError(
+        'Fill in an item name, description, and a price greater than $0.'
+      )
       setFormStatus('error')
       return
     }
@@ -156,8 +181,16 @@ export function FeedPage() {
     setFormStatus('submitting')
     setFormError(null)
 
-    const input = { itemName, description, price: parsedPrice, condition, category,
-      imageUrls: photos.filter((photo) => photo.status === 'ready').map((photo) => photo.url!) }
+    const input = {
+      itemName,
+      description,
+      price: parsedPrice,
+      condition,
+      category,
+      imageUrls: photos
+        .filter((photo) => photo.status === 'ready')
+        .map((photo) => photo.url!),
+    }
 
     try {
       if (editingListingId !== null) {
@@ -177,7 +210,9 @@ export function FeedPage() {
       setPhotos([])
       setFormStatus('idle')
     } catch (error) {
-      setFormError(getErrorMessage(error, 'Something went wrong. Please try again.'))
+      setFormError(
+        getErrorMessage(error, 'Something went wrong. Please try again.')
+      )
       setFormStatus('error')
     }
   }
@@ -196,7 +231,9 @@ export function FeedPage() {
 
       <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-zinc-900">Campus Marketplace</h1>
+          <h1 className="text-xl font-semibold text-zinc-900">
+            Campus Marketplace
+          </h1>
           <Button
             type="button"
             fullWidth={false}
@@ -207,8 +244,17 @@ export function FeedPage() {
           </Button>
         </div>
 
-        <SearchBar key={`search-${clearVersion}`} value={filters.q} onSearch={handleSearch} />
-        <FilterBar key={`filter-${clearVersion}`} filters={filters} onChange={updateParams} onClear={handleClearAll} />
+        <SearchBar
+          key={`search-${clearVersion}`}
+          value={filters.q}
+          onSearch={handleSearch}
+        />
+        <FilterBar
+          key={`filter-${clearVersion}`}
+          filters={filters}
+          onChange={updateParams}
+          onClear={handleClearAll}
+        />
 
         {showForm && (
           <ListingForm
@@ -227,7 +273,9 @@ export function FeedPage() {
             onPhotosChange={setPhotos}
             status={formStatus}
             error={formError}
-            submitLabel={editingListingId !== null ? 'Save changes' : 'Post listing'}
+            submitLabel={
+              editingListingId !== null ? 'Save changes' : 'Post listing'
+            }
             onSubmit={handleFormSubmit}
           />
         )}
@@ -236,7 +284,9 @@ export function FeedPage() {
 
         {feedState.status === 'loading' && <ListingGridSkeleton />}
         {feedState.status === 'error' && <FeedError onRetry={reload} />}
-        {feedState.status === 'ready' && feedState.data.items.length === 0 && <ListingsEmptyState />}
+        {feedState.status === 'ready' && feedState.data.items.length === 0 && (
+          <ListingsEmptyState />
+        )}
         {feedState.status === 'ready' && feedState.data.items.length > 0 && (
           <>
             <ListingGrid>
@@ -244,12 +294,25 @@ export function FeedPage() {
                 <ListingCard
                   key={listing.id}
                   listing={listing}
-                  onEdit={listing.sellerId === student?.id ? () => openEditForm(listing) : undefined}
-                  onDelete={listing.sellerId === student?.id ? () => handleDelete(listing.id) : undefined}
+                  onEdit={
+                    listing.sellerId === student?.id
+                      ? () => openEditForm(listing)
+                      : undefined
+                  }
+                  onDelete={
+                    listing.sellerId === student?.id
+                      ? () => handleDelete(listing.id)
+                      : undefined
+                  }
                 />
               ))}
             </ListingGrid>
-            <Pagination currentPage={feedState.data.meta.currentPage} totalPages={feedState.data.meta.totalPages} totalItems={feedState.data.meta.totalItems} onPageChange={handlePageChange} />
+            <Pagination
+              currentPage={feedState.data.meta.currentPage}
+              totalPages={feedState.data.meta.totalPages}
+              totalItems={feedState.data.meta.totalItems}
+              onPageChange={handlePageChange}
+            />
           </>
         )}
       </main>

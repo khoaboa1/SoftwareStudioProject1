@@ -18,20 +18,29 @@ describe('ProfileView', () => {
   it('renders the profile details', () => {
     render(<ProfileView status="ready" profile={profile} />)
 
-    expect(screen.getByRole('heading', { name: 'Jane Doe' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Jane Doe' })
+    ).toBeInTheDocument()
     expect(screen.getByText('Computer Science')).toBeInTheDocument()
     expect(screen.getByText('tulane.edu')).toBeInTheDocument()
     expect(screen.getByText('Junior studying CS and Math.')).toBeInTheDocument()
   })
 
   it('shows the initials of the first and last name', () => {
-    render(<ProfileView status="ready" profile={{ ...profile, name: 'Jane Q Doe' }} />)
+    render(
+      <ProfileView
+        status="ready"
+        profile={{ ...profile, name: 'Jane Q Doe' }}
+      />
+    )
 
     expect(screen.getByText('JD')).toBeInTheDocument()
   })
 
   it('shows a single initial for a one-word name', () => {
-    render(<ProfileView status="ready" profile={{ ...profile, name: 'Cher' }} />)
+    render(
+      <ProfileView status="ready" profile={{ ...profile, name: 'Cher' }} />
+    )
 
     expect(screen.getByText('C')).toBeInTheDocument()
   })
@@ -64,20 +73,26 @@ describe('ProfileView', () => {
   it('shows the error message', () => {
     render(<ProfileView status="error" error="Could not load your profile." />)
 
-    expect(screen.getByRole('status')).toHaveTextContent('Could not load your profile.')
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Could not load your profile.'
+    )
     expect(screen.queryByRole('heading')).not.toBeInTheDocument()
   })
 
   it('falls back to a generic error message', () => {
     render(<ProfileView status="error" />)
 
-    expect(screen.getByRole('status')).toHaveTextContent('Something went wrong loading this profile.')
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Something went wrong loading this profile.'
+    )
   })
 
   it('does not show an edit button without onEdit', () => {
     render(<ProfileView status="ready" profile={profile} />)
 
-    expect(screen.queryByRole('button', { name: 'Edit profile' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Edit profile' })
+    ).not.toBeInTheDocument()
   })
 
   it('calls onEdit when the edit button is clicked', async () => {
@@ -95,9 +110,9 @@ describe('ProfileView', () => {
       render(<ProfileView status="ready" profile={profile} verified />)
 
       expect(screen.getByText('Verified Student')).toBeInTheDocument()
-      expect(screen.getByRole('heading', { name: 'Jane Doe' }).parentElement).toContainElement(
-        screen.getByText('Verified Student'),
-      )
+      expect(
+        screen.getByRole('heading', { name: 'Jane Doe' }).parentElement
+      ).toContainElement(screen.getByText('Verified Student'))
     })
 
     it('does not show the badge when not verified', () => {

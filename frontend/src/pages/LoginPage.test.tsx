@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { NetworkError } from '../services/httpClient'
 import { ApiError, login, resendPin, verifyPin } from '../services/authService'
 import { LoginPage } from './LoginPage'
 
@@ -30,7 +31,7 @@ async function submitLogin() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/feed" element={<p>Marketplace destination</p>} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   )
   await user.type(screen.getByLabelText('School email'), 'jane@tulane.edu')
   await user.type(screen.getByLabelText('Password'), 'Password123!')
@@ -48,27 +49,45 @@ describe('LoginPage authentication behavior', () => {
 
   it('keeps password-login defaults, device identity, auth update, and navigation', async () => {
     vi.mocked(login).mockResolvedValue({
-      requiresPin: false, message: 'Login successful',
-      id: 1, studentName: 'Jane Doe', email: 'jane@tulane.edu',
+      requiresPin: false,
+      message: 'Login successful',
+      id: 1,
+      studentName: 'Jane Doe',
+      email: 'jane@tulane.edu',
     })
 
     await submitLogin()
 
-    expect(await screen.findByText('Marketplace destination')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Marketplace destination')
+    ).toBeInTheDocument()
     expect(login).toHaveBeenCalledWith({
-      email: 'jane@tulane.edu', password: 'Password123!', deviceId: 'existing-browser',
+      email: 'jane@tulane.edu',
+      password: 'Password123!',
+      deviceId: 'existing-browser',
     })
     expect(setStudent).toHaveBeenCalledWith({
-      id: 1, studentName: 'Jane Doe', email: 'jane@tulane.edu',
-      emailVerified: true, sellingItems: null, dormLocation: null,
+      id: 1,
+      studentName: 'Jane Doe',
+      email: 'jane@tulane.edu',
+      emailVerified: true,
+      sellingItems: null,
+      dormLocation: null,
     })
   })
 
   it('waits for PIN verification before updating auth and navigating', async () => {
-    vi.mocked(login).mockResolvedValue({ requiresPin: true, message: 'Check your email' })
+    vi.mocked(login).mockResolvedValue({
+      requiresPin: true,
+      message: 'Check your email',
+    })
     const student = {
-      id: 1, studentName: 'Jane Doe', email: 'jane@tulane.edu',
-      emailVerified: true, sellingItems: null, dormLocation: null,
+      id: 1,
+      studentName: 'Jane Doe',
+      email: 'jane@tulane.edu',
+      emailVerified: true,
+      sellingItems: null,
+      dormLocation: null,
     }
     vi.mocked(verifyPin).mockResolvedValue(student)
 
@@ -77,11 +96,17 @@ describe('LoginPage authentication behavior', () => {
     expect(await screen.findByText('Check your email')).toBeInTheDocument()
     expect(setStudent).not.toHaveBeenCalled()
     await user.type(screen.getByLabelText('6-Digit Verification PIN'), '123456')
-    await user.click(screen.getByRole('button', { name: 'Verify PIN & Trust Device' }))
+    await user.click(
+      screen.getByRole('button', { name: 'Verify PIN & Trust Device' })
+    )
 
-    expect(await screen.findByText('Marketplace destination')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Marketplace destination')
+    ).toBeInTheDocument()
     expect(verifyPin).toHaveBeenCalledWith({
-      email: 'jane@tulane.edu', pin: '123456', deviceId: 'existing-browser',
+      email: 'jane@tulane.edu',
+      pin: '123456',
+      deviceId: 'existing-browser',
     })
     expect(setStudent).toHaveBeenCalledWith(student)
   })
@@ -93,62 +118,143 @@ describe('LoginPage authentication behavior', () => {
 
     expect(await screen.findByText('Invalid credentials')).toBeInTheDocument()
     expect(setStudent).not.toHaveBeenCalled()
-    expect(screen.queryByText('Marketplace destination')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Marketplace destination')
+    ).not.toBeInTheDocument()
   })
 
   it('keeps a failed PIN verification on the verification form', async () => {
-    vi.mocked(login).mockResolvedValue({ requiresPin: true, message: 'Check your email' })
-    vi.mocked(verifyPin).mockRejectedValue(new ApiError(400, 'Incorrect verification PIN'))
+    vi.mocked(login).mockResolvedValue({
+      requiresPin: true,
+      message: 'Check your email',
+    })
+    vi.mocked(verifyPin).mockRejectedValue(
+      new ApiError(400, 'Incorrect verification PIN')
+    )
 
     const user = await submitLogin()
-    await user.type(await screen.findByLabelText('6-Digit Verification PIN'), '123456')
-    await user.click(screen.getByRole('button', { name: 'Verify PIN & Trust Device' }))
+    await user.type(
+      await screen.findByLabelText('6-Digit Verification PIN'),
+      '123456'
+    )
+    await user.click(
+      screen.getByRole('button', { name: 'Verify PIN & Trust Device' })
+    )
 
-    expect(await screen.findByText('Incorrect verification PIN')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Incorrect verification PIN')
+    ).toBeInTheDocument()
     expect(setStudent).not.toHaveBeenCalled()
-    expect(screen.queryByText('Marketplace destination')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Marketplace destination')
+    ).not.toBeInTheDocument()
   })
 
   it('rejects a short PIN before verification', async () => {
-    vi.mocked(login).mockResolvedValue({ requiresPin: true, message: 'Check your email' })
+    vi.mocked(login).mockResolvedValue({
+      requiresPin: true,
+      message: 'Check your email',
+    })
 
     const user = await submitLogin()
-    await user.type(await screen.findByLabelText('6-Digit Verification PIN'), '12345')
-    await user.click(screen.getByRole('button', { name: 'Verify PIN & Trust Device' }))
+    await user.type(
+      await screen.findByLabelText('6-Digit Verification PIN'),
+      '12345'
+    )
+    await user.click(
+      screen.getByRole('button', { name: 'Verify PIN & Trust Device' })
+    )
 
     expect(screen.getByText('Enter the 6-digit PIN')).toBeInTheDocument()
     expect(verifyPin).not.toHaveBeenCalled()
   })
 
   it('resends the PIN and shows confirmation', async () => {
-    vi.mocked(login).mockResolvedValue({ requiresPin: true, message: 'Check your email' })
+    vi.mocked(login).mockResolvedValue({
+      requiresPin: true,
+      message: 'Check your email',
+    })
     vi.mocked(resendPin).mockResolvedValue()
 
     const user = await submitLogin()
     await user.click(await screen.findByRole('button', { name: 'Resend PIN' }))
 
     expect(resendPin).toHaveBeenCalledWith({ email: 'jane@tulane.edu' })
-    expect(await screen.findByText('A new 6-digit PIN has been generated!')).toBeInTheDocument()
+    expect(
+      await screen.findByText('A new 6-digit PIN has been generated!')
+    ).toBeInTheDocument()
   })
 
   it('shows the fallback for an unexpected verification failure', async () => {
-    vi.mocked(login).mockResolvedValue({ requiresPin: true, message: 'Check your email' })
+    vi.mocked(login).mockResolvedValue({
+      requiresPin: true,
+      message: 'Check your email',
+    })
     vi.mocked(verifyPin).mockRejectedValue(new Error('Network failed'))
 
     const user = await submitLogin()
-    await user.type(await screen.findByLabelText('6-Digit Verification PIN'), '123456')
-    await user.click(screen.getByRole('button', { name: 'Verify PIN & Trust Device' }))
+    await user.type(
+      await screen.findByLabelText('6-Digit Verification PIN'),
+      '123456'
+    )
+    await user.click(
+      screen.getByRole('button', { name: 'Verify PIN & Trust Device' })
+    )
 
-    expect(await screen.findByText('Invalid verification PIN.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Invalid verification PIN.')
+    ).toBeInTheDocument()
   })
 
   it('returns to login with the password cleared', async () => {
-    vi.mocked(login).mockResolvedValue({ requiresPin: true, message: 'Check your email' })
+    vi.mocked(login).mockResolvedValue({
+      requiresPin: true,
+      message: 'Check your email',
+    })
 
     const user = await submitLogin()
-    await user.click(await screen.findByRole('button', { name: 'Back to login' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Back to login' })
+    )
 
-    expect(screen.getByRole('heading', { name: 'Log in to Handoff' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Log in to Handoff' })
+    ).toBeInTheDocument()
     expect(screen.getByLabelText('Password')).toHaveValue('')
+  })
+
+  it('offers a retry when the server cannot be reached', async () => {
+    vi.mocked(login)
+      .mockRejectedValueOnce(new NetworkError())
+      .mockResolvedValueOnce({
+        requiresPin: false,
+        message: 'Login successful',
+        id: 1,
+        studentName: 'Jane Doe',
+        email: 'jane@tulane.edu',
+      })
+    const user = await submitLogin()
+    expect(
+      await screen.findByText(
+        "Can't reach the server. Check your connection and try again."
+      )
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(
+      await screen.findByText('Marketplace destination')
+    ).toBeInTheDocument()
+    expect(login).toHaveBeenCalledTimes(2)
+  })
+
+  it('titles the PIN step for both unverified accounts and new devices', async () => {
+    vi.mocked(login).mockResolvedValue({
+      requiresPin: true,
+      message:
+        'Account is unverified. A new verification PIN has been sent to your school email.',
+    })
+    await submitLogin()
+    expect(
+      await screen.findByRole('heading', { name: "Verify it's you" })
+    ).toBeInTheDocument()
   })
 })

@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Logo } from './Logo'
+import { MessagesMenu } from './MessagesMenu'
 import { Button } from './ui/Button'
 import { useAuth } from '../lib/auth-context'
 import { createAuthFacade } from '../services/authFacade'
@@ -24,7 +25,9 @@ export function AppHeader() {
         <div className="flex items-center gap-4 sm:gap-6">
           <div className="flex items-center gap-2">
             <Logo className="h-8 w-8" />
-            <span className="hidden text-lg font-semibold text-zinc-900 sm:inline">Handoff</span>
+            <span className="hidden text-lg font-semibold text-zinc-900 sm:inline">
+              Handoff
+            </span>
           </div>
           <nav className="flex items-center gap-4">
             <NavLink to="/feed" className={navLinkClass}>
@@ -36,8 +39,16 @@ export function AppHeader() {
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <span className="hidden text-sm text-zinc-600 sm:inline">Logged in as {student?.studentName}</span>
-          <Button type="button" fullWidth={false} onClick={handleLogout} className="whitespace-nowrap px-4 py-2 text-sm">
+          <MessagesMenu />
+          <span className="hidden text-sm text-zinc-600 sm:inline">
+            Logged in as {student?.studentName}
+          </span>
+          <Button
+            type="button"
+            fullWidth={false}
+            onClick={handleLogout}
+            className="whitespace-nowrap px-4 py-2 text-sm"
+          >
             Log out
           </Button>
         </div>

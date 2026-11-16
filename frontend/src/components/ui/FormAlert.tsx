@@ -3,9 +3,11 @@ import { CheckCircle, WarningCircle } from '@phosphor-icons/react'
 type FormAlertProps = {
   kind: 'success' | 'error'
   children: React.ReactNode
+  /** Optional follow-up, such as retrying a request that could not reach the server. */
+  action?: { label: string; onClick: () => void }
 }
 
-export function FormAlert({ kind, children }: FormAlertProps) {
+export function FormAlert({ kind, children, action }: FormAlertProps) {
   const isSuccess = kind === 'success'
   return (
     <div
@@ -21,7 +23,16 @@ export function FormAlert({ kind, children }: FormAlertProps) {
       ) : (
         <WarningCircle weight="fill" className="mt-0.5 h-4 w-4 shrink-0" />
       )}
-      <span>{children}</span>
+      <span className="flex-1">{children}</span>
+      {action && (
+        <button
+          type="button"
+          onClick={action.onClick}
+          className="shrink-0 font-medium underline underline-offset-2 hover:no-underline"
+        >
+          {action.label}
+        </button>
+      )}
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ListingDetailPage } from './ListingDetailPage'
 import { ApiError } from '../services/httpClient'
 import { getListing, type Listing } from '../services/listingService'
+import { startConversation } from '../services/conversationService'
 
 vi.mock('../lib/auth-context', () => ({
   useAuth: () => ({
@@ -15,6 +16,12 @@ vi.mock('../lib/auth-context', () => ({
 
 vi.mock('../services/listingService', () => ({
   getListing: vi.fn(),
+}))
+
+vi.mock('../services/conversationService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/conversationService')>()),
+  getConversations: vi.fn().mockResolvedValue([]),
+  startConversation: vi.fn(),
 }))
 
 const listing: Listing = {
@@ -34,21 +41,25 @@ function renderPage(path = '/listings/1') {
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/listings/:id" element={<ListingDetailPage />} />
+        <Route path="/conversations/:id" element={<p>Chat screen</p>} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   )
 }
 
 describe('ListingDetailPage', () => {
   beforeEach(() => {
     vi.mocked(getListing).mockReset()
+    vi.mocked(startConversation).mockReset()
   })
 
   it('renders the listing details', async () => {
     vi.mocked(getListing).mockResolvedValue(listing)
     renderPage()
 
-    expect(await screen.findByRole('heading', { name: 'Desk Lamp' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Desk Lamp' })
+    ).toBeInTheDocument()
     expect(screen.getByText('$10.00')).toBeInTheDocument()
     expect(screen.getByText('Works great')).toBeInTheDocument()
     expect(screen.getByText(/Sold by Jane Doe/)).toBeInTheDocument()
@@ -56,16 +67,22 @@ describe('ListingDetailPage', () => {
   })
 
   it('shows not found when the API returns 404', async () => {
-    vi.mocked(getListing).mockRejectedValue(new ApiError(404, 'Listing not found'))
+    vi.mocked(getListing).mockRejectedValue(
+      new ApiError(404, 'Listing not found')
+    )
     renderPage()
 
-    expect(await screen.findByRole('heading', { name: 'Listing not found' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Listing not found' })
+    ).toBeInTheDocument()
   })
 
   it('shows not found for a non-numeric id without calling the API', async () => {
     renderPage('/listings/abc')
 
-    expect(await screen.findByRole('heading', { name: 'Listing not found' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Listing not found' })
+    ).toBeInTheDocument()
     expect(getListing).not.toHaveBeenCalled()
   })
 
@@ -80,72 +97,162 @@ describe('ListingDetailPage', () => {
     vi.mocked(getListing).mockReturnValue(new Promise(() => {}))
     renderPage()
 
-    expect(screen.getByRole('link', { name: 'Back to marketplace' })).toHaveAttribute('href', '/feed')
+    expect(
+      screen.getByRole('link', { name: 'Back to marketplace' })
+    ).toHaveAttribute('href', '/feed')
   })
 
   it('shows the first photo by default', async () => {
-    vi.mocked(getListing).mockResolvedValue({ ...listing, imageUrls: ['https://a', 'https://b'] })
+    vi.mocked(getListing).mockResolvedValue({
+      ...listing,
+      imageUrls: ['https://a', 'https://b'],
+    })
     renderPage()
-    expect(await screen.findByRole('img', { name: 'Desk Lamp' })).toHaveAttribute('src', 'https://a')
-    expect(screen.getByRole('button', { name: 'Show photo 1' })).toHaveAttribute('aria-pressed', 'true')
+    expect(
+      await screen.findByRole('img', { name: 'Desk Lamp' })
+    ).toHaveAttribute('src', 'https://a')
+    expect(
+      screen.getByRole('button', { name: 'Show photo 1' })
+    ).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('switches the main photo when a thumbnail is clicked', async () => {
-    vi.mocked(getListing).mockResolvedValue({ ...listing, imageUrls: ['https://a', 'https://b'] })
+    vi.mocked(getListing).mockResolvedValue({
+      ...listing,
+      imageUrls: ['https://a', 'https://b'],
+    })
     renderPage()
     await screen.findByRole('img', { name: 'Desk Lamp' })
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Show photo 2' }))
-    expect(screen.getByRole('img', { name: 'Desk Lamp' })).toHaveAttribute('src', 'https://b')
-    expect(screen.getByRole('button', { name: 'Show photo 2' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'Show photo 2' }))
+    expect(screen.getByRole('img', { name: 'Desk Lamp' })).toHaveAttribute(
+      'src',
+      'https://b'
+    )
+    expect(
+      screen.getByRole('button', { name: 'Show photo 2' })
+    ).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('hides the thumbnail row with a single photo', async () => {
-    vi.mocked(getListing).mockResolvedValue({ ...listing, imageUrls: ['https://a'] })
+    vi.mocked(getListing).mockResolvedValue({
+      ...listing,
+      imageUrls: ['https://a'],
+    })
     renderPage()
-    expect(await screen.findByRole('img', { name: 'Desk Lamp' })).toHaveAttribute('src', 'https://a')
-    expect(screen.queryByRole('button', { name: 'Show photo 1' })).not.toBeInTheDocument()
+    expect(
+      await screen.findByRole('img', { name: 'Desk Lamp' })
+    ).toHaveAttribute('src', 'https://a')
+    expect(
+      screen.queryByRole('button', { name: 'Show photo 1' })
+    ).not.toBeInTheDocument()
   })
 
   it('shows the category placeholder with no photos', async () => {
-    vi.mocked(getListing).mockResolvedValue({ ...listing, imageUrls: [], imageUrl: null })
+    vi.mocked(getListing).mockResolvedValue({
+      ...listing,
+      imageUrls: [],
+      imageUrl: null,
+    })
     renderPage()
-    expect(await screen.findByRole('img', { name: 'Furniture listing' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Show photo/ })).not.toBeInTheDocument()
+    expect(
+      await screen.findByRole('img', { name: 'Furniture listing' })
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Show photo/ })
+    ).not.toBeInTheDocument()
   })
 
   describe('Message seller button', () => {
     it('shows Message seller on another student’s listing', async () => {
       vi.mocked(getListing).mockResolvedValue(listing)
       renderPage()
-      expect(await screen.findByRole('button', { name: 'Message seller' })).toBeEnabled()
+      expect(
+        await screen.findByRole('button', { name: 'Message seller' })
+      ).toBeEnabled()
     })
 
     it('shows Message seller on an ACTIVE listing', async () => {
       vi.mocked(getListing).mockResolvedValue({ ...listing, status: 'ACTIVE' })
       renderPage()
-      expect(await screen.findByRole('button', { name: 'Message seller' })).toBeInTheDocument()
+      expect(
+        await screen.findByRole('button', { name: 'Message seller' })
+      ).toBeInTheDocument()
     })
 
     it('hides Message seller on the student’s own listing', async () => {
       vi.mocked(getListing).mockResolvedValue({ ...listing, sellerId: 1 })
       renderPage()
       await screen.findByRole('heading', { name: 'Desk Lamp' })
-      expect(screen.queryByRole('button', { name: 'Message seller' })).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Message seller' })
+      ).not.toBeInTheDocument()
     })
 
-    it.each(['INACTIVE', 'SOLD'])('hides Message seller when the listing is %s', async (status) => {
-      vi.mocked(getListing).mockResolvedValue({ ...listing, status })
-      renderPage()
-      await screen.findByRole('heading', { name: 'Desk Lamp' })
-      expect(screen.queryByRole('button', { name: 'Message seller' })).not.toBeInTheDocument()
-    })
+    it.each(['INACTIVE', 'SOLD'])(
+      'hides Message seller when the listing is %s',
+      async (status) => {
+        vi.mocked(getListing).mockResolvedValue({ ...listing, status })
+        renderPage()
+        await screen.findByRole('heading', { name: 'Desk Lamp' })
+        expect(
+          screen.queryByRole('button', { name: 'Message seller' })
+        ).not.toBeInTheDocument()
+      }
+    )
 
     it('hides Message seller while loading and on errors', async () => {
       vi.mocked(getListing).mockRejectedValue(new ApiError(500, 'Server down'))
       renderPage()
-      expect(screen.queryByRole('button', { name: 'Message seller' })).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Message seller' })
+      ).not.toBeInTheDocument()
       await screen.findByText('Server down')
-      expect(screen.queryByRole('button', { name: 'Message seller' })).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Message seller' })
+      ).not.toBeInTheDocument()
+    })
+
+    it('starts the conversation and opens the chat page', async () => {
+      vi.mocked(getListing).mockResolvedValue(listing)
+      vi.mocked(startConversation).mockResolvedValue({
+        id: 42, listingId: 1, itemName: 'Desk Lamp', buyerId: 1, buyerName: 'Jane Doe',
+        sellerId: 7, sellerName: 'Sam Seller', createdAt: '2026-11-13T10:00:00Z',
+      })
+      renderPage()
+
+      await userEvent.setup().click(await screen.findByRole('button', { name: 'Message seller' }))
+
+      expect(startConversation).toHaveBeenCalledWith(1)
+      expect(await screen.findByText('Chat screen')).toBeInTheDocument()
+    })
+
+    it('disables the button while the conversation is starting', async () => {
+      vi.mocked(getListing).mockResolvedValue(listing)
+      vi.mocked(startConversation).mockReturnValue(new Promise(() => {}))
+      renderPage()
+
+      const button = await screen.findByRole('button', { name: 'Message seller' })
+      await userEvent.setup().click(button)
+
+      expect(button).toBeDisabled()
+      expect(startConversation).toHaveBeenCalledTimes(1)
+    })
+
+    it.each([
+      [409, 'This item has already been sold'],
+      [403, 'You cannot message yourself about your own listing'],
+    ])('shows the backend message inline on %i and stays on the page', async (status, apiMessage) => {
+      vi.mocked(getListing).mockResolvedValue(listing)
+      vi.mocked(startConversation).mockRejectedValue(new ApiError(status, apiMessage))
+      renderPage()
+
+      await userEvent.setup().click(await screen.findByRole('button', { name: 'Message seller' }))
+
+      expect(await screen.findByText(apiMessage)).toBeInTheDocument()
+      expect(screen.queryByText('Chat screen')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Message seller' })).toBeEnabled()
     })
   })
 })
