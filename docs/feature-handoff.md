@@ -49,6 +49,13 @@
   - An unverified sign-up is still purged from our table after 30 minutes by `AccountCleanupService`, but its unconfirmed Supabase user stays. Signing up again reuses it (found by email, which pages the admin user list).
   - The PIN lockout counter is in memory, so it resets when the backend restarts, and there is no limit yet on how often a new PIN can be requested.
 
+## Handoff Note: SSP1-142 Conversation API (Backend → Frontend)
+
+- **Shipped:** `GET /api/conversations` (buyer and seller side, newest first, `[]` when none) and `GET /api/conversations/{id}` (403 `You do not have access to this conversation` for non-participants, 404 `Conversation not found`). There is no separate create endpoint: starting or reopening a conversation stays `POST /listings/{id}/conversation` (SSP1-123), which the Message seller button already uses.
+- **Both reads:** 401 when not logged in; `404 { "message": "Profile not found" }` when the student has no profile.
+- **Response fields:** `ConversationResponse` now includes `listingStatus` (`ACTIVE`, `PENDING`, `SOLD`) and `lastMessage`, which is always `null` until the Message API (SSP1-135) ships.
+- **Sold listings:** existing conversations stay readable after a listing is sold.
+
 ## Handoff Note: SSP1-136 Inbox Page & Messages Menu (Frontend → Backend)
 
 - **Feature summary:** The header has a **Message** button that opens a dropdown with an **All messages** link (`/inbox`) and the 3 latest conversations. `/inbox` lists all of the student's conversations, newest first. Rows link to `/conversations/{id}` (the chat view, SSP1-141, is not built yet).
