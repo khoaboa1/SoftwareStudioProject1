@@ -14,6 +14,8 @@ import { deleteListing } from '../services/listingService'
 import { isAdmin } from '../lib/roles'
 import { ReportListingPanel } from '../components/ReportListingPanel'
 import { ConfirmInline } from '../components/ConfirmInline'
+import { ListingStatusBadge } from '../components/ListingStatusBadge'
+import { ListingStatusControl } from '../components/ListingStatusControl'
 
 export function ListingDetailPage() {
   const { id } = useParams()
@@ -21,9 +23,13 @@ export function ListingDetailPage() {
   const validId = Number.isInteger(listingId) && listingId > 0
   const { student } = useAuth()
   const navigate = useNavigate()
-  const { state } = useAsyncResource(() => getListing(listingId), [listingId], {
-    enabled: validId,
-  })
+  const { state, setData } = useAsyncResource(
+    () => getListing(listingId),
+    [listingId],
+    {
+      enabled: validId,
+    }
+  )
   const [selection, setSelection] = useState({ listingId, index: 0 })
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
@@ -36,13 +42,15 @@ export function ListingDetailPage() {
       ? (state.data.imageUrls ??
         (state.data.imageUrl ? [state.data.imageUrl] : []))
       : []
-  // Login and same-school access are enforced by RequireAuth and the backend's 404.
-  const canMessage =
-    state.status === 'ready' &&
-    state.data.sellerId !== student?.id &&
-    (state.data.status == null || state.data.status === 'ACTIVE')
+  const listingStatus =
+    state.status === 'ready' ? (state.data.status ?? 'ACTIVE') : 'ACTIVE'
+  const isOwnListing =
+    state.status === 'ready' && state.data.sellerId === student?.id
   const isOthersListing =
     state.status === 'ready' && state.data.sellerId !== student?.id
+  // Login and same-school access are enforced by RequireAuth and the backend's 404. Pending still takes messages.
+  const canMessage = isOthersListing && listingStatus !== 'SOLD'
+  const isSoldToOthers = isOthersListing && listingStatus === 'SOLD'
   // Admins delete directly; reporting would only send the listing to their own queue.
   const canReport = isOthersListing && !isAdmin(student)
   const canAdminDelete = isOthersListing && isAdmin(student)
@@ -139,6 +147,7 @@ export function ListingDetailPage() {
                 <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700">
                   {CONDITION_LABELS[state.data.condition]}
                 </span>
+                <ListingStatusBadge status={listingStatus} />
               </div>
               <p className="mt-6 whitespace-pre-line text-sm text-zinc-700">
                 {state.data.description}
@@ -154,6 +163,18 @@ export function ListingDetailPage() {
                   year: 'numeric',
                 })}
               </p>
+              {isOwnListing && (
+                <ListingStatusControl
+                  listingId={listingId}
+                  status={listingStatus}
+                  onChange={(updated) => setData(updated)}
+                />
+              )}
+              {isSoldToOthers && (
+                <p className="mt-6 text-sm font-medium text-zinc-600">
+                  This item has been sold.
+                </p>
+              )}
               {canMessage && (
                 <>
                   <Button
@@ -164,6 +185,12 @@ export function ListingDetailPage() {
                   >
                     Message seller
                   </Button>
+                  {listingStatus === 'PENDING' && (
+                    <p className="mt-2 text-sm text-zinc-500">
+                      Someone is already arranging to buy this — you can still
+                      message the seller.
+                    </p>
+                  )}
                   {startError && (
                     <FormAlert kind="error">{startError}</FormAlert>
                   )}

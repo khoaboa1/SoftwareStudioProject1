@@ -1,5 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { createListing, uploadListingImage } from './listingService'
+import {
+  createListing,
+  updateListingStatus,
+  uploadListingImage,
+} from './listingService'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -35,4 +39,19 @@ it('createListing sends imageUrls', async () => {
   expect(JSON.parse(fetchMock.mock.calls[0][1].body).imageUrls).toEqual([
     'https://a',
   ])
+})
+
+it('updateListingStatus patches the status and returns the listing', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValue(new Response(JSON.stringify({ id: 5, status: 'SOLD' })))
+  vi.stubGlobal('fetch', fetchMock)
+  expect(await updateListingStatus(5, 'SOLD')).toEqual({
+    id: 5,
+    status: 'SOLD',
+  })
+  const [path, options] = fetchMock.mock.calls[0]
+  expect(path).toMatch(/\/listings\/5\/status$/)
+  expect(options.method).toBe('PATCH')
+  expect(JSON.parse(options.body)).toEqual({ status: 'SOLD' })
 })

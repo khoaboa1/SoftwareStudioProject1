@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +7,7 @@ import { ApiError } from '../services/httpClient'
 import {
   deleteListing,
   getListing,
+  updateListingStatus,
   type Listing,
 } from '../services/listingService'
 import { startConversation } from '../services/conversationService'
@@ -28,6 +29,7 @@ vi.mock('../lib/auth-context', () => ({
 vi.mock('../services/listingService', () => ({
   getListing: vi.fn(),
   deleteListing: vi.fn(),
+  updateListingStatus: vi.fn(),
 }))
 
 vi.mock('../services/conversationService', async (importOriginal) => ({
@@ -71,6 +73,7 @@ describe('ListingDetailPage', () => {
     vi.mocked(startConversation).mockReset()
     vi.mocked(deleteListing).mockReset()
     vi.mocked(reportListing).mockReset()
+    vi.mocked(updateListingStatus).mockReset()
   })
 
   it('shows Report listing to another student but hides admin delete', async () => {
@@ -297,17 +300,29 @@ describe('ListingDetailPage', () => {
       ).not.toBeInTheDocument()
     })
 
-    it.each(['INACTIVE', 'SOLD'])(
-      'hides Message seller when the listing is %s',
-      async (status) => {
-        vi.mocked(getListing).mockResolvedValue({ ...listing, status })
-        renderPage()
-        await screen.findByRole('heading', { name: 'Desk Lamp' })
-        expect(
-          screen.queryByRole('button', { name: 'Message seller' })
-        ).not.toBeInTheDocument()
-      }
-    )
+    it('hides Message seller and says so when the listing is SOLD', async () => {
+      vi.mocked(getListing).mockResolvedValue({ ...listing, status: 'SOLD' })
+      renderPage()
+      expect(
+        await screen.findByText('This item has been sold.')
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Message seller' })
+      ).not.toBeInTheDocument()
+      expect(screen.getByText('Sold')).toBeInTheDocument()
+    })
+
+    it('still shows Message seller on a PENDING listing, with a note', async () => {
+      vi.mocked(getListing).mockResolvedValue({ ...listing, status: 'PENDING' })
+      renderPage()
+      expect(
+        await screen.findByRole('button', { name: 'Message seller' })
+      ).toBeEnabled()
+      expect(screen.getByText('Pending')).toBeInTheDocument()
+      expect(
+        screen.getByText(/someone is already arranging to buy this/i)
+      ).toBeInTheDocument()
+    })
 
     it('hides Message seller while loading and on errors', async () => {
       vi.mocked(getListing).mockRejectedValue(new ApiError(500, 'Server down'))
@@ -380,5 +395,50 @@ describe('ListingDetailPage', () => {
         ).toBeEnabled()
       }
     )
+  })
+
+  describe('Listing status control', () => {
+    it('shows the status control to the owner only', async () => {
+      vi.mocked(getListing).mockResolvedValue({
+        ...listing,
+        sellerId: 1,
+        status: 'PENDING',
+      })
+      const view = renderPage()
+      expect(
+        await screen.findByRole('radiogroup', { name: 'Listing status' })
+      ).toBeInTheDocument()
+      expect(screen.getByRole('radio', { name: 'Pending' })).toBeChecked()
+      view.unmount()
+
+      vi.mocked(getListing).mockResolvedValue({ ...listing, status: 'PENDING' })
+      renderPage()
+      await screen.findByRole('heading', { name: 'Desk Lamp' })
+      expect(
+        screen.queryByRole('radiogroup', { name: 'Listing status' })
+      ).not.toBeInTheDocument()
+    })
+
+    it('updates the badge after the owner marks it sold, without reloading', async () => {
+      const user = userEvent.setup()
+      const own = { ...listing, sellerId: 1, status: 'ACTIVE' as const }
+      vi.mocked(getListing).mockResolvedValue(own)
+      vi.mocked(updateListingStatus).mockResolvedValue({
+        ...own,
+        status: 'SOLD',
+      })
+      renderPage()
+      await user.click(await screen.findByRole('radio', { name: 'Sold' }))
+      expect(updateListingStatus).toHaveBeenCalledWith(1, 'SOLD')
+      await waitFor(() =>
+        expect(screen.getByRole('radio', { name: 'Sold' })).toBeChecked()
+      )
+      // One "Sold" is the radio option's label; the other is the new badge.
+      expect(screen.getAllByText('Sold')).toHaveLength(2)
+      expect(getListing).toHaveBeenCalledTimes(1)
+      expect(
+        screen.queryByText('This item has been sold.')
+      ).not.toBeInTheDocument()
+    })
   })
 })
