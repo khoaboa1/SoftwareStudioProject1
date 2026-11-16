@@ -279,7 +279,6 @@ class ListingServiceTest {
         verify(listingRepository, never()).delete(any(Listing.class));
     }
 
-
     @Test
     void delete_adminSameSchool_deletes() {
         Student admin = newStudent(1L, "Admin");

@@ -9,5 +9,5 @@ This repo has a Spring Boot backend (`backend/`) and a React/Vite frontend (`fro
 
 ## Java Formatting
 - Format every Java file you create or change with the project's formatter (`formatter-maven-plugin`, Eclipse style, configured in `backend/pom.xml`); the Red Hat Java extension in VS Code produces the same style: 4-space indentation, lines wrapped at about 120 columns, and empty bodies written as `{` then `}` on separate lines. Do not copy the indentation of older files; they may predate the formatter.
-- After editing Java files, run `cd backend && ./mvnw formatter:format`. Check with `./mvnw formatter:validate`; `./mvnw verify` fails if any Java file is not formatted.
+- After editing Java files, run `cd backend && ./mvnw formatter:format`. `./mvnw formatter:validate` can check formatting, but `./mvnw verify` no longer runs it because the formatter output differed between devices.
 - Do not use Prettier on Java files. Prettier is only used for the frontend (`frontend/`).
