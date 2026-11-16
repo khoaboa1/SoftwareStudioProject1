@@ -3,6 +3,7 @@ package com.Handoff.backend.controller;
 import com.Handoff.backend.dto.CreateListingRequest;
 import com.Handoff.backend.dto.ErrorResponse;
 import com.Handoff.backend.dto.ListingResponse;
+import com.Handoff.backend.dto.UpdateListingStatusRequest;
 import com.Handoff.backend.model.Category;
 import com.Handoff.backend.model.Listing;
 import com.Handoff.backend.model.Student;
@@ -18,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -73,6 +75,14 @@ public class ListingController {
         Student requester = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED_TO_POST);
         Listing listing = listingService.updateListing(id, requester, request);
         return ResponseEntity.ok(ListingResponse.from(listing));
+    }
+
+    @PatchMapping("/{id}/status")
+    public ListingResponse updateStatus(@PathVariable Long id,
+            @RequestBody(required = false) UpdateListingStatusRequest request, HttpServletRequest httpRequest) {
+        Student requester = currentStudentResolver.require(httpRequest, NOT_AUTHENTICATED_TO_POST);
+        return ListingResponse
+                .from(listingService.updateStatus(id, requester, request == null ? null : request.status()));
     }
 
     @DeleteMapping("/{id}")

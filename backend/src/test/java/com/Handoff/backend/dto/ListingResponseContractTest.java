@@ -74,7 +74,8 @@ class ListingResponseContractTest {
         List<String> components = java.util.Arrays.stream(ListingResponse.class.getRecordComponents())
                 .map(java.lang.reflect.RecordComponent::getName).toList();
 
-        assertEquals(12, components.size());
+        assertEquals(13, components.size());
+        assertTrue(components.contains("status"));
         assertTrue(components.contains("sellerVerified"));
         assertFalse(components.stream()
                 .anyMatch(name -> name.equals("passwordHash") || name.equals("verificationPin")

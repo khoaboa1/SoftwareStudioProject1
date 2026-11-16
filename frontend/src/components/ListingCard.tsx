@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { CATEGORY_LABELS, CONDITION_LABELS } from '../lib/listingOptions'
 import type { Listing } from '../services/listingService'
+import { ListingStatusBadge } from './ListingStatusBadge'
 import { ListingThumbnail } from './ListingThumbnail'
 import { VerifiedBadge } from './VerifiedBadge'
 
@@ -46,6 +47,7 @@ export function ListingCard({ listing, onEdit, onDelete }: ListingCardProps) {
           <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700">
             {CONDITION_LABELS[listing.condition]}
           </span>
+          <ListingStatusBadge status={listing.status} />
         </div>
         <div className="mt-auto flex items-center justify-between gap-2">
           <div

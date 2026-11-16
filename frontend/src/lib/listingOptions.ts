@@ -1,4 +1,8 @@
-import type { Category, Condition } from '../services/listingService'
+import type {
+  Category,
+  Condition,
+  ListingStatus,
+} from '../services/listingService'
 
 export const CONDITION_OPTIONS: { value: Condition; label: string }[] = [
   { value: 'NEW', label: 'New' },
@@ -24,3 +28,9 @@ export const CONDITION_LABELS = Object.fromEntries(
 export const CATEGORY_LABELS = Object.fromEntries(
   CATEGORY_OPTIONS.map((option) => [option.value, option.label])
 ) as Record<Category, string>
+
+export const STATUS_OPTIONS: { value: ListingStatus; label: string }[] = [
+  { value: 'ACTIVE', label: 'Available' },
+  { value: 'PENDING', label: 'Pending' },
+  { value: 'SOLD', label: 'Sold' },
+]

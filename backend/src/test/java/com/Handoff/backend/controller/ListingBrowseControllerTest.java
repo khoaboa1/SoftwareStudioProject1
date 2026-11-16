@@ -181,6 +181,22 @@ class ListingBrowseControllerTest {
                 .andExpect(jsonPath("$.items[1].sellerVerified").value(false));
     }
 
+    @Test
+    void browse_includesPendingButNotSold() throws Exception {
+        Student viewer = student("Viewer", "viewer@tulane.edu", "tulane.edu");
+        Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
+        listing(seller, "Available", "desc", "10.00", Category.FURNITURE, ListingStatus.ACTIVE, 1);
+        listing(seller, "Pending", "desc", "20.00", Category.FURNITURE, ListingStatus.PENDING, 2);
+        listing(seller, "Sold", "desc", "30.00", Category.FURNITURE, ListingStatus.SOLD, 3);
+
+        mockMvc.perform(get("/api/listings").cookie(session(viewer))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.items", hasSize(2))).andExpect(jsonPath("$.items[0].itemName").value("Pending"))
+                .andExpect(jsonPath("$.items[0].status").value("PENDING"))
+                .andExpect(jsonPath("$.items[1].itemName").value("Available"))
+                .andExpect(jsonPath("$.items[1].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.meta.totalItems").value(2));
+    }
+
     private Listing listing(Student seller, String name, String description, String price, Category category,
             ListingStatus status, long seconds) {
         // Fixed timestamps make pagination and ordering assertions deterministic.

@@ -34,8 +34,9 @@ public final class ListingSpecifications {
             predicates.add(criteriaBuilder.exists(matchingProfile));
             predicates.add(criteriaBuilder.isFalse(root.get("seller").get("suspended")));
 
-            // Existing rows predate the status column; null is treated as ACTIVE during migration.
-            predicates.add(criteriaBuilder.or(criteriaBuilder.equal(root.get("status"), ListingStatus.ACTIVE),
+            // Pending listings stay browseable; sold ones leave the marketplace. Null predates the status column and
+            // is treated as ACTIVE.
+            predicates.add(criteriaBuilder.or(root.get("status").in(ListingStatus.ACTIVE, ListingStatus.PENDING),
                     criteriaBuilder.isNull(root.get("status"))));
 
             if (request.keyword() != null) {

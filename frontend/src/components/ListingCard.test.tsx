@@ -145,4 +145,16 @@ describe('ListingCard', () => {
       )
     })
   })
+
+  it('shows the status badge for a sold listing', () => {
+    renderCard(undefined, undefined, { status: 'SOLD' })
+    expect(screen.getByText('Sold')).toBeInTheDocument()
+  })
+
+  it('shows no status badge for an available listing', () => {
+    renderCard(undefined, undefined, { status: 'ACTIVE' })
+    expect(screen.queryByText('Available')).not.toBeInTheDocument()
+    expect(screen.queryByText('Sold')).not.toBeInTheDocument()
+    expect(screen.queryByText('Pending')).not.toBeInTheDocument()
+  })
 })

@@ -1,5 +1,27 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-147 Listing Status (Backend + Frontend)
+
+- **Feature summary:** A seller can mark their own listing Available, Pending or Sold, as on Facebook Marketplace. Buyers see the status. They can still message the seller about a Pending listing, but can't start a new conversation about a Sold one.
+- **Data:** this uses the existing `listings.status` column and `ListingStatus` enum, so there is no migration. Every listing response (`GET /listings`, `GET /listings/{id}`, `GET /api/listings`, create, update) now includes `"status": "ACTIVE" | "PENDING" | "SOLD"`. A `null` in the database is returned as `"ACTIVE"`.
+- **Endpoint:** `PATCH /listings/{id}/status` with `{ "status": "ACTIVE" | "PENDING" | "SOLD" }` (case-insensitive) returns `200` with the updated listing. Any status can change to any other.
+  - 401 `You must be logged in to post a listing`.
+  - 404 `Listing not found`.
+  - 403 `You do not have permission to modify this listing` for anyone but the owner, admins included. Ownership is checked before the value, so a non-owner always gets 403.
+  - 400 `status must be one of ACTIVE, PENDING, SOLD` for a missing or blank status, an unknown value, or the internal `INACTIVE`, `DRAFT` and `DELETED`.
+- **Where listings appear:** marketplace browse (`GET /api/listings`) shows ACTIVE and PENDING listings and hides SOLD. `GET /listings/{id}` and `GET /listings` still return every status, so old conversations open a Sold listing and the profile's "My listings" shows the seller's Sold items.
+- **Messaging:** unchanged from SSP1-123. `POST /listings/{id}/conversation` returns 409 for a Sold listing unless the buyer already has a conversation about it, which reopens.
+- **Frontend:**
+  - The owner sees a "Listing status" Available / Pending / Sold switch on the listing page (`ListingStatusControl`). The page updates without reloading. A failed save shows the error and keeps the old status.
+  - `ListingStatusBadge` shows Pending and Sold pills on cards and the detail page; Available has no badge.
+  - Buyers see Message seller on Pending, with a note that someone is already arranging to buy it. On Sold they see "This item has been sold." instead of the button.
+- **Known gaps:**
+  - No status history or timestamp.
+  - Admins can't change a status; they delete instead.
+  - `GET /listings` still returns Sold listings to other students.
+  - Messages can still be sent in an existing conversation after the listing is Sold.
+  - The feed's Edit form doesn't show or change the status.
+
 ## Handoff Note: SSP1-115 Admin Role (Backend → Frontend)
 
 - **Feature summary:** Same-school admins can review listing reports, delete another student's listing, suspend or unsuspend students, and change student roles. A student can report a visible listing.

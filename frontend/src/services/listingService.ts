@@ -4,6 +4,9 @@ export type Condition = 'NEW' | 'LIKE_NEW' | 'GOOD' | 'FAIR' | 'WORN'
 export type Category =
   'FURNITURE' | 'ELECTRONICS' | 'KITCHEN' | 'DECOR' | 'CLOTHING' | 'OTHER'
 
+/** The statuses a seller can choose. A missing status means ACTIVE. */
+export type ListingStatus = 'ACTIVE' | 'PENDING' | 'SOLD'
+
 export type Listing = {
   id: number
   itemName: string
@@ -15,8 +18,8 @@ export type Listing = {
   sellerName: string
   sellerVerified?: boolean | null
   createdAt: string
-  /** Not sent by the backend yet; absent means the listing is treated as ACTIVE. */
-  status?: string | null
+  /** Absent or null means ACTIVE. */
+  status?: ListingStatus | null
   imageUrl?: string | null
   imageUrls?: string[]
 }
@@ -99,6 +102,16 @@ export function updateListing(
   return request<Listing>(`/listings/${id}`, {
     method: 'PUT',
     body: JSON.stringify(input),
+  })
+}
+
+export function updateListingStatus(
+  id: number,
+  status: ListingStatus
+): Promise<Listing> {
+  return request<Listing>(`/listings/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
   })
 }
 
