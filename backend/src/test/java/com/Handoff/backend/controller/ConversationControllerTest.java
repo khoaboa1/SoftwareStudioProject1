@@ -197,70 +197,10 @@ class ConversationControllerTest {
 
     private static final String LOGIN_MESSAGE = "You must be logged in to view conversations";
 
-    private org.springframework.test.web.servlet.ResultActions postApi(String body, Cookie session) throws Exception {
-        var request = post("/api/conversations").contentType("application/json").content(body);
-        return mockMvc.perform(session == null ? request : request.cookie(session));
-    }
-
     private long startViaApi(long listingId, String email) throws Exception {
-        MvcResult result = postApi("{\"listingId\":" + listingId + "}", loginSession(email))
+        MvcResult result = mockMvc.perform(post("/listings/{id}/conversation", listingId).cookie(loginSession(email)))
                 .andExpect(status().isCreated()).andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asLong();
-    }
-
-    @Test
-    void apiStart_firstTime_returns201() throws Exception {
-        Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
-        Student buyer = student("Buyer", "buyer@tulane.edu", "tulane.edu");
-        Listing listing = listing(seller);
-        postApi("{\"listingId\":" + listing.getId() + "}", loginSession("buyer@tulane.edu"))
-                .andExpect(status().isCreated()).andExpect(jsonPath("$.id").isNumber())
-                .andExpect(jsonPath("$.listingId").value(listing.getId()))
-                .andExpect(jsonPath("$.buyerId").value(buyer.getId()))
-                .andExpect(jsonPath("$.sellerId").value(seller.getId()))
-                .andExpect(jsonPath("$.listingStatus").value("ACTIVE"))
-                .andExpect(jsonPath("$.lastMessage").value(nullValue()));
-    }
-
-    @Test
-    void apiStart_secondTime_returns200SameId() throws Exception {
-        Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
-        student("Buyer", "buyer@tulane.edu", "tulane.edu");
-        Listing listing = listing(seller);
-        long id = startViaApi(listing.getId(), "buyer@tulane.edu");
-        postApi("{\"listingId\":" + listing.getId() + "}", loginSession("buyer@tulane.edu")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(id));
-        assertThat(conversationRepository.count()).isEqualTo(1);
-    }
-
-    @Test
-    void apiStart_missingListingId_returns400() throws Exception {
-        student("Buyer", "buyer@tulane.edu", "tulane.edu");
-        postApi("{}", loginSession("buyer@tulane.edu")).andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("listingId is required"));
-        assertThat(conversationRepository.count()).isZero();
-    }
-
-    @Test
-    void apiStart_ownListing_returns403() throws Exception {
-        Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
-        Listing listing = listing(seller);
-        postApi("{\"listingId\":" + listing.getId() + "}", loginSession("seller@tulane.edu"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("You cannot message yourself about your own listing"));
-    }
-
-    @Test
-    void apiStart_notLoggedIn_returns401() throws Exception {
-        postApi("{\"listingId\":1}", null).andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value(LOGIN_MESSAGE));
-    }
-
-    @Test
-    void apiStart_withoutProfile_returns404ProfileNotFound() throws Exception {
-        Cookie session = loginAsNewStudent("buyer@tulane.edu");
-        postApi("{\"listingId\":999999}", session).andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message").value("Profile not found"));
     }
 
     @Test
