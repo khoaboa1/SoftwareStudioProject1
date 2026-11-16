@@ -134,6 +134,20 @@ class MessageServiceTest {
     }
 
     @Test
+    void latestByConversation_mapsConversationIdToNewestMessage() {
+        Message last = new Message(conversation, buyer, "last");
+        when(messageRepository.findLatestForConversations(List.of(5L))).thenReturn(List.of(last));
+
+        assertThat(service().latestByConversation(List.of(conversation))).containsOnlyKeys(5L).containsEntry(5L, last);
+    }
+
+    @Test
+    void latestByConversation_noConversations_returnsEmptyWithoutQuerying() {
+        assertThat(service().latestByConversation(List.of())).isEmpty();
+        verify(messageRepository, never()).findLatestForConversations(any());
+    }
+
+    @Test
     void history_nonParticipant_propagatesAccessDenied() {
         when(conversationService.getForParticipant(5L, buyer)).thenThrow(new ConversationAccessDeniedException());
 

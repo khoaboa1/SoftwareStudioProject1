@@ -77,6 +77,22 @@ class MessageRepositoryTest {
     }
 
     @Test
+    void findLatestForConversations_returnsNewestMessagePerConversation() {
+        Student seller = student("Seller", "msg-seller5@tulane.edu");
+        Student buyer = student("Buyer", "msg-buyer5@tulane.edu");
+        Conversation lamp = conversation("Lamp", seller, buyer);
+        Conversation desk = conversation("Desk", seller, buyer);
+        Conversation empty = conversation("Chair", seller, buyer);
+        messageRepository.saveAndFlush(new Message(lamp, buyer, "lamp first"));
+        Message lampLast = messageRepository.saveAndFlush(new Message(lamp, seller, "lamp last"));
+        Message deskLast = messageRepository.saveAndFlush(new Message(desk, buyer, "desk only"));
+
+        assertThat(messageRepository
+                .findLatestForConversations(java.util.List.of(lamp.getId(), desk.getId(), empty.getId())))
+                        .containsExactlyInAnyOrder(lampLast, deskLast);
+    }
+
+    @Test
     void newMessage_hasCreatedAtAndGetters() {
         Student seller = student("Seller", "msg-seller3@tulane.edu");
         Student buyer = student("Buyer", "msg-buyer3@tulane.edu");
