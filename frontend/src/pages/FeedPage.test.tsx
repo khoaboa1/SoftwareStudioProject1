@@ -32,6 +32,11 @@ vi.mock('../services/listingService', () => ({
   deleteListing: vi.fn(),
 }))
 
+vi.mock('../services/conversationService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/conversationService')>()),
+  getConversations: vi.fn().mockResolvedValue([]),
+}))
+
 function listing(id: number, itemName: string): Listing {
   return {
     id,
@@ -669,5 +674,70 @@ describe('FeedPage', () => {
       )
     )
     vi.unstubAllGlobals()
+  })
+
+  describe('Message button', () => {
+    it("shows Message on other students' listings, hides it on own and sold ones", async () => {
+      vi.mocked(searchListings).mockResolvedValue(
+        page([
+          { ...listing(1, 'Lamp'), sellerId: 7 },
+          { ...listing(2, 'Chair'), sellerId: 1 },
+          { ...listing(3, 'Desk'), sellerId: 7, status: 'SOLD' },
+          { ...listing(4, 'Bike'), sellerId: 7, status: 'PENDING' },
+        ])
+      )
+      renderFeed()
+
+      expect(
+        await screen.findByRole('button', { name: 'Message seller about Lamp' })
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Message seller about Bike' })
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Message seller about Chair' })
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Message seller about Desk' })
+      ).not.toBeInTheDocument()
+    })
+
+    it('opens the message popup for that item', async () => {
+      vi.mocked(searchListings).mockResolvedValue(
+        page([{ ...listing(1, 'Lamp'), sellerId: 7 }])
+      )
+      renderFeed()
+
+      await userEvent.setup().click(
+        await screen.findByRole('button', {
+          name: 'Message seller about Lamp',
+        })
+      )
+
+      await expect(
+        screen.findByRole('dialog', { name: 'Lamp' })
+      ).resolves.toBeInTheDocument()
+    })
+
+    it('closes the popup', async () => {
+      vi.mocked(searchListings).mockResolvedValue(
+        page([{ ...listing(1, 'Lamp'), sellerId: 7 }])
+      )
+      renderFeed()
+
+      await userEvent.setup().click(
+        await screen.findByRole('button', {
+          name: 'Message seller about Lamp',
+        })
+      )
+
+      await screen.findByRole('dialog', { name: 'Lamp' })
+
+      await userEvent
+        .setup()
+        .click(screen.getByRole('button', { name: 'Close' }))
+
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
   })
 })
