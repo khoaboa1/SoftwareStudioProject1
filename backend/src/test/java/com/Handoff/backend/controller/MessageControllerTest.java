@@ -14,6 +14,7 @@ import com.Handoff.backend.model.Category;
 import com.Handoff.backend.model.Condition;
 import com.Handoff.backend.model.Conversation;
 import com.Handoff.backend.model.Listing;
+import com.Handoff.backend.model.ListingStatus;
 import com.Handoff.backend.model.Profile;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ConversationRepository;
@@ -97,6 +98,14 @@ class MessageControllerTest {
         Listing listing = listingRepository.save(
                 new Listing("Desk Lamp", "Works great", BigDecimal.TEN, Condition.GOOD, Category.FURNITURE, seller));
         return conversationRepository.save(new Conversation(listing, buyer));
+    }
+
+    private Conversation soldConversation(Student seller, Student buyer) {
+        Conversation conversation = conversation(seller, buyer);
+        Listing listing = conversation.getListing();
+        listing.setStatus(ListingStatus.SOLD);
+        listingRepository.save(listing);
+        return conversation;
     }
 
     private String body(String content) {
@@ -274,5 +283,83 @@ class MessageControllerTest {
     void history_notLoggedIn_returns401() throws Exception {
         mockMvc.perform(get("/api/conversations/1/messages")).andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value(VIEW_LOGIN));
+    }
+
+    @Test
+    void send_onSoldListing_stillWorksForBuyerAndSeller() throws Exception {
+        Student seller = student("Seller", "seller@tulane.edu");
+        Student buyer = student("Buyer", "buyer@tulane.edu");
+        Conversation conversation = soldConversation(seller, buyer);
+
+        mockMvc.perform(
+                post("/api/conversations/{id}/messages", conversation.getId()).cookie(sessions.get("buyer@tulane.edu"))
+                        .contentType("application/json").content(body("Still meeting at 5?")))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.senderId").value(buyer.getId()));
+
+        mockMvc.perform(
+                post("/api/conversations/{id}/messages", conversation.getId()).cookie(sessions.get("seller@tulane.edu"))
+                        .contentType("application/json").content(body("Yes, see you")))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.senderId").value(seller.getId()));
+
+        assertThat(messageRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void history_onSoldListing_stillWorksForBothParticipants() throws Exception {
+        Student seller = student("Seller", "seller@tulane.edu");
+        Student buyer = student("Buyer", "buyer@tulane.edu");
+        Conversation conversation = soldConversation(seller, buyer);
+        send(conversation, "buyer@tulane.edu", "first");
+        send(conversation, "seller@tulane.edu", "second");
+
+        for (String email : new String[] { "buyer@tulane.edu", "seller@tulane.edu" }) {
+            mockMvc.perform(get("/api/conversations/{id}/messages", conversation.getId()).cookie(sessions.get(email)))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2))
+                    .andExpect(jsonPath("$[0].content").value("first"))
+                    .andExpect(jsonPath("$[1].content").value("second"));
+        }
+    }
+
+    @Test
+    void history_onSoldListing_withAfterCursor_returnsOnlyNewerMessages() throws Exception {
+        Student seller = student("Seller", "seller@tulane.edu");
+        Student buyer = student("Buyer", "buyer@tulane.edu");
+        Conversation conversation = soldConversation(seller, buyer);
+        send(conversation, "buyer@tulane.edu", "first");
+        send(conversation, "seller@tulane.edu", "second");
+        long firstId = messageRepository.findByConversation_IdOrderByCreatedAtAscIdAsc(conversation.getId()).get(0)
+                .getId();
+
+        mockMvc.perform(get("/api/conversations/{id}/messages", conversation.getId()).param("after", "" + firstId)
+                .cookie(sessions.get("seller@tulane.edu"))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0].content").value("second"));
+    }
+
+    @Test
+    void send_onSoldListing_asOutsider_returns403() throws Exception {
+        Student seller = student("Seller", "seller@tulane.edu");
+        Student buyer = student("Buyer", "buyer@tulane.edu");
+        student("Other", "other@tulane.edu");
+        Conversation conversation = soldConversation(seller, buyer);
+
+        mockMvc.perform(post("/api/conversations/{id}/messages", conversation.getId())
+                .cookie(sessions.get("other@tulane.edu")).contentType("application/json").content(body("hi")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("You do not have access to this conversation"));
+        assertThat(messageRepository.count()).isZero();
+    }
+
+    @Test
+    void history_onSoldListing_asOutsider_returns403() throws Exception {
+        Student seller = student("Seller", "seller@tulane.edu");
+        Student buyer = student("Buyer", "buyer@tulane.edu");
+        student("Other", "other@tulane.edu");
+        Conversation conversation = soldConversation(seller, buyer);
+        send(conversation, "buyer@tulane.edu", "private");
+
+        mockMvc.perform(
+                get("/api/conversations/{id}/messages", conversation.getId()).cookie(sessions.get("other@tulane.edu")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("You do not have access to this conversation"));
     }
 }
