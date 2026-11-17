@@ -583,3 +583,28 @@ Adds `sellerVerified: boolean` to `ListingResponse`:
 - When `sellerVerified` is `true`, display a "Verified" badge/indicator next to the seller name.
 - When `false`, show no badge (or an "Unverified" label if desired).
 - Do not display any sensitive student account data (password, PIN, trusted devices, etc.) — these are never included in listing responses.
+
+---
+
+## Handoff Note: SSP1-139 Conversation Access Rules
+
+### Who can use a conversation
+
+- Only the conversation's buyer and the listing's seller can read it (`GET /api/conversations/{id}`), read its messages (`GET /api/conversations/{id}/messages`) or send one (`POST /api/conversations/{id}/messages`).
+- Anyone else who is logged in gets 403 "You do not have access to this conversation". An unknown conversation is 404; not logged in is 401.
+- The check lives in `ConversationService.getForParticipant`, which `MessageService.send` and `MessageService.history` both call first.
+
+### Own listings
+
+- A seller cannot start a conversation about their own listing: `POST /listings/{id}/conversation` returns 403 "You cannot message yourself about your own listing".
+
+### Sold listings
+
+- No new conversation can be started on a SOLD listing (409 "This item has already been sold"); asking again for an existing one returns it.
+- Existing conversations stay fully available after the sale: both participants can still read the history and send messages, so they can finish arranging the handoff.
+
+### Tests
+
+- `MessageControllerTest`: outsider 403 on send and history, including on SOLD listings; buyer and seller can send and read after SOLD.
+- `MessageServiceTest`: send and history on a SOLD listing still go through the participant check.
+- `ConversationControllerTest` / `ConversationServiceTest`: own-listing 403, SOLD 409 for new conversations, existing conversation returned on a SOLD listing.

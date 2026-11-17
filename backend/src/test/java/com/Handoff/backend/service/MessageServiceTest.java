@@ -11,6 +11,7 @@ import com.Handoff.backend.model.Category;
 import com.Handoff.backend.model.Condition;
 import com.Handoff.backend.model.Conversation;
 import com.Handoff.backend.model.Listing;
+import com.Handoff.backend.model.ListingStatus;
 import com.Handoff.backend.model.Message;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.MessageRepository;
@@ -154,5 +155,29 @@ class MessageServiceTest {
         assertThatThrownBy(() -> service().history(5L, buyer, null))
                 .isInstanceOf(ConversationAccessDeniedException.class);
         verify(messageRepository, never()).findByConversation_IdOrderByCreatedAtAscIdAsc(any());
+    }
+
+    @Test
+    void send_onSoldListing_isSaved() {
+        conversation.getListing().setStatus(ListingStatus.SOLD);
+        participant();
+        saves();
+
+        Message sent = service().send(5L, buyer, "Still meeting?");
+
+        assertThat(sent.getContent()).isEqualTo("Still meeting?");
+        assertThat(sent.getConversation()).isEqualTo(conversation);
+        verify(conversationService).getForParticipant(5L, buyer);
+    }
+
+    @Test
+    void history_onSoldListing_isReturned() {
+        conversation.getListing().setStatus(ListingStatus.SOLD);
+        participant();
+        List<Message> messages = List.of(new Message(conversation, buyer, "one"));
+        when(messageRepository.findByConversation_IdOrderByCreatedAtAscIdAsc(5L)).thenReturn(messages);
+
+        assertThat(service().history(5L, buyer, null)).isEqualTo(messages);
+        verify(conversationService).getForParticipant(5L, buyer);
     }
 }
