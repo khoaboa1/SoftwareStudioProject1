@@ -336,65 +336,35 @@ describe('ListingDetailPage', () => {
       ).not.toBeInTheDocument()
     })
 
-    it('starts the conversation and opens the chat page', async () => {
+    it('opens the message popup titled with the item name, without starting a conversation', async () => {
       vi.mocked(getListing).mockResolvedValue(listing)
-      vi.mocked(startConversation).mockResolvedValue({
-        id: 42,
-        listingId: 1,
-        itemName: 'Desk Lamp',
-        buyerId: 1,
-        buyerName: 'Jane Doe',
-        sellerId: 7,
-        sellerName: 'Sam Seller',
-        createdAt: '2026-11-13T10:00:00Z',
-      })
       renderPage()
 
       await userEvent
         .setup()
         .click(await screen.findByRole('button', { name: 'Message seller' }))
 
-      expect(startConversation).toHaveBeenCalledWith(1)
-      expect(await screen.findByText('Chat screen')).toBeInTheDocument()
+      expect(
+        await screen.findByRole('dialog', { name: 'Desk Lamp' })
+      ).toBeInTheDocument()
+      expect(startConversation).not.toHaveBeenCalled()
+      expect(screen.queryByText('Chat screen')).not.toBeInTheDocument()
     })
 
-    it('disables the button while the conversation is starting', async () => {
+    it('closes the popup', async () => {
       vi.mocked(getListing).mockResolvedValue(listing)
-      vi.mocked(startConversation).mockReturnValue(new Promise(() => {}))
       renderPage()
 
-      const button = await screen.findByRole('button', {
-        name: 'Message seller',
-      })
-      await userEvent.setup().click(button)
+      await userEvent
+        .setup()
+        .click(await screen.findByRole('button', { name: 'Message seller' }))
+      await screen.findByRole('dialog', { name: 'Desk Lamp' })
 
-      expect(button).toBeDisabled()
-      expect(startConversation).toHaveBeenCalledTimes(1)
+      await userEvent
+        .setup()
+        .click(screen.getByRole('button', { name: 'Close' }))
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
-
-    it.each([
-      [409, 'This item has already been sold'],
-      [403, 'You cannot message yourself about your own listing'],
-    ])(
-      'shows the backend message inline on %i and stays on the page',
-      async (status, apiMessage) => {
-        vi.mocked(getListing).mockResolvedValue(listing)
-        vi.mocked(startConversation).mockRejectedValue(
-          new ApiError(status, apiMessage)
-        )
-        renderPage()
-
-        await userEvent
-          .setup()
-          .click(await screen.findByRole('button', { name: 'Message seller' }))
-
-        expect(await screen.findByText(apiMessage)).toBeInTheDocument()
-        expect(screen.queryByText('Chat screen')).not.toBeInTheDocument()
-        expect(
-          screen.getByRole('button', { name: 'Message seller' })
-        ).toBeEnabled()
-      }
-    )
   })
 
   describe('Listing status control', () => {

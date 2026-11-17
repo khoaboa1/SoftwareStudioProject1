@@ -4,6 +4,7 @@ import { AppHeader } from '../components/AppHeader'
 import { Button } from '../components/ui/Button'
 import { FormAlert } from '../components/ui/FormAlert'
 import { ListingCard } from '../components/ListingCard'
+import { MessageSellerModal } from '../components/MessageSellerModal'
 import { ListingGrid } from '../components/ListingGrid'
 import { ListingGridSkeleton } from '../components/ListingCardSkeleton'
 import { ListingsEmptyState } from '../components/ListingsEmptyState'
@@ -64,6 +65,7 @@ export function FeedPage() {
   const [clearVersion, setClearVersion] = useState(0)
   const [categoryOptions, setCategoryOptions] = useState<Category[]>([])
   const [actionError, setActionError] = useState<string | null>(null)
+  const [messageListing, setMessageListing] = useState<Listing | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingListingId, setEditingListingId] = useState<number | null>(null)
 
@@ -304,6 +306,12 @@ export function FeedPage() {
                       ? () => handleDelete(listing.id)
                       : undefined
                   }
+                  onMessage={
+                    listing.sellerId !== student?.id &&
+                    (listing.status ?? 'ACTIVE') !== 'SOLD'
+                      ? () => setMessageListing(listing)
+                      : undefined
+                  }
                 />
               ))}
             </ListingGrid>
@@ -314,6 +322,12 @@ export function FeedPage() {
               onPageChange={handlePageChange}
             />
           </>
+        )}
+        {messageListing && (
+          <MessageSellerModal
+            listing={messageListing}
+            onClose={() => setMessageListing(null)}
+          />
         )}
       </main>
     </div>

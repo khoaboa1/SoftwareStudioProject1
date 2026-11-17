@@ -16,9 +16,15 @@ type ListingCardProps = {
   listing: Listing
   onEdit?: () => void
   onDelete?: () => void
+  onMessage?: () => void
 }
 
-export function ListingCard({ listing, onEdit, onDelete }: ListingCardProps) {
+export function ListingCard({
+  listing,
+  onEdit,
+  onDelete,
+  onMessage,
+}: ListingCardProps) {
   return (
     <article className="relative flex flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition hover:shadow-md focus-within:ring-2 focus-within:ring-accent-300">
       <ListingThumbnail
@@ -80,6 +86,16 @@ export function ListingCard({ listing, onEdit, onDelete }: ListingCardProps) {
                 </button>
               )}
             </div>
+          )}
+          {onMessage && (
+            <button
+              type="button"
+              onClick={onMessage}
+              aria-label={`Message seller about ${listing.itemName}`}
+              className="relative z-10 rounded-lg bg-accent-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
+            >
+              Message
+            </button>
           )}
         </div>
       </div>

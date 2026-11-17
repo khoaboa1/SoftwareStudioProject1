@@ -25,7 +25,8 @@ function LocationProbe() {
 function renderCard(
   onEdit?: () => void,
   onDelete?: () => void,
-  overrides: Partial<Listing> = {}
+  overrides: Partial<Listing> = {},
+  onMessage?: () => void
 ) {
   return render(
     <MemoryRouter initialEntries={['/feed']}>
@@ -33,6 +34,7 @@ function renderCard(
         listing={{ ...listing, ...overrides }}
         onEdit={onEdit}
         onDelete={onDelete}
+        onMessage={onMessage}
       />
       <LocationProbe />
     </MemoryRouter>
@@ -99,6 +101,27 @@ describe('ListingCard', () => {
 
     expect(handleEdit).toHaveBeenCalledTimes(1)
     expect(screen.getByTestId('location')).toHaveTextContent('/feed')
+  })
+
+  it('shows a Message button when onMessage is given and calls it without navigating', async () => {
+    const user = userEvent.setup()
+    const onMessage = vi.fn()
+
+    renderCard(undefined, undefined, {}, onMessage)
+    await user.click(
+      screen.getByRole('button', { name: 'Message seller about Desk Lamp' })
+    )
+
+    expect(onMessage).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('location')).toHaveTextContent('/feed')
+  })
+
+  it('hides the Message button when onMessage is not given', () => {
+    renderCard()
+
+    expect(
+      screen.queryByRole('button', { name: /Message seller about/ })
+    ).not.toBeInTheDocument()
   })
 
   describe('verified seller badge', () => {

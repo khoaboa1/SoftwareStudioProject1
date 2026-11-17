@@ -9,8 +9,8 @@ import { CATEGORY_LABELS, CONDITION_LABELS } from '../lib/listingOptions'
 import { getErrorMessage, hasApiStatus } from '../lib/apiError'
 import { useAsyncResource } from '../lib/useAsyncResource'
 import { getListing } from '../services/listingService'
-import { startConversation } from '../services/conversationService'
 import { deleteListing } from '../services/listingService'
+import { MessageSellerModal } from '../components/MessageSellerModal'
 import { isAdmin } from '../lib/roles'
 import { ReportListingPanel } from '../components/ReportListingPanel'
 import { ConfirmInline } from '../components/ConfirmInline'
@@ -31,8 +31,7 @@ export function ListingDetailPage() {
     }
   )
   const [selection, setSelection] = useState({ listingId, index: 0 })
-  const [starting, setStarting] = useState(false)
-  const [startError, setStartError] = useState<string | null>(null)
+  const [showMessage, setShowMessage] = useState(false)
   const [showReport, setShowReport] = useState(false)
   const [reported, setReported] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
@@ -54,19 +53,6 @@ export function ListingDetailPage() {
   // Admins delete directly; reporting would only send the listing to their own queue.
   const canReport = isOthersListing && !isAdmin(student)
   const canAdminDelete = isOthersListing && isAdmin(student)
-
-  async function handleMessageSeller() {
-    setStartError(null)
-    setStarting(true)
-    try {
-      const conversation = await startConversation(listingId)
-      navigate(`/conversations/${conversation.id}`)
-    } catch (error) {
-      setStartError(getErrorMessage(error, 'Could not start conversation.'))
-    } finally {
-      setStarting(false)
-    }
-  }
 
   return (
     <div className="min-h-dvh bg-zinc-50">
@@ -180,8 +166,7 @@ export function ListingDetailPage() {
                   <Button
                     type="button"
                     className="mt-6"
-                    onClick={handleMessageSeller}
-                    loading={starting}
+                    onClick={() => setShowMessage(true)}
                   >
                     Message seller
                   </Button>
@@ -190,9 +175,6 @@ export function ListingDetailPage() {
                       Someone is already arranging to buy this — you can still
                       message the seller.
                     </p>
-                  )}
-                  {startError && (
-                    <FormAlert kind="error">{startError}</FormAlert>
                   )}
                 </>
               )}
@@ -247,6 +229,13 @@ export function ListingDetailPage() {
               )}
             </div>
           </div>
+        )}
+
+        {showMessage && state.status === 'ready' && (
+          <MessageSellerModal
+            listing={state.data}
+            onClose={() => setShowMessage(false)}
+          />
         )}
       </main>
     </div>
