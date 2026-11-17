@@ -8,6 +8,7 @@ import com.Handoff.backend.service.ConversationNotFoundException;
 import com.Handoff.backend.service.ConversationService;
 import com.Handoff.backend.service.ListingNotFoundException;
 import com.Handoff.backend.service.ListingSoldException;
+import com.Handoff.backend.service.MessageService;
 import com.Handoff.backend.service.OwnListingConversationException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
@@ -22,11 +23,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class ConversationController {
     private final ConversationService conversationService;
+    private final MessageService messageService;
     private final CurrentStudentResolver currentStudentResolver;
 
-    public ConversationController(ConversationService conversationService,
+    public ConversationController(ConversationService conversationService, MessageService messageService,
             CurrentStudentResolver currentStudentResolver) {
         this.conversationService = conversationService;
+        this.messageService = messageService;
         this.currentStudentResolver = currentStudentResolver;
     }
 
@@ -41,13 +44,17 @@ public class ConversationController {
     @GetMapping("/api/conversations")
     public List<ConversationResponse> listConversations(HttpServletRequest request) {
         Student student = currentStudentResolver.require(request, "You must be logged in to view conversations");
-        return conversationService.listForStudent(student).stream().map(ConversationResponse::from).toList();
+        var conversations = conversationService.listForStudent(student);
+        var latest = messageService.latestByConversation(conversations);
+        return conversations.stream().map(c -> ConversationResponse.from(c, latest.get(c.getId()))).toList();
     }
 
     @GetMapping("/api/conversations/{conversationId}")
     public ConversationResponse getConversation(@PathVariable Long conversationId, HttpServletRequest request) {
         Student student = currentStudentResolver.require(request, "You must be logged in to view conversations");
-        return ConversationResponse.from(conversationService.getForParticipant(conversationId, student));
+        var conversation = conversationService.getForParticipant(conversationId, student);
+        return ConversationResponse.from(conversation,
+                messageService.latestByConversation(List.of(conversation)).get(conversation.getId()));
     }
 
     @ExceptionHandler(ListingNotFoundException.class)

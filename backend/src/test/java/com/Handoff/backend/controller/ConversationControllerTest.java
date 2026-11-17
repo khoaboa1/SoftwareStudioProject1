@@ -48,6 +48,8 @@ class ConversationControllerTest {
     @Autowired
     private ConversationRepository conversationRepository;
     @Autowired
+    private com.Handoff.backend.repository.MessageRepository messageRepository;
+    @Autowired
     private ObjectMapper objectMapper;
 
     @Autowired
@@ -57,6 +59,7 @@ class ConversationControllerTest {
     @AfterEach
     void cleanDatabase() {
         sessions.clear();
+        messageRepository.deleteAll();
         conversationRepository.deleteAll();
         listingRepository.deleteAll();
         profileRepository.deleteAll();
@@ -217,6 +220,43 @@ class ConversationControllerTest {
         mockMvc.perform(get("/api/conversations").cookie(loginSession("seller@tulane.edu"))).andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0].id").value(id))
                 .andExpect(jsonPath("$[0].buyerName").value("Buyer"));
+    }
+
+    @Test
+    void list_includesLastMessageOfEachConversation() throws Exception {
+        Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
+        Student buyer = student("Buyer", "buyer@tulane.edu", "tulane.edu");
+        long id = startViaApi(listing(seller).getId(), "buyer@tulane.edu");
+        var conversation = conversationRepository.findById(id).orElseThrow();
+        messageRepository.save(new com.Handoff.backend.model.Message(conversation, buyer, "older"));
+        messageRepository.save(new com.Handoff.backend.model.Message(conversation, seller, "Yes, still here"));
+
+        mockMvc.perform(get("/api/conversations").cookie(loginSession("buyer@tulane.edu"))).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].lastMessage.content").value("Yes, still here"))
+                .andExpect(jsonPath("$[0].lastMessage.senderId").value(seller.getId()))
+                .andExpect(jsonPath("$[0].lastMessage.createdAt").exists());
+    }
+
+    @Test
+    void list_conversationWithoutMessages_hasNullLastMessage() throws Exception {
+        Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
+        student("Buyer", "buyer@tulane.edu", "tulane.edu");
+        startViaApi(listing(seller).getId(), "buyer@tulane.edu");
+
+        mockMvc.perform(get("/api/conversations").cookie(loginSession("buyer@tulane.edu"))).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].lastMessage").value(nullValue()));
+    }
+
+    @Test
+    void get_includesLastMessage() throws Exception {
+        Student seller = student("Seller", "seller@tulane.edu", "tulane.edu");
+        Student buyer = student("Buyer", "buyer@tulane.edu", "tulane.edu");
+        long id = startViaApi(listing(seller).getId(), "buyer@tulane.edu");
+        var conversation = conversationRepository.findById(id).orElseThrow();
+        messageRepository.save(new com.Handoff.backend.model.Message(conversation, buyer, "hello"));
+
+        mockMvc.perform(get("/api/conversations/{id}", id).cookie(loginSession("seller@tulane.edu")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lastMessage.content").value("hello"));
     }
 
     @Test
