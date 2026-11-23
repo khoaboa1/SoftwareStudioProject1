@@ -40,3 +40,7 @@ docs/local-suggestions.md
 
 # Local task plans
 /plan docs/
+
+# Local agent instructions (not tracked — stored locally, never pushed)
+CLAUDE.md
+MEMORY.md

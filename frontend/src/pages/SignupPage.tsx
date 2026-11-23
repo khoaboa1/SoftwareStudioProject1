@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { AuthCard } from '../components/AuthCard'
+import { PinVerificationStep } from '../components/PinVerificationStep'
 import { Button } from '../components/ui/Button'
 import { FormAlert } from '../components/ui/FormAlert'
 import { TextField } from '../components/ui/TextField'
@@ -10,33 +11,57 @@ import {
   validateName,
   validatePassword,
 } from '../lib/validation'
-import { ApiError, resendPin, signup, verifyPin } from '../services/authService'
+import { signup, verifyPin } from '../services/authService'
+import { createAuthFacade } from '../services/authFacade'
+import { getErrorMessage, hasApiStatus, isNetworkError } from '../lib/apiError'
 import { getOrCreateDeviceId } from '../lib/device'
-
+import { useAuth } from '../lib/auth-context'
 type FieldErrors = {
   name?: string
   email?: string
   password?: string
   confirmPassword?: string
-  pin?: string
 }
-
+const DUPLICATE_EMAIL_MESSAGE = 'An account with this email already exists.'
 export function SignupPage() {
+  const navigate = useNavigate()
+  const { setStudent } = useAuth()
+  const auth = createAuthFacade(setStudent)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [pin, setPin] = useState('')
-
-  const [step, setStep] = useState<'form' | 'verify_pin' | 'complete'>('form')
+  const [step, setStep] = useState<'form' | 'verify_pin'>('form')
   const [errors, setErrors] = useState<FieldErrors>({})
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
-  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent'>('idle')
   const [serverError, setServerError] = useState<string | null>(null)
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const [canRetry, setCanRetry] = useState(false)
+  const [emailTaken, setEmailTaken] = useState(false)
+  async function submitSignup() {
+    setStatus('submitting')
+    setServerError(null)
+    setCanRetry(false)
+    setEmailTaken(false)
+    try {
+      await signup({ studentName: name, email, password })
+      setStatus('idle')
+      setStep('verify_pin')
+    } catch (error) {
+      if (hasApiStatus(error, 409)) {
+        setErrors((current) => ({ ...current, email: DUPLICATE_EMAIL_MESSAGE }))
+        setEmailTaken(true)
+        setStatus('idle')
+        return
+      }
+      setServerError(
+        getErrorMessage(error, 'Something went wrong. Please try again.')
+      )
+      setCanRetry(isNetworkError(error))
+      setStatus('error')
+    }
+  }
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-
     const nextErrors: FieldErrors = {
       name: validateName(name),
       email: validateEmail(email),
@@ -45,88 +70,25 @@ export function SignupPage() {
     }
     setErrors(nextErrors)
     if (Object.values(nextErrors).some(Boolean)) return
-
-    setStatus('submitting')
-    setServerError(null)
-
-    try {
-      await signup({ studentName: name, email, password })
-      setStatus('idle')
-      setStep('verify_pin')
-    } catch (error) {
-      setServerError(
-        error instanceof ApiError ? error.message : 'Something went wrong. Please try again.',
-      )
-      setStatus('error')
-    }
+    void submitSignup()
   }
-
-  async function handleVerifyPin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-
-    if (!pin.trim() || pin.trim().length !== 6) {
-      setErrors({ pin: 'Enter the 6-digit PIN' })
-      return
-    }
-
-    setStatus('submitting')
-    setServerError(null)
-
-    try {
-      await verifyPin({
-        email,
-        pin: pin.trim(),
-        deviceId: getOrCreateDeviceId(),
-      })
-      setStatus('idle')
-      setStep('complete')
-    } catch (error) {
-      setServerError(
-        error instanceof ApiError ? error.message : 'Failed to verify PIN. Please try again.',
-      )
-      setStatus('error')
-    }
-  }
-
-  async function handleResendPin() {
-    setResendStatus('sending')
-    setServerError(null)
-    try {
-      await resendPin({ email })
-      setResendStatus('sent')
-      setTimeout(() => setResendStatus('idle'), 4000)
-    } catch (error) {
-      setServerError(
-        error instanceof ApiError ? error.message : 'Failed to resend PIN.',
-      )
-      setResendStatus('idle')
-    }
-  }
-
-  if (step === 'complete') {
-    return (
-      <AuthCard
-        title="Account Verified!"
-        subtitle="Your .edu school email has been verified and this device is trusted."
-        footer={null}
-      >
-        <div className="flex flex-col gap-4">
-          <FormAlert kind="success">
-            Welcome to Handoff! Your student verification badge is active.
-          </FormAlert>
-          <Link to="/login">
-            <Button type="button">Go to Log In</Button>
-          </Link>
-        </div>
-      </AuthCard>
-    )
-  }
-
   if (step === 'verify_pin') {
     return (
-      <AuthCard
+      <PinVerificationStep
+        email={email}
         title="Verify your school email"
         subtitle={`We generated a 6-digit PIN for ${email}`}
+        helperText="Check your school email (or backend console during dev/demo)"
+        submitLabel="Verify PIN & Activate Account"
+        verifyErrorFallback="Failed to verify PIN. Please try again."
+        onVerify={async (pin) => {
+          await verifyPin({ email, pin, deviceId: getOrCreateDeviceId() })
+          // The account is now verified and this device is trusted. Signing in sets the auth cookies.
+          const result = await auth.signIn({ email, password })
+          navigate(result.requiresPin ? '/login' : '/profile-setup', {
+            replace: true,
+          })
+        }}
         footer={
           <>
             Entered the wrong email?{' '}
@@ -143,48 +105,9 @@ export function SignupPage() {
             </button>
           </>
         }
-      >
-        {serverError && <FormAlert kind="error">{serverError}</FormAlert>}
-        {resendStatus === 'sent' && (
-          <FormAlert kind="success">A new 6-digit PIN has been generated!</FormAlert>
-        )}
-
-        <form onSubmit={handleVerifyPin} noValidate className="flex flex-col gap-5">
-          <TextField
-            label="6-Digit Verification PIN"
-            type="text"
-            inputMode="numeric"
-            maxLength={6}
-            placeholder="123456"
-            helperText="Check your university email (or the backend console during dev/demo)"
-            error={errors.pin}
-            value={pin}
-            onChange={(e) => {
-              setPin(e.target.value.replace(/\D/g, ''))
-              if (errors.pin) setErrors({})
-            }}
-          />
-
-          <Button type="submit" loading={status === 'submitting'}>
-            Verify PIN & Activate Account
-          </Button>
-
-          <div className="flex items-center justify-between text-xs text-zinc-500 pt-2">
-            <span>Didn't receive it?</span>
-            <button
-              type="button"
-              onClick={handleResendPin}
-              disabled={resendStatus === 'sending'}
-              className="font-medium text-accent-700 hover:text-accent-800 underline disabled:opacity-50"
-            >
-              {resendStatus === 'sending' ? 'Sending...' : 'Resend PIN'}
-            </button>
-          </div>
-        </form>
-      </AuthCard>
+      />
     )
   }
-
   return (
     <AuthCard
       title="Create your account"
@@ -201,8 +124,18 @@ export function SignupPage() {
         </>
       }
     >
-      {status === 'error' && serverError && <FormAlert kind="error">{serverError}</FormAlert>}
-
+      {status === 'error' && serverError && (
+        <FormAlert
+          kind="error"
+          action={
+            canRetry
+              ? { label: 'Try again', onClick: () => void submitSignup() }
+              : undefined
+          }
+        >
+          {serverError}
+        </FormAlert>
+      )}
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
         <TextField
           label="Full name"
@@ -213,7 +146,6 @@ export function SignupPage() {
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-
         <TextField
           label="School email"
           type="email"
@@ -222,9 +154,22 @@ export function SignupPage() {
           helperText={errors.email ? undefined : 'Must be a .edu email'}
           error={errors.email}
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value)
+            if (emailTaken) setEmailTaken(false)
+          }}
         />
-
+        {emailTaken && (
+          <p className="-mt-3 text-sm text-zinc-600">
+            Already registered?{' '}
+            <Link
+              to="/login"
+              className="font-medium text-accent-700 hover:text-accent-800"
+            >
+              Log in instead
+            </Link>
+          </p>
+        )}
         <TextField
           label="Password"
           type="password"
@@ -235,7 +180,6 @@ export function SignupPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-
         <TextField
           label="Confirm password"
           type="password"
@@ -245,7 +189,6 @@ export function SignupPage() {
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
         />
-
         <Button type="submit" loading={status === 'submitting'}>
           Continue & Get PIN
         </Button>

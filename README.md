@@ -10,6 +10,26 @@ cd SoftwareStudioProject1
 
 `setup-dev.sh` points git at the repo's hooks and installs the commit-message template.
 
+### Database (Supabase)
+
+The backend uses a hosted Supabase PostgreSQL database. Credentials are never committed.
+
+1. Create `backend/.env` (gitignored).
+2. In the Supabase dashboard, open **Connect → Session pooler** and fill in `DB_URL`
+   (JDBC form, `?sslmode=require`), `DB_USERNAME` (`postgres.<project-ref>`) and `DB_PASSWORD`.
+3. Run the backend: `cd backend && ./mvnw spring-boot:run`. Flyway creates/updates the schema on startup.
+
+To load demo students and listings in development, run `cd backend && ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev`.
+
+### Listing photo storage
+
+Create a **public** Supabase Storage bucket named `listing-images`. Set `SUPABASE_URL` and
+`SUPABASE_SERVICE_KEY` in the gitignored `backend/.env` to enable authenticated photo uploads.
+The service key is used only by the backend. `SUPABASE_STORAGE_BUCKET` can override the bucket name.
+Without these settings, listing creation still works, but photo uploads return 503.
+
+Environment variables with the same names override `.env`.
+
 ## Jira workflow
 
 Every branch and commit is tied to a Jira issue so work shows up automatically on the

@@ -3,15 +3,26 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProfilePage } from './ProfilePage'
-import { ApiError, getMyProfile, updateProfile, type Profile } from '../services/profileService'
+import {
+  ApiError,
+  getMyProfile,
+  updateProfile,
+  type Profile,
+} from '../services/profileService'
 import { getListings } from '../services/listingService'
 
 const setStudent = vi.fn()
 const markProfileMissing = vi.fn()
+let currentStudent: {
+  id: number
+  studentName: string
+  email: string
+  verified?: boolean
+} | null
 
 vi.mock('../lib/auth-context', () => ({
   useAuth: () => ({
-    student: { id: 1, studentName: 'Jane Doe', email: 'jane@tulane.edu' },
+    student: currentStudent,
     setStudent,
     markProfileMissing,
   }),
@@ -45,7 +56,7 @@ function renderPage() {
         <Route path="/login" element={<p>Login screen</p>} />
         <Route path="/profile-setup" element={<p>Profile setup screen</p>} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   )
 }
 
@@ -56,6 +67,45 @@ describe('ProfilePage', () => {
     vi.mocked(getListings).mockReset().mockResolvedValue([])
     setStudent.mockClear()
     markProfileMissing.mockClear()
+    currentStudent = {
+      id: 1,
+      studentName: 'Jane Doe',
+      email: 'jane@tulane.edu',
+    }
+  })
+
+  it('shows the Verified Student badge for a verified account', async () => {
+    currentStudent = {
+      id: 1,
+      studentName: 'Jane Doe',
+      email: 'jane@tulane.edu',
+      verified: true,
+    }
+    vi.mocked(getMyProfile).mockResolvedValue(profile)
+
+    renderPage()
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Jane Doe' })
+    ).toBeInTheDocument()
+    expect(screen.getByText('Verified Student')).toBeInTheDocument()
+  })
+
+  it('never shows the Verified Student badge for an unverified account', async () => {
+    currentStudent = {
+      id: 1,
+      studentName: 'Jane Doe',
+      email: 'jane@tulane.edu',
+      verified: false,
+    }
+    vi.mocked(getMyProfile).mockResolvedValue(profile)
+
+    renderPage()
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Jane Doe' })
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Verified Student')).not.toBeInTheDocument()
   })
 
   it('shows a loading state while the profile is being fetched', () => {
@@ -63,7 +113,9 @@ describe('ProfilePage', () => {
 
     renderPage()
 
-    expect(screen.getByRole('heading', { level: 1, name: 'My profile' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'My profile' })
+    ).toBeInTheDocument()
     expect(screen.getByLabelText('Loading profile')).toBeInTheDocument()
   })
 
@@ -72,14 +124,18 @@ describe('ProfilePage', () => {
 
     renderPage()
 
-    expect(await screen.findByRole('heading', { level: 2, name: 'Jane Doe' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Jane Doe' })
+    ).toBeInTheDocument()
     expect(screen.getByText('tulane.edu')).toBeInTheDocument()
     expect(screen.getByText('Junior studying CS and Math.')).toBeInTheDocument()
     expect(getMyProfile).toHaveBeenCalled()
   })
 
   it('clears the session and goes to login on 401', async () => {
-    vi.mocked(getMyProfile).mockRejectedValue(new ApiError(401, 'User must be authenticated'))
+    vi.mocked(getMyProfile).mockRejectedValue(
+      new ApiError(401, 'User must be authenticated')
+    )
 
     renderPage()
 
@@ -88,7 +144,9 @@ describe('ProfilePage', () => {
   })
 
   it('marks the profile missing and goes to profile setup on 404', async () => {
-    vi.mocked(getMyProfile).mockRejectedValue(new ApiError(404, 'Profile not found'))
+    vi.mocked(getMyProfile).mockRejectedValue(
+      new ApiError(404, 'Profile not found')
+    )
 
     renderPage()
 
@@ -97,11 +155,15 @@ describe('ProfilePage', () => {
   })
 
   it('shows the API error message for other failures', async () => {
-    vi.mocked(getMyProfile).mockRejectedValue(new ApiError(500, 'Database unavailable'))
+    vi.mocked(getMyProfile).mockRejectedValue(
+      new ApiError(500, 'Database unavailable')
+    )
 
     renderPage()
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Database unavailable')
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Database unavailable'
+    )
   })
 
   it('shows a generic message when the request fails without an API error', async () => {
@@ -109,7 +171,9 @@ describe('ProfilePage', () => {
 
     renderPage()
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Could not load your profile.')
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Could not load your profile.'
+    )
   })
 
   it("shows the student's listings below the profile", async () => {
@@ -130,7 +194,9 @@ describe('ProfilePage', () => {
 
     renderPage()
 
-    expect(await screen.findByRole('heading', { name: 'My listings (1)' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'My listings (1)' })
+    ).toBeInTheDocument()
     expect(screen.getByText('Mini Fridge')).toBeInTheDocument()
   })
 
@@ -147,7 +213,9 @@ describe('ProfilePage', () => {
       const user = userEvent.setup()
       vi.mocked(getMyProfile).mockResolvedValue(profile)
       renderPage()
-      await user.click(await screen.findByRole('button', { name: 'Edit profile' }))
+      await user.click(
+        await screen.findByRole('button', { name: 'Edit profile' })
+      )
       return user
     }
 
@@ -155,7 +223,9 @@ describe('ProfilePage', () => {
       await openEditor()
 
       expect(screen.getByLabelText('Name')).toHaveValue('Jane Doe')
-      expect(screen.queryByRole('button', { name: 'Edit profile' })).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Edit profile' })
+      ).not.toBeInTheDocument()
     })
 
     it('returns to the unchanged profile on cancel', async () => {
@@ -171,7 +241,11 @@ describe('ProfilePage', () => {
     })
 
     it('saves the changes and shows the updated profile', async () => {
-      vi.mocked(updateProfile).mockResolvedValue({ ...profile, major: 'Data Science', bio: 'Senior now.' })
+      vi.mocked(updateProfile).mockResolvedValue({
+        ...profile,
+        major: 'Data Science',
+        bio: 'Senior now.',
+      })
       const user = await openEditor()
 
       await user.clear(screen.getByLabelText('Major'))
@@ -180,7 +254,11 @@ describe('ProfilePage', () => {
       await user.type(screen.getByLabelText('Bio'), 'Senior now.')
       await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
-      expect(updateProfile).toHaveBeenCalledWith(1, { name: 'Jane Doe', major: 'Data Science', bio: 'Senior now.' })
+      expect(updateProfile).toHaveBeenCalledWith(1, {
+        name: 'Jane Doe',
+        major: 'Data Science',
+        bio: 'Senior now.',
+      })
       expect(await screen.findByText('Profile updated.')).toBeInTheDocument()
       expect(screen.getByText('Data Science')).toBeInTheDocument()
       expect(screen.getByText('Senior now.')).toBeInTheDocument()
@@ -189,36 +267,48 @@ describe('ProfilePage', () => {
 
     it('keeps the form open and shows the message on 403', async () => {
       vi.mocked(updateProfile).mockRejectedValue(
-        new ApiError(403, 'You do not have permission to modify this profile.'),
+        new ApiError(403, 'You do not have permission to modify this profile.')
       )
       const user = await openEditor()
 
       await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
-      expect(await screen.findByRole('status')).toHaveTextContent('You do not have permission to modify this profile.')
+      expect(await screen.findByRole('status')).toHaveTextContent(
+        'You do not have permission to modify this profile.'
+      )
       expect(screen.getByLabelText('Name')).toBeInTheDocument()
     })
 
     it('keeps the form open and shows the message on 400', async () => {
-      vi.mocked(updateProfile).mockRejectedValue(new ApiError(400, 'bio: Bio cannot exceed 1000 characters'))
+      vi.mocked(updateProfile).mockRejectedValue(
+        new ApiError(400, 'bio: Bio cannot exceed 1000 characters')
+      )
       const user = await openEditor()
 
       await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
-      expect(await screen.findByRole('status')).toHaveTextContent('bio: Bio cannot exceed 1000 characters')
+      expect(await screen.findByRole('status')).toHaveTextContent(
+        'bio: Bio cannot exceed 1000 characters'
+      )
     })
 
     it('shows a generic message when saving fails without an API error', async () => {
-      vi.mocked(updateProfile).mockRejectedValue(new TypeError('Failed to fetch'))
+      vi.mocked(updateProfile).mockRejectedValue(
+        new TypeError('Failed to fetch')
+      )
       const user = await openEditor()
 
       await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
-      expect(await screen.findByRole('status')).toHaveTextContent('Could not save your profile.')
+      expect(await screen.findByRole('status')).toHaveTextContent(
+        'Could not save your profile.'
+      )
     })
 
     it('clears the session and goes to login on 401', async () => {
-      vi.mocked(updateProfile).mockRejectedValue(new ApiError(401, 'User must be authenticated'))
+      vi.mocked(updateProfile).mockRejectedValue(
+        new ApiError(401, 'User must be authenticated')
+      )
       const user = await openEditor()
 
       await user.click(screen.getByRole('button', { name: 'Save changes' }))
@@ -228,12 +318,16 @@ describe('ProfilePage', () => {
     })
 
     it('goes to profile setup on 404', async () => {
-      vi.mocked(updateProfile).mockRejectedValue(new ApiError(404, 'Profile not found'))
+      vi.mocked(updateProfile).mockRejectedValue(
+        new ApiError(404, 'Profile not found')
+      )
       const user = await openEditor()
 
       await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
-      expect(await screen.findByText('Profile setup screen')).toBeInTheDocument()
+      expect(
+        await screen.findByText('Profile setup screen')
+      ).toBeInTheDocument()
       expect(markProfileMissing).toHaveBeenCalledTimes(1)
     })
   })

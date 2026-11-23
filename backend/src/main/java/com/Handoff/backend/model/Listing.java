@@ -1,5 +1,7 @@
 package com.Handoff.backend.model;
 
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -8,121 +10,162 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
-
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import org.hibernate.annotations.BatchSize;
 
 @Entity
 @Table(name = "listings")
 public class Listing {
 
-  @Id
-  @GeneratedValue(strategy = GenerationType.IDENTITY)
-  private Long id;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
-  private String itemName;
+    private String itemName;
 
-  private String description;
+    private String description;
 
-  private BigDecimal price;
+    private BigDecimal price;
 
-  @Enumerated(EnumType.STRING)
-  private Condition condition;
+    @Enumerated(EnumType.STRING)
+    private Condition condition;
 
-  @Enumerated(EnumType.STRING)
-  private Category category;
+    @Enumerated(EnumType.STRING)
+    private Category category;
 
-  // New listings are immediately browseable unless a future workflow changes their lifecycle.
-  @Enumerated(EnumType.STRING)
-  private ListingStatus status = ListingStatus.ACTIVE;
+    // New listings are immediately browseable unless a future workflow changes their lifecycle.
+    @Enumerated(EnumType.STRING)
+    private ListingStatus status = ListingStatus.ACTIVE;
 
-  @ManyToOne
-  @JoinColumn(name = "seller_id", nullable = false)
-  private Student seller;
+    @ManyToOne
+    @JoinColumn(name = "seller_id", nullable = false)
+    private Student seller;
 
-  private Instant createdAt;
+    private Instant createdAt;
 
-  public Listing() {
-  }
+    @Column(name = "image_url", length = 1000)
+    private String imageUrl;
 
-  public Listing(String itemName, String description, BigDecimal price,
-                 Condition condition, Category category, Student seller) {
-    this.itemName = itemName;
-    this.description = description;
-    this.price = price;
-    this.condition = condition;
-    this.category = category;
-    this.status = ListingStatus.ACTIVE;
-    this.seller = seller;
-    this.createdAt = Instant.now();
-  }
+    @OneToMany(mappedBy = "listing", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("position ASC")
+    @BatchSize(size = 50)
+    private List<ListingImage> images = new ArrayList<>();
 
-  public Long getId() {
-    return id;
-  }
+    public Listing() {
+    }
 
-  public String getItemName() {
-    return itemName;
-  }
+    public Listing(String itemName, String description, BigDecimal price, Condition condition, Category category,
+            Student seller) {
+        this.itemName = itemName;
+        this.description = description;
+        this.price = price;
+        this.condition = condition;
+        this.category = category;
+        this.status = ListingStatus.ACTIVE;
+        this.seller = seller;
+        this.createdAt = Instant.now();
+    }
 
-  public String getDescription() {
-    return description;
-  }
+    public Long getId() {
+        return id;
+    }
 
-  public BigDecimal getPrice() {
-    return price;
-  }
+    public String getItemName() {
+        return itemName;
+    }
 
-  public Condition getCondition() {
-    return condition;
-  }
+    public String getDescription() {
+        return description;
+    }
 
-  public Category getCategory() {
-    return category;
-  }
+    public BigDecimal getPrice() {
+        return price;
+    }
 
-  public ListingStatus getStatus() {
-    return status;
-  }
+    public Condition getCondition() {
+        return condition;
+    }
 
-  public Student getSeller() {
-    return seller;
-  }
+    public Category getCategory() {
+        return category;
+    }
 
-  public Instant getCreatedAt() {
-    return createdAt;
-  }
+    public ListingStatus getStatus() {
+        return status;
+    }
 
-  public void setCreatedAt(Instant createdAt) {
-    this.createdAt = createdAt;
-  }
+    public Student getSeller() {
+        return seller;
+    }
 
-  public void setId(Long id) {
-    this.id = id;
-  }
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 
-  public void setItemName(String itemName) {
-    this.itemName = itemName;
-  }
+    public String getImageUrl() {
+        return imageUrl;
+    }
 
-  public void setDescription(String description) {
-    this.description = description;
-  }
+    public void setImageUrl(String imageUrl) {
+        this.imageUrl = imageUrl;
+    }
 
-  public void setPrice(BigDecimal price) {
-    this.price = price;
-  }
+    public List<String> getImageUrls() {
+        return images.stream().map(ListingImage::getUrl).toList();
+    }
 
-  public void setCondition(Condition condition) {
-    this.condition = condition;
-  }
+    public void replaceImages(List<String> urls) {
+        for (int index = 0; index < urls.size(); index++) {
+            if (index < images.size()) {
+                images.get(index).setUrl(urls.get(index));
+            } else {
+                images.add(new ListingImage(this, urls.get(index), index));
+            }
+        }
+        if (images.size() > urls.size())
+            images.subList(urls.size(), images.size()).clear();
+        imageUrl = urls.isEmpty() ? null : urls.get(0);
+    }
 
-  public void setCategory(Category category) {
-    this.category = category;
-  }
+    public void setCreatedAt(Instant createdAt) {
+        this.createdAt = createdAt;
+    }
 
-  public void setStatus(ListingStatus status) {
-    this.status = status;
-  }
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public void setItemName(String itemName) {
+        this.itemName = itemName;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public void setPrice(BigDecimal price) {
+        this.price = price;
+    }
+
+    public void setCondition(Condition condition) {
+        this.condition = condition;
+    }
+
+    public void setCategory(Category category) {
+        this.category = category;
+    }
+
+    public void setStatus(ListingStatus status) {
+        this.status = status;
+    }
+
+    public void setSeller(Student student) {
+        this.seller = student;
+    }
 }

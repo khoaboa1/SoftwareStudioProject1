@@ -7,7 +7,11 @@ type SearchBarProps = {
   debounceMs?: number
 }
 
-export function SearchBar({ value, onSearch, debounceMs = 400 }: SearchBarProps) {
+export function SearchBar({
+  value,
+  onSearch,
+  debounceMs = 400,
+}: SearchBarProps) {
   const [text, setText] = useState(value)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const input = useRef<HTMLInputElement>(null)
@@ -21,9 +25,12 @@ export function SearchBar({ value, onSearch, debounceMs = 400 }: SearchBarProps)
   }, [value])
   // oxlint-enable react-hooks/exhaustive-deps
 
-  useEffect(() => () => {
-    if (timer.current !== null) clearTimeout(timer.current)
-  }, [])
+  useEffect(
+    () => () => {
+      if (timer.current !== null) clearTimeout(timer.current)
+    },
+    []
+  )
 
   function clearTimer() {
     if (timer.current !== null) clearTimeout(timer.current)
@@ -43,7 +50,10 @@ export function SearchBar({ value, onSearch, debounceMs = 400 }: SearchBarProps)
 
   return (
     <form role="search" onSubmit={handleSubmit} className="relative mb-6">
-      <MagnifyingGlass aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400" />
+      <MagnifyingGlass
+        aria-hidden="true"
+        className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400"
+      />
       <input
         ref={input}
         type="search"

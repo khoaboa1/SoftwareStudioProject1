@@ -5,6 +5,7 @@ import { SelectField } from './ui/SelectField'
 import { TextField } from './ui/TextField'
 import { CATEGORY_LABELS, CONDITION_OPTIONS } from '../lib/listingOptions'
 import type { Category, Condition } from '../services/listingService'
+import { ListingPhotoPicker, type ListingPhoto } from './ListingPhotoPicker'
 
 type ListingFormProps = {
   itemName: string
@@ -22,6 +23,8 @@ type ListingFormProps = {
   error: string | null
   submitLabel: string
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  photos: ListingPhoto[]
+  onPhotosChange: (update: (prev: ListingPhoto[]) => ListingPhoto[]) => void
 }
 
 export function ListingForm({
@@ -40,13 +43,17 @@ export function ListingForm({
   error,
   submitLabel,
   onSubmit,
+  photos,
+  onPhotosChange,
 }: ListingFormProps) {
   return (
     <form
       onSubmit={onSubmit}
       className="mb-8 flex flex-col gap-5 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
     >
-      {status === 'error' && error && <FormAlert kind="error">{error}</FormAlert>}
+      {status === 'error' && error && (
+        <FormAlert kind="error">{error}</FormAlert>
+      )}
 
       <TextField
         label="Item name"
@@ -56,7 +63,10 @@ export function ListingForm({
       />
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="listing-description" className="text-sm font-medium text-zinc-800">
+        <label
+          htmlFor="listing-description"
+          className="text-sm font-medium text-zinc-800"
+        >
           Description
         </label>
         <textarea
@@ -88,12 +98,21 @@ export function ListingForm({
 
       <SelectField
         label="Category"
-        options={categoryOptions.map((value) => ({ value, label: CATEGORY_LABELS[value] }))}
+        options={categoryOptions.map((value) => ({
+          value,
+          label: CATEGORY_LABELS[value],
+        }))}
         value={category}
         onChange={(e) => onCategoryChange(e.target.value as Category)}
       />
 
-      <Button type="submit" loading={status === 'submitting'}>
+      <ListingPhotoPicker photos={photos} onPhotosChange={onPhotosChange} />
+
+      <Button
+        type="submit"
+        loading={status === 'submitting'}
+        disabled={photos.some((photo) => photo.status === 'uploading')}
+      >
         {submitLabel}
       </Button>
     </form>

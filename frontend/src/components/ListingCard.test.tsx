@@ -22,16 +22,34 @@ function LocationProbe() {
   return <span data-testid="location">{location.pathname}</span>
 }
 
-function renderCard(onEdit?: () => void, onDelete?: () => void) {
+function renderCard(
+  onEdit?: () => void,
+  onDelete?: () => void,
+  overrides: Partial<Listing> = {},
+  onMessage?: () => void
+) {
   return render(
     <MemoryRouter initialEntries={['/feed']}>
-      <ListingCard listing={listing} onEdit={onEdit} onDelete={onDelete} />
+      <ListingCard
+        listing={{ ...listing, ...overrides }}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onMessage={onMessage}
+      />
       <LocationProbe />
-    </MemoryRouter>,
+    </MemoryRouter>
   )
 }
 
 describe('ListingCard', () => {
+  it('shows the listing photo when imageUrl is present', () => {
+    const url = 'https://images.unsplash.com/photo-1?w=800'
+    renderCard(undefined, undefined, { imageUrl: url })
+    expect(screen.getByRole('img', { name: 'Desk Lamp' })).toHaveAttribute(
+      'src',
+      url
+    )
+  })
   it('renders the listing details', () => {
     renderCard()
 
@@ -46,14 +64,21 @@ describe('ListingCard', () => {
   it('links the card to the listing detail page', () => {
     renderCard()
 
-    expect(screen.getByRole('link', { name: 'Desk Lamp' })).toHaveAttribute('href', '/listings/1')
+    expect(screen.getByRole('link', { name: 'Desk Lamp' })).toHaveAttribute(
+      'href',
+      '/listings/1'
+    )
   })
 
   it('does not render edit or delete buttons when the handlers are not provided', () => {
     renderCard()
 
-    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Delete' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Edit' })
+    ).not.toBeInTheDocument()
   })
 
   it('calls onDelete without navigating', async () => {
@@ -76,5 +101,83 @@ describe('ListingCard', () => {
 
     expect(handleEdit).toHaveBeenCalledTimes(1)
     expect(screen.getByTestId('location')).toHaveTextContent('/feed')
+  })
+
+  it('shows a Message button when onMessage is given and calls it without navigating', async () => {
+    const user = userEvent.setup()
+    const onMessage = vi.fn()
+
+    renderCard(undefined, undefined, {}, onMessage)
+    await user.click(
+      screen.getByRole('button', { name: 'Message seller about Desk Lamp' })
+    )
+
+    expect(onMessage).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('location')).toHaveTextContent('/feed')
+  })
+
+  it('hides the Message button when onMessage is not given', () => {
+    renderCard()
+
+    expect(
+      screen.queryByRole('button', { name: /Message seller about/ })
+    ).not.toBeInTheDocument()
+  })
+
+  describe('verified seller badge', () => {
+    it('shows the Verified Student badge beside the seller when sellerVerified is true', () => {
+      renderCard(undefined, undefined, { sellerVerified: true })
+
+      const badge = screen.getByText('Verified Student')
+      expect(screen.getByTestId('listing-seller')).toContainElement(badge)
+      expect(screen.getByTestId('listing-seller')).toHaveTextContent('Jane Doe')
+    })
+
+    it('does not show the badge when sellerVerified is false', () => {
+      renderCard(undefined, undefined, { sellerVerified: false })
+
+      expect(screen.queryByText('Verified Student')).not.toBeInTheDocument()
+    })
+
+    it('does not show the badge when sellerVerified is missing (legacy payload)', () => {
+      renderCard()
+
+      expect(screen.queryByText('Verified Student')).not.toBeInTheDocument()
+    })
+
+    it('does not show the badge when sellerVerified is null', () => {
+      renderCard(undefined, undefined, { sellerVerified: null })
+
+      expect(screen.queryByText('Verified Student')).not.toBeInTheDocument()
+    })
+
+    it('does not show the badge for a non-boolean truthy sellerVerified value', () => {
+      renderCard(undefined, undefined, {
+        sellerVerified: 'true' as unknown as boolean,
+      })
+
+      expect(screen.queryByText('Verified Student')).not.toBeInTheDocument()
+    })
+
+    it('keeps the card link name unchanged when verified', () => {
+      renderCard(undefined, undefined, { sellerVerified: true })
+
+      expect(screen.getByRole('link', { name: 'Desk Lamp' })).toHaveAttribute(
+        'href',
+        '/listings/1'
+      )
+    })
+  })
+
+  it('shows the status badge for a sold listing', () => {
+    renderCard(undefined, undefined, { status: 'SOLD' })
+    expect(screen.getByText('Sold')).toBeInTheDocument()
+  })
+
+  it('shows no status badge for an available listing', () => {
+    renderCard(undefined, undefined, { status: 'ACTIVE' })
+    expect(screen.queryByText('Available')).not.toBeInTheDocument()
+    expect(screen.queryByText('Sold')).not.toBeInTheDocument()
+    expect(screen.queryByText('Pending')).not.toBeInTheDocument()
   })
 })

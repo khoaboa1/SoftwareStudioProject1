@@ -1,4 +1,5 @@
 import { ApiError, request } from './httpClient'
+import { hasApiStatus } from '../lib/apiError'
 
 export { ApiError }
 
@@ -7,8 +8,11 @@ export type Student = {
   studentName: string
   email: string
   emailVerified: boolean
+  verified?: boolean
   sellingItems: string[] | null
   dormLocation: string | null
+  role?: 'STUDENT' | 'ADMIN'
+  suspended?: boolean
 }
 
 export type LoginResult = {
@@ -18,8 +22,11 @@ export type LoginResult = {
   studentName?: string
   email?: string
   emailVerified?: boolean
+  verified?: boolean
   sellingItems?: string[] | null
   dormLocation?: string | null
+  role?: 'STUDENT' | 'ADMIN' | null
+  suspended?: boolean
 }
 
 export function signup(input: {
@@ -70,7 +77,7 @@ export async function getCurrentStudent(): Promise<Student | null> {
   try {
     return await request<Student>('/auth/me')
   } catch (error) {
-    if (error instanceof ApiError && error.status === 401) {
+    if (hasApiStatus(error, 401)) {
       return null
     }
     throw error

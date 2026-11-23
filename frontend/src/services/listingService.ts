@@ -1,7 +1,11 @@
 import { request } from './httpClient'
 
 export type Condition = 'NEW' | 'LIKE_NEW' | 'GOOD' | 'FAIR' | 'WORN'
-export type Category = 'FURNITURE' | 'ELECTRONICS' | 'KITCHEN' | 'DECOR' | 'CLOTHING' | 'OTHER'
+export type Category =
+  'FURNITURE' | 'ELECTRONICS' | 'KITCHEN' | 'DECOR' | 'CLOTHING' | 'OTHER'
+
+/** The statuses a seller can choose. A missing status means ACTIVE. */
+export type ListingStatus = 'ACTIVE' | 'PENDING' | 'SOLD'
 
 export type Listing = {
   id: number
@@ -12,7 +16,12 @@ export type Listing = {
   category: Category
   sellerId: number
   sellerName: string
+  sellerVerified?: boolean | null
   createdAt: string
+  /** Absent or null means ACTIVE. */
+  status?: ListingStatus | null
+  imageUrl?: string | null
+  imageUrls?: string[]
 }
 
 export type ListingPage = {
@@ -36,12 +45,16 @@ export type SearchListingsParams = {
   limit?: number
 }
 
-export function searchListings(params: SearchListingsParams): Promise<ListingPage> {
+export function searchListings(
+  params: SearchListingsParams
+): Promise<ListingPage> {
   const query = new URLSearchParams()
   if (params.q !== undefined) query.set('q', params.q)
   if (params.category !== undefined) query.set('category', params.category)
-  if (params.minPrice !== undefined) query.set('minPrice', String(params.minPrice))
-  if (params.maxPrice !== undefined) query.set('maxPrice', String(params.maxPrice))
+  if (params.minPrice !== undefined)
+    query.set('minPrice', String(params.minPrice))
+  if (params.maxPrice !== undefined)
+    query.set('maxPrice', String(params.maxPrice))
   if (params.sortBy !== undefined) query.set('sortBy', params.sortBy)
   if (params.sortOrder !== undefined) query.set('sortOrder', params.sortOrder)
   if (params.page !== undefined) query.set('page', String(params.page))
@@ -67,6 +80,7 @@ export function createListing(input: {
   price: number
   condition: Condition
   category: Category
+  imageUrls: string[]
 }): Promise<Listing> {
   return request<Listing>('/listings', {
     method: 'POST',
@@ -82,7 +96,8 @@ export function updateListing(
     price: number
     condition: Condition
     category: Category
-  },
+    imageUrls: string[]
+  }
 ): Promise<Listing> {
   return request<Listing>(`/listings/${id}`, {
     method: 'PUT',
@@ -90,6 +105,22 @@ export function updateListing(
   })
 }
 
+export function updateListingStatus(
+  id: number,
+  status: ListingStatus
+): Promise<Listing> {
+  return request<Listing>(`/listings/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  })
+}
+
 export function deleteListing(id: number): Promise<void> {
   return request<void>(`/listings/${id}`, { method: 'DELETE' })
+}
+
+export function uploadListingImage(file: Blob): Promise<{ url: string }> {
+  const body = new FormData()
+  body.append('file', file, 'photo.jpg')
+  return request<{ url: string }>('/listings/images', { method: 'POST', body })
 }

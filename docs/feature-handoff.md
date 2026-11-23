@@ -1,5 +1,159 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-147 Listing Status (Backend + Frontend)
+
+- **Feature summary:** A seller can mark their own listing Available, Pending or Sold, as on Facebook Marketplace. Buyers see the status. They can still message the seller about a Pending listing, but can't start a new conversation about a Sold one.
+- **Data:** this uses the existing `listings.status` column and `ListingStatus` enum, so there is no migration. Every listing response (`GET /listings`, `GET /listings/{id}`, `GET /api/listings`, create, update) now includes `"status": "ACTIVE" | "PENDING" | "SOLD"`. A `null` in the database is returned as `"ACTIVE"`.
+- **Endpoint:** `PATCH /listings/{id}/status` with `{ "status": "ACTIVE" | "PENDING" | "SOLD" }` (case-insensitive) returns `200` with the updated listing. Any status can change to any other.
+  - 401 `You must be logged in to post a listing`.
+  - 404 `Listing not found`.
+  - 403 `You do not have permission to modify this listing` for anyone but the owner, admins included. Ownership is checked before the value, so a non-owner always gets 403.
+  - 400 `status must be one of ACTIVE, PENDING, SOLD` for a missing or blank status, an unknown value, or the internal `INACTIVE`, `DRAFT` and `DELETED`.
+- **Where listings appear:** marketplace browse (`GET /api/listings`) shows ACTIVE and PENDING listings and hides SOLD. `GET /listings/{id}` and `GET /listings` still return every status, so old conversations open a Sold listing and the profile's "My listings" shows the seller's Sold items.
+- **Messaging:** unchanged from SSP1-123. `POST /listings/{id}/conversation` returns 409 for a Sold listing unless the buyer already has a conversation about it, which reopens.
+- **Frontend:**
+  - The owner sees a "Listing status" Available / Pending / Sold switch on the listing page (`ListingStatusControl`). The page updates without reloading. A failed save shows the error and keeps the old status.
+  - `ListingStatusBadge` shows Pending and Sold pills on cards and the detail page; Available has no badge.
+  - Buyers see Message seller on Pending, with a note that someone is already arranging to buy it. On Sold they see "This item has been sold." instead of the button.
+- **Known gaps:**
+  - No status history or timestamp.
+  - Admins can't change a status; they delete instead.
+  - `GET /listings` still returns Sold listings to other students.
+  - Messages can still be sent in an existing conversation after the listing is Sold.
+  - The feed's Edit form doesn't show or change the status.
+
+## Handoff Note: SSP1-115 Admin Role (Backend → Frontend)
+
+- **Feature summary:** Same-school admins can review listing reports, delete another student's listing, suspend or unsuspend students, and change student roles. A student can report a visible listing.
+- **Auth and roles:** Send the `sb-access` / `sb-refresh` cookies (SSP1-116), keeping `credentials: 'include'`. `role` is SSP1-114's field (`STUDENT` or `ADMIN`, migration V8). This change adds `suspended` (boolean, migration `V9__add_student_suspension.sql`), which appears in `GET /auth/me` next to `role`. `role` and `suspended` are read-only in every JSON request body; only the admin endpoints below change them. The backend reloads the student on every request, so a role change or suspension takes effect on the next request. Every `/api/admin` endpoint returns `401 { "message": "You must be logged in" }` when not logged in and `403 { "message": "Admin access required" }` for a non-admin. A suspended account gets `403 { "message": "This account has been suspended" }` on a correct-password login, with no cookies set; a wrong password still gets the usual 401. A suspended student's existing cookie gets 401 on the next request.
+- **Dev seed:** The `dev` profile seeds verified `admin@tulane.edu` / `12345678` with name Khoa Le and a `tulane.edu` profile. This account is not seeded outside `dev`.
+- **Reports (migration `V10__create_listing_reports.sql`, with row level security enabled):** `POST /listings/{id}/reports` with `{ "reason": "SCAM" | "PROHIBITED_ITEM" | "SPAM" | "OFFENSIVE" | "OTHER", "details"?: string }` returns `201 { id, listingId, reason, details, status: "OPEN", createdAt }`. `details` is trimmed, blank becomes null, and its maximum length is 500. Errors: 401 `You must be logged in to report a listing`; 403 `You cannot report your own listing`; 404 `Listing not found` (including another school or a suspended seller); 409 `You have already reported this listing` while an open report exists; 400 `reason must be one of SCAM, PROHIBITED_ITEM, SPAM, OFFENSIVE, OTHER` or `details cannot exceed 500 characters`.
+- **Admin report queue:** `GET /api/admin/reports` returns `200` with a newest-first array of `{ id, reason, details, createdAt, reporterId, reporterName, listingId, itemName, sellerId, sellerName, sellerSuspended }` for open reports on listings in the admin's school. `POST /api/admin/reports/{id}/dismiss` returns `204` and is idempotent. A missing or other-school report gives 404 `Report not found`.
+- **Admin students:** `GET /api/admin/students?q=&page=&limit=` returns `200 { items: [{ id, name, email, role, suspended, createdAt }], meta: { totalItems, currentPage, totalPages, pageSize } }`. It includes the admin and only profiles in their school, ordered by name then id. `q` is optional and matches profile name or email without case sensitivity; its maximum length is 100. Page defaults to 1, limit to 20 (maximum 100). Errors: 400 `q cannot exceed 100 characters`, `page must be a valid integer`, `page must be at least 1`, `limit must be a valid integer`, or `limit must be between 1 and 100`.
+- **Admin student actions:** `POST /api/admin/students/{id}/suspend` and `/unsuspend` return `200 { id, name, email, role, suspended, createdAt }`; unsuspend is a no-op if already active. `PUT /api/admin/students/{id}/role` with `{ "role": "ADMIN" | "STUDENT" }` returns the same item. Missing or other-school students give 404 `Student not found`. Suspend errors: 400 `You cannot suspend yourself`; 409 `Remove admin role before suspending this student`. Role errors: 400 `You cannot change your own role` or `role must be ADMIN or STUDENT`. Admins without a profile get 404 `Profile not found` on admin actions.
+- **Listings and frontend use:** Suspended sellers' listings disappear from `GET /listings`, `GET /api/listings`, and `GET /listings/{id}` until unsuspended. An owner or same-school admin can use the existing `DELETE /listings/{id}` for 204; a non-owner student gets 403 `You do not have permission to modify this listing`, and a missing or other-school admin target gets 404 `Listing not found`. SSP1-117 can show an Admin link only for `role === 'ADMIN'`, put Reports and Students tabs at `/admin`, show a Report button for other students' visible listings, and use that existing delete endpoint for admin deletion.
+- **Known gaps:** The old unauthenticated `/students` routes still exist. `role` and `suspended` are read-only there, so they can't grant admin or lift a suspension, but anyone can still edit or delete any account through them; removing those routes is a separate ticket. Two simultaneous report requests from the same student can create a duplicate open report. There are no notifications and no audit log of admin actions.
+
+## Handoff Note: SSP1-114 Student Role Field (Backend → Frontend)
+
+- **Feature summary:** Every student now has a `role`: `STUDENT` or `ADMIN`. New and existing accounts are `STUDENT`. It is stored in `students.role` (migration `V8__add_role_to_students.sql`, `varchar(50) not null default 'STUDENT'` with a check that only allows those two values).
+- **Where it appears:** a new `"role"` string in the JSON of every response that returns the student: `POST /auth/signup` (`201`), `POST /auth/verify-pin` (`200`), `GET /auth/me` (`200`), and `POST /auth/login` (`200`) when `requiresPin` is `false`. Example: `{ "id": 7, "studentName": "Jane Doe", "email": "jane@tulane.edu", "role": "STUDENT", ... }`.
+- **When it is missing:** the `requiresPin: true` login response has no `role` (it is `null`), because the student has not signed in yet.
+- **Frontend:** nothing breaks if you ignore it. To use it, add `role: 'STUDENT' | 'ADMIN'` to the student type in the auth types. Treat it as display and routing only: the backend decides what each role may do, and that enforcement is SSP1-113.
+- **Known gaps:** nothing enforces the role yet, and there is no endpoint to change it. An admin has to be set in the database. The migration has only been checked by tests on H2 and a text check of the SQL; it has not been run against Supabase.
+- **How to check it:** log in through the app with DevTools → Network open and read `role` in the `login` and `me` responses (the PIN prints in the backend console when `AUTH_LOG_PIN=true`). `AuthControllerTest` has `role_isStudentInSignupVerifyLoginAndMe`, `role_isAdminInLoginAndMe_whenStoredRoleIsAdmin` and `login_requiringPin_hasNoRole`; `StudentRoleTest`, `LoginResponseTest` and `RoleMigrationContractTest` cover the entity, the response and the V8 SQL.
+
+## Note: SSP1-116 Auth Token Storage (HttpOnly Cookies, Not localStorage)
+
+- **Decision:** The Supabase access token is stored in an **HttpOnly cookie** set by the backend, not in the browser's `localStorage` as the course tutorial shows.
+- **Where the token lives:** Either way, the token is kept only in the user's own browser (DevTools → Application → Cookies / Local Storage). Neither option stores it in project files or on any other server.
+- **Why HttpOnly:** JavaScript cannot read an HttpOnly cookie, so an XSS bug or a compromised npm package cannot steal the token. A token in `localStorage` can be read by any script on the page.
+- **How it works:** Supabase issues the token to the Spring backend (`/auth/login`, `/auth/verify-pin`, `/auth/refresh`). The backend sends it back as `sb-access` and `sb-refresh` cookies with `HttpOnly; SameSite=Lax` (`Secure` in production), and the browser attaches them to every request automatically. Spring Security reads the JWT from the `sb-access` cookie and checks it against Supabase's JWKS keys. These cookies replace `JSESSIONID`.
+- **CSRF:** Because cookies are sent automatically, `SameSite=Lax` and the CORS allow-list (`http://localhost:5173`) block cross-site POSTs.
+- **Frontend rules:**
+  - Keep `credentials: 'include'` in `services/httpClient.ts`.
+  - Never read, store or add the token yourself: no `localStorage` and no `Authorization` header.
+  - Never import `@supabase/*` (oxlint enforces this).
+  - On a `401`, call `POST /auth/refresh` once, then retry the request.
+
+## Handoff Note: SSP1-116 Sign-Up and Sign-In Through Supabase Auth (Backend → Frontend)
+
+- **Feature summary:** Supabase Auth now stores users, checks passwords and issues the JWTs. Only the Spring Boot backend talks to Supabase; React still calls only the existing `/auth/*` endpoints and never imports a Supabase SDK. The backend verifies every token against Supabase's JWKS keys (OAuth2 resource server) and reads it from the HttpOnly `sb-access` cookie. The server-side session and `SessionKeys` are gone.
+- **Important for every earlier note:** wherever a note below says to send the `JSESSIONID` cookie, send the `sb-access` / `sb-refresh` cookies instead. `credentials: 'include'` in `services/httpClient.ts` already does this, so no other client change is needed.
+- **Endpoints (paths and JSON shapes unchanged):**
+  - `POST /auth/signup` `{ studentName, email, password }` → `201` Student. No cookies yet. Our own 6-digit PIN is emailed to the school email (and printed in the backend console during dev/demo). The Supabase user is created unconfirmed, which needs `SUPABASE_SERVICE_KEY`.
+  - `POST /auth/verify-pin` `{ email, pin, deviceId }` → `200` Student. For a new account it only verifies the email and sets **no cookies**; the client then calls `/auth/login` (the frontend does this automatically). For a login from a new device it sets the auth cookies. Both PINs are our own. After 5 wrong guesses for one email the PIN is invalidated (`400 "Too many incorrect attempts. Please request a new PIN."`) and the student must request a new one.
+  - `POST /auth/login` `{ email, password, deviceId }` → `200` `{ requiresPin, message, ...student }`. Cookies are set only when `requiresPin` is `false`.
+  - `POST /auth/resend-pin` `{ email }` → `204`.
+  - `POST /auth/refresh`, with no body → `204` and new cookies, or `401` and cleared cookies.
+  - `POST /auth/logout` → `204` and cleared cookies. `GET /auth/me` → `200` Student or `401`.
+- **Cookies:** `sb-access` (Path `/`, lives as long as the Supabase token, about 1 hour) and `sb-refresh` (Path `/auth`, 30 days). Both are `HttpOnly; SameSite=Lax`, and `Secure` when `AUTH_COOKIE_SECURE=true`.
+- **When a PIN is required:**
+  - The account's email is not verified yet, so login sends a new PIN.
+  - The device is new or no `deviceId` was sent. The backend sends our own 6-digit PIN and holds the sign-in for 10 minutes. After `verify-pin` succeeds the device is trusted and the cookies are set.
+- **Errors:** `400` invalid sign-up input or wrong/expired PIN; `401 { "message": "Invalid email or password" }`; `401 { "message": "Your sign-in expired. Please log in again." }` when a new-device PIN is entered after the 10-minute hold; `409 { "message": "Email already registered" }`; `429` too many requests; `502` Supabase unreachable.
+- **Existing accounts:** migration `V7__add_supabase_user_id.sql` adds `students.supabase_user_id`. A verified account created before this change has no Supabase user, so on its first login with the right password the backend creates the confirmed Supabase user (this needs `SUPABASE_SERVICE_KEY`) and drops the old password hash. Seeded demo accounts are linked at startup when the keys are set.
+- **Setup:**
+  - `backend/.env` needs `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY` and optionally `AUTH_COOKIE_SECURE`. Never put these in the frontend.
+  - The PIN is printed in the backend console **only when `AUTH_LOG_PIN=true`** is set in the backend environment file (default `false`). Set it to `true` for local development and demos without an inbox. Never set it in production.
+  - In the Supabase dashboard: turn on asymmetric JWT signing keys, or the JWKS endpoint has no keys. Turn off "Allow new users to sign up" so nobody can create Supabase users that skip our `.edu` check. The email template and SMTP are not needed, because the PIN email is sent by our own sender (Gmail, webhook or Resend).
+- **Frontend (done in this change):** a failed network request shows "Try again"; a duplicate email shows an error on the email field with a "Log in instead" link; a verified sign-up PIN signs the student in and opens `/profile-setup`; the PIN step is titled "Verify it's you"; `httpClient` calls `/auth/refresh` once after a `401` and retries; oxlint blocks `@supabase/*` imports.
+- **Known gaps:**
+  - It has not been tested against real Supabase. Tests use `FakeSupabaseAuthClient` and `FakeJwtDecoderConfig`, so the exact Supabase request formats and the JWKS issuer and audience settings in `application.properties` still need a manual check.
+  - An unverified sign-up is still purged from our table after 30 minutes by `AccountCleanupService`, but its unconfirmed Supabase user stays. Signing up again reuses it (found by email, which pages the admin user list).
+  - The PIN lockout counter is in memory, so it resets when the backend restarts, and there is no limit yet on how often a new PIN can be requested.
+
+## Handoff Note: SSP1-142 Conversation API (Backend → Frontend)
+
+- **Shipped:** `GET /api/conversations` (buyer and seller side, newest first, `[]` when none) and `GET /api/conversations/{id}` (403 `You do not have access to this conversation` for non-participants, 404 `Conversation not found`). There is no separate create endpoint: starting or reopening a conversation stays `POST /listings/{id}/conversation` (SSP1-123), which the Message seller button already uses.
+- **Both reads:** 401 when not logged in; `404 { "message": "Profile not found" }` when the student has no profile.
+- **Response fields:** `ConversationResponse` now includes `listingStatus` (`ACTIVE`, `PENDING`, `SOLD`) and `lastMessage`, which is always `null` until the Message API (SSP1-135) ships.
+- **Sold listings:** existing conversations stay readable after a listing is sold.
+
+## Handoff Note: SSP1-136 Inbox Page & Messages Menu (Frontend → Backend)
+
+- **Feature summary:** The header has a **Message** button that opens a dropdown with an **All messages** link (`/inbox`) and the 3 latest conversations. `/inbox` lists all of the student's conversations, newest first. Rows link to `/conversations/{id}` (the chat view, SSP1-141, is not built yet).
+- **Request — list endpoint:** `GET /api/conversations`, no parameters. Send the existing `JSESSIONID` cookie; the backend resolves the student from the session.
+- **Response (200):** a JSON array of the same objects `POST /listings/{id}/conversation` returns, for every conversation where the student is the buyer **or** the seller: `[{ "id": 1, "listingId": 2, "itemName": "Desk Lamp", "buyerId": 3, "buyerName": "Buyer", "sellerId": 4, "sellerName": "Seller", "createdAt": "2026-11-11T20:00:00Z", "listingStatus": "ACTIVE" }]`. No conversations returns `[]`, not an error.
+- **Request — `listingStatus`:** add `listingStatus` (`ACTIVE`, `PENDING` or `SOLD`) to `ConversationResponse`. The frontend shows a "Sold" badge when it is `SOLD`, and treats a missing or `null` value as not sold, so nothing breaks before this ships.
+- **Request — `lastMessage`:** add `lastMessage` to each `ConversationResponse` in the list: `{ "content": "Is it still available?", "senderId": 3, "createdAt": "2026-11-11T20:05:00Z" }`, or `null` when no message has been sent. The dropdown and inbox show it as "You: ..." when `senderId` is the student, otherwise "{first name}: ...". A missing value is treated as `null`, so nothing breaks before this ships.
+- **Ordering:** the frontend sorts by last activity (`lastMessage.createdAt`, else `createdAt`) descending itself, so any order works. Returning that order is still preferred.
+- **Errors:** `401` when not logged in (frontend redirects to `/login`); `404 { "message": "Profile not found" }` when the student has no profile (frontend redirects to `/profile-setup`). Other failures show an error message with a Retry button.
+- **Visibility rules:** return only the requester's own conversations. A sold listing's conversation is still returned, because reopening is supported.
+- **Known gaps:** no pagination (the dropdown and inbox fetch the whole list), and no unread counts or indicator.
+
+- **Chat endpoints (SSP1-141):** The chat page at `/conversations/{id}` fetches and posts messages:
+  - `GET /api/conversations/{id}` — header info for the conversation, including `listingStatus`. Errors: `401` → `/login`; `404 "Profile not found"` → `/profile-setup`; `403` or any other `404` → "Conversation not found".
+  - `GET /api/conversations/{id}/messages?after={messageId}` — message history, oldest first. `after` is used when polling for new messages. Response: `[{ "id", "conversationId", "senderId", "senderName", "content", "createdAt" }]`.
+  - `POST /api/conversations/{id}/messages` body `{ "content": "..." }` — send a message. `201` with the saved message. `400` when content is empty or over 1000 characters (frontend shows the backend message inline).
+  - **Polling:** the frontend fetches new messages every 5 seconds (paused when the tab is hidden). Real-time delivery is out of scope.
+  - All endpoints send the existing `JSESSIONID` cookie.
+
+## Handoff Note: SSP1-123 Start Conversation API
+
+- **Feature summary:** A buyer can start or reopen one conversation with a listing's seller. Repeated requests return the same conversation.
+- **Endpoint:** `POST /listings/{id}/conversation`, with no request body. Send the existing `JSESSIONID` cookie; the backend resolves the buyer from the session.
+- **Response:** `{ "id": 1, "listingId": 2, "itemName": "Desk Lamp", "buyerId": 3, "buyerName": "Buyer", "sellerId": 4, "sellerName": "Seller", "createdAt": "2026-11-11T20:00:00Z" }`. A new conversation returns `201 Created`; an existing conversation returns `200 OK` with the same `id`.
+- **Errors:** `401 { "message": "You must be logged in to message a seller" }`; `404 { "message": "Profile not found" }` when the buyer has no profile; `404 { "message": "Listing not found" }` when the listing is missing or outside the buyer's school; `403 { "message": "You cannot message yourself about your own listing" }`; `409 { "message": "This item has already been sold" }` when starting a new conversation on a sold listing.
+- **Visibility rules:** Buyer and seller must have profiles in the same school. A seller cannot message their own listing. `PENDING` listings remain messageable. `SOLD` blocks new conversations, but a buyer can reopen one created earlier.
+- **Listing status:** `ListingStatus` now includes `PENDING` and `SOLD`; BE2 (SSP1-125) will add the endpoint that sets them.
+- **Known gaps:** Sending and reading messages, an inbox list, and realtime delivery are not included. The frontend will poll once message endpoints exist.
+
+## Handoff Note: SSP1-124 Message Seller Button (Frontend → Backend)
+
+- **Feature summary:** The listing detail page shows a **Message seller** button on another student's available listing. It is hidden on the student's own listing (`sellerId === student.id`) and on any listing whose `status` is not `ACTIVE`. Clicking it will open the buyer–seller conversation, which is not built yet.
+- **Auth assumptions:** No new checks on the frontend. `/listings/:id` already requires login and a profile, and `GET /listings/{id}` already returns `404` across schools.
+- **Request — listing status:** Add `status` (`ACTIVE`, or a non-active value once the item is sold) to listing responses, at least from `GET /listings/{id}`. The frontend treats a missing or `null` `status` as `ACTIVE`, so nothing breaks before this ships.
+- **Request — messaging:** No messaging backend exists yet. The conversation/inbox endpoints will be specified in the follow-up messaging ticket. The backend must enforce the same-school and not-own-listing rules itself.
+
+## Handoff Note: SSP1-118 Listing Photo Upload
+
+- **Feature summary:** Students attach up to 8 photos from their phone or computer when posting or editing a listing, and can remove and reorder them. The first photo is the cover on browse cards; the detail page shows a gallery.
+- **Upload endpoint:** `POST /listings/images` (multipart field `file`, `JSESSIONID` cookie). Success: `201 { "url": "<Supabase public URL>" }`. Errors: `401` not logged in; `400 { "message": "Photos must be JPEG, PNG or WebP and at most 5 MB" }` (type is checked from the file bytes); `503` when Supabase Storage isn't configured; `502` when storage fails.
+- **Listings API:** create/update accept `imageUrls: string[]` (ordered, max 8, each `https://`). Responses include `imageUrls` (ordered, `[]` when none) and `imageUrl`, which always equals the cover. Requests without `imageUrls` still work through the old single `imageUrl`.
+- **Database:** Flyway `V4__create_listing_images.sql` adds `listing_images (listing_id, url, position)` with cascade delete and backfills existing `image_url` values as one-photo listings.
+- **Setup:** `backend/.env` needs `SUPABASE_URL` (e.g. `https://<ref>.supabase.co`) and `SUPABASE_SERVICE_KEY` (secret key), plus a public Storage bucket `listing-images`. Without them the app still runs; only uploads return 503.
+- **Frontend:** photos are resized in the browser to at most 1600 px (JPEG) before upload. Reordering uses move-left/right buttons; drag-and-drop is not implemented.
+- **Known gaps:** removed or abandoned uploads stay in the bucket (cleanup is a follow-up), and the storage call has no explicit timeout.
+
+## Handoff Note: SSP1-106 Demo Seed Data & Listing Images
+
+- **Feature summary:** Listings now carry an optional photo, and a dev-only seeder loads 10 verified demo students (6 Tulane, 2 USF, 2 UCF) with profiles and 20 photo listings (12 / 4 / 4).
+- **API:** Listing responses from `GET /listings`, `GET /listings/{id}` and `GET /api/listings` include `imageUrl: string | null`. `POST`/`PUT` listing requests accept an optional `imageUrl`; blank becomes `null`, anything not `https://` or longer than 1000 characters returns `400 { "message": "imageUrl must be an https URL of at most 1000 characters" }`.
+- **Database:** Flyway `V3__add_listing_image_url.sql` adds nullable `listings.image_url varchar(1000)`. Existing rows keep `null`.
+- **Seeding:** Run `cd backend && ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev`. The seeder skips any demo email that already exists, so re-running is safe. It never runs without the `dev` profile. All demo accounts use `Password123!`; data lives in `backend/src/main/java/com/Handoff/backend/config/DemoSeedData.java`.
+- **Frontend:** `ListingThumbnail` shows the photo in the existing 4:3 box on cards and the detail page, and falls back to the category icon when `imageUrl` is null or the image fails to load. There is no image upload or form field yet.
+
+## Handoff Note: SSP1-105 User Name Search API
+
+- **Feature summary:** Backend support for searching other students by the editable public `Profile.name`.
+- **Endpoint:** `GET /api/profiles/search?q={name}&page={page}&limit={limit}`. `q` is required; `page` defaults to 1 and `limit` to 20 (maximum 100).
+- **Authentication:** Send the existing `JSESSIONID` cookie. The backend derives the requester's school from the saved profile; clients cannot supply or override it.
+- **Success (200):** `{ "items": [{ "id": 1, "studentId": 2, "name": "Jane Doe", "major": "Computer Science", "bio": "..." }], "meta": { "totalItems": 1, "currentPage": 1, "totalPages": 1, "pageSize": 20 } }`. No matches return an empty `items` array with valid metadata.
+- **Visibility:** Case-insensitive partial matching, limited to the same school domain, excluding the requester. Results are ordered by name and then profile ID.
+- **Errors:** `400 { "message": "..." }` for invalid query or pagination, `401` without an authenticated session, and `404 { "message": "Profile not found" }` when the requester has no profile.
+- **Frontend assumptions:** Render compact, non-clickable result cards. Public profile-detail navigation is outside this task.
+
 ## Handoff Note: SSP1-84 Listing Thumbnails (Frontend → Backend)
 
 - **Feature summary:** Browse cards and the listing detail page reserve a 4:3 thumbnail slot. For now, they show a category icon placeholder.
@@ -348,3 +502,109 @@ Strict Insecure Direct Object Reference (IDOR) protection has been implemented f
 - When viewing or editing profile settings, the frontend should handle `403 Forbidden` by displaying an unauthorized access warning or navigating back to the student's own profile (`/api/profiles/me`).
 - If `404 Not Found` occurs on edit, prompt the student to create their profile.
 
+---
+
+## Handoff Note: SSP1-102 Add Seller Verification Status to Listing API Responses
+
+### Feature Summary
+Supports User Story 2 — Show Verified Student Status. Adds a `sellerVerified` boolean to the safe `ListingResponse` DTO and populates it from the seller account for every listing response path. The field is derived server-side from `listing.getSeller().isVerified()` and cannot be supplied or overridden by clients. No password, PIN, trusted-device identifier, or other private account data is exposed.
+
+### API Endpoints
+- `GET /listings` — feed items include `sellerVerified`
+- `GET /listings/{id}` — detail response includes `sellerVerified`
+- `POST /listings` (create) — response includes `sellerVerified`
+- `PUT /listings/{id}` (update) — response includes `sellerVerified`
+- `GET /api/listings` — `items[].sellerVerified` included in each browse item
+
+### Request Shape
+No new request parameters. `CreateListingRequest` has no `sellerVerified` field; clients cannot supply or override it.
+
+### Response Shape
+Adds `sellerVerified: boolean` to `ListingResponse`:
+```json
+{
+  "id": 1,
+  "itemName": "Desk Lamp",
+  "description": "Works great",
+  "price": 10.00,
+  "condition": "GOOD",
+  "category": "FURNITURE",
+  "sellerId": 1,
+  "sellerName": "Jane Doe",
+  "sellerVerified": true,
+  "createdAt": "2026-09-22T00:00:00.000000"
+}
+```
+
+### Auth & Session Needs
+- Same as existing listing endpoints: requires an active `JSESSIONID` cookie resolved via `CurrentStudentResolver`.
+- School-domain scoping unchanged; only sellers in the requester's school domain are returned.
+
+### Validation Rules
+- `sellerVerified` is derived purely server-side from the seller's `verified` boolean; no client input is accepted.
+
+### Success and Error States
+- `200 OK`: Response includes `sellerVerified` derived from the seller account.
+- `201 Created` (create): Response includes `sellerVerified`.
+- `401 Unauthorized`: No or stale session.
+- `403 Forbidden`: Requester is not the listing owner (for update/delete).
+- `404 Not Found`: Listing or requester profile not found.
+
+### UI Constraints or Assumptions
+- Frontend should render a "Verified" badge/indicator when `sellerVerified` is `true`.
+- No sensitive student account data (password, PIN, trusted devices, email verification state) is exposed in listing responses.
+
+### Tests
+- `ListingResponseContractTest`: unit tests for verified/unverified mapping and sensitive field exclusion.
+- `ListingControllerTest`: MockMvc contract tests for feed, detail, create, update serialization.
+- `ListingBrowseControllerTest`: MockMvc contract test for `/api/listings` items serialization.
+- Jacoco coverage: 100% line coverage on `ListingResponse`, `ListingController`, `ListingBrowseController`.
+
+---
+
+## Handoff Note: SSP1-103 Verified Status API Contract
+
+### Field Definition
+- `sellerVerified: boolean` — server-derived from the seller's `verified` status. Read-only; clients cannot supply or override it.
+
+### Affected Endpoints
+- `GET /listings` — feed items include `sellerVerified`
+- `GET /listings/{id}` — detail response includes `sellerVerified`
+- `POST /listings` (create) — response includes `sellerVerified`
+- `PUT /listings/{id}` (update) — response includes `sellerVerified`
+- `GET /api/listings` — `items[].sellerVerified` included in each browse item
+
+### Compatibility Notes
+- Additive field only; no existing response fields changed or removed.
+- No new request parameters; `CreateListingRequest` has no `sellerVerified` field.
+- School-domain scoping and existing authentication behavior unchanged.
+
+### Frontend Display Assumptions
+- When `sellerVerified` is `true`, display a "Verified" badge/indicator next to the seller name.
+- When `false`, show no badge (or an "Unverified" label if desired).
+- Do not display any sensitive student account data (password, PIN, trusted devices, etc.) — these are never included in listing responses.
+
+---
+
+## Handoff Note: SSP1-139 Conversation Access Rules
+
+### Who can use a conversation
+
+- Only the conversation's buyer and the listing's seller can read it (`GET /api/conversations/{id}`), read its messages (`GET /api/conversations/{id}/messages`) or send one (`POST /api/conversations/{id}/messages`).
+- Anyone else who is logged in gets 403 "You do not have access to this conversation". An unknown conversation is 404; not logged in is 401.
+- The check lives in `ConversationService.getForParticipant`, which `MessageService.send` and `MessageService.history` both call first.
+
+### Own listings
+
+- A seller cannot start a conversation about their own listing: `POST /listings/{id}/conversation` returns 403 "You cannot message yourself about your own listing".
+
+### Sold listings
+
+- No new conversation can be started on a SOLD listing (409 "This item has already been sold"); asking again for an existing one returns it.
+- Existing conversations stay fully available after the sale: both participants can still read the history and send messages, so they can finish arranging the handoff.
+
+### Tests
+
+- `MessageControllerTest`: outsider 403 on send and history, including on SOLD listings; buyer and seller can send and read after SOLD.
+- `MessageServiceTest`: send and history on a SOLD listing still go through the participant check.
+- `ConversationControllerTest` / `ConversationServiceTest`: own-listing 403, SOLD 409 for new conversations, existing conversation returned on a SOLD listing.

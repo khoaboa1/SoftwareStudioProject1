@@ -2,11 +2,17 @@ import { GraduationCap, Buildings } from '@phosphor-icons/react'
 import { Button } from './ui/Button'
 import { FormAlert } from './ui/FormAlert'
 import type { Profile } from '../services/profileService'
+import { VerifiedBadge } from './VerifiedBadge'
 
 type ProfileViewProps =
   | { status: 'loading' }
   | { status: 'error'; error?: string }
-  | { status: 'ready'; profile: Profile; onEdit?: () => void }
+  | {
+      status: 'ready'
+      profile: Profile
+      verified?: boolean
+      onEdit?: () => void
+    }
 
 function initialsOf(name: string): string {
   const words = name.trim().split(/\s+/)
@@ -16,7 +22,10 @@ function initialsOf(name: string): string {
 }
 
 function formatMemberSince(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    year: 'numeric',
+  })
 }
 
 export function ProfileView(props: ProfileViewProps) {
@@ -37,10 +46,14 @@ export function ProfileView(props: ProfileViewProps) {
   }
 
   if (props.status === 'error') {
-    return <FormAlert kind="error">{props.error ?? 'Something went wrong loading this profile.'}</FormAlert>
+    return (
+      <FormAlert kind="error">
+        {props.error ?? 'Something went wrong loading this profile.'}
+      </FormAlert>
+    )
   }
 
-  const { profile, onEdit } = props
+  const { profile, verified, onEdit } = props
   const bio = profile.bio?.trim()
 
   return (
@@ -53,7 +66,12 @@ export function ProfileView(props: ProfileViewProps) {
           {initialsOf(profile.name)}
         </div>
         <div className="flex flex-col gap-1.5">
-          <h2 className="text-2xl font-semibold text-zinc-900">{profile.name}</h2>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h2 className="text-2xl font-semibold text-zinc-900">
+              {profile.name}
+            </h2>
+            {verified === true && <VerifiedBadge />}
+          </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-zinc-600">
             <span className="flex items-center gap-1.5">
               <GraduationCap className="h-4 w-4" aria-hidden="true" />
@@ -66,10 +84,17 @@ export function ProfileView(props: ProfileViewProps) {
               </span>
             </span>
           </div>
-          <p className="text-xs text-zinc-400">Member since {formatMemberSince(profile.createdAt)}</p>
+          <p className="text-xs text-zinc-400">
+            Member since {formatMemberSince(profile.createdAt)}
+          </p>
         </div>
         {onEdit && (
-          <Button type="button" fullWidth={false} onClick={onEdit} className="px-4 py-2 text-sm sm:ml-auto">
+          <Button
+            type="button"
+            fullWidth={false}
+            onClick={onEdit}
+            className="px-4 py-2 text-sm sm:ml-auto"
+          >
             Edit profile
           </Button>
         )}

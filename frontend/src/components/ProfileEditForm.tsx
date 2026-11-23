@@ -17,7 +17,13 @@ type ProfileEditFormProps = {
   onCancel: () => void
 }
 
-export function ProfileEditForm({ profile, status, error, onSubmit, onCancel }: ProfileEditFormProps) {
+export function ProfileEditForm({
+  profile,
+  status,
+  error,
+  onSubmit,
+  onCancel,
+}: ProfileEditFormProps) {
   const bioId = useId()
   const [name, setName] = useState(profile.name)
   const [major, setMajor] = useState(profile.major)
@@ -31,7 +37,8 @@ export function ProfileEditForm({ profile, status, error, onSubmit, onCancel }: 
     const errors: FieldErrors = {}
     if (!input.name) errors.name = 'Name is required'
     if (!input.major) errors.major = 'Major is required'
-    if (input.bio.length > BIO_MAX_LENGTH) errors.bio = `Bio cannot exceed ${BIO_MAX_LENGTH} characters`
+    if (input.bio.length > BIO_MAX_LENGTH)
+      errors.bio = `Bio cannot exceed ${BIO_MAX_LENGTH} characters`
 
     setFieldErrors(errors)
     if (Object.keys(errors).length > 0) return
@@ -43,7 +50,9 @@ export function ProfileEditForm({ profile, status, error, onSubmit, onCancel }: 
     <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
       <h2 className="mb-5 text-lg font-semibold text-zinc-900">Edit profile</h2>
 
-      {status === 'error' && error && <FormAlert kind="error">{error}</FormAlert>}
+      {status === 'error' && error && (
+        <FormAlert kind="error">{error}</FormAlert>
+      )}
 
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
         <TextField
@@ -82,9 +91,18 @@ export function ProfileEditForm({ profile, status, error, onSubmit, onCancel }: 
                 : 'border-zinc-300 focus:border-accent-500 focus:ring-2 focus:ring-accent-100'
             }`}
           />
-          <div id={`${bioId}-hint`} className="flex justify-between gap-2 text-sm">
+          <div
+            id={`${bioId}-hint`}
+            className="flex justify-between gap-2 text-sm"
+          >
             <span className="text-red-600">{fieldErrors.bio}</span>
-            <span className={bio.trim().length > BIO_MAX_LENGTH ? 'text-red-600' : 'text-zinc-500'}>
+            <span
+              className={
+                bio.trim().length > BIO_MAX_LENGTH
+                  ? 'text-red-600'
+                  : 'text-zinc-500'
+              }
+            >
               {bio.trim().length}/{BIO_MAX_LENGTH}
             </span>
           </div>
@@ -98,7 +116,12 @@ export function ProfileEditForm({ profile, status, error, onSubmit, onCancel }: 
           >
             Cancel
           </button>
-          <Button type="submit" fullWidth={false} loading={status === 'submitting'} className="px-4 py-2 text-sm">
+          <Button
+            type="submit"
+            fullWidth={false}
+            loading={status === 'submitting'}
+            className="px-4 py-2 text-sm"
+          >
             Save changes
           </Button>
         </div>

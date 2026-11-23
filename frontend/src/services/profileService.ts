@@ -1,4 +1,5 @@
 import { ApiError, request } from './httpClient'
+import { hasApiStatus } from '../lib/apiError'
 
 export { ApiError }
 
@@ -20,7 +21,7 @@ export async function getMyProfileOrNull(): Promise<Profile | null> {
   try {
     return await getMyProfile()
   } catch (error) {
-    if (error instanceof ApiError && error.status === 404) {
+    if (hasApiStatus(error, 404)) {
       return null
     }
     throw error
@@ -44,7 +45,10 @@ export type ProfileUpdate = {
   bio: string
 }
 
-export function updateProfile(id: number, input: ProfileUpdate): Promise<Profile> {
+export function updateProfile(
+  id: number,
+  input: ProfileUpdate
+): Promise<Profile> {
   return request<Profile>(`/api/profiles/${id}`, {
     method: 'PUT',
     body: JSON.stringify(input),

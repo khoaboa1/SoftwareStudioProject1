@@ -5,7 +5,8 @@ import { Button } from '../components/ui/Button'
 import { FormAlert } from '../components/ui/FormAlert'
 import { TextField } from '../components/ui/TextField'
 import { useAuth } from '../lib/auth-context'
-import { ApiError, createProfile } from '../services/profileService'
+import { getErrorMessage } from '../lib/apiError'
+import { createProfile } from '../services/profileService'
 
 export function ProfileSetupPage() {
   const navigate = useNavigate()
@@ -38,7 +39,7 @@ export function ProfileSetupPage() {
       navigate('/feed')
     } catch (error) {
       setServerError(
-        error instanceof ApiError ? error.message : 'Something went wrong. Please try again.',
+        getErrorMessage(error, 'Something went wrong. Please try again.')
       )
       setStatus('error')
     }
@@ -50,7 +51,9 @@ export function ProfileSetupPage() {
       subtitle="Tell us your major so we can connect you to your campus marketplace"
       footer={null}
     >
-      {status === 'error' && serverError && <FormAlert kind="error">{serverError}</FormAlert>}
+      {status === 'error' && serverError && (
+        <FormAlert kind="error">{serverError}</FormAlert>
+      )}
 
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
         <TextField

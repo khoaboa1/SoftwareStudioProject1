@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom'
 import { CATEGORY_LABELS, CONDITION_LABELS } from '../lib/listingOptions'
 import type { Listing } from '../services/listingService'
+import { ListingStatusBadge } from './ListingStatusBadge'
 import { ListingThumbnail } from './ListingThumbnail'
+import { VerifiedBadge } from './VerifiedBadge'
 
 function formatPostedDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -14,20 +16,35 @@ type ListingCardProps = {
   listing: Listing
   onEdit?: () => void
   onDelete?: () => void
+  onMessage?: () => void
 }
 
-export function ListingCard({ listing, onEdit, onDelete }: ListingCardProps) {
+export function ListingCard({
+  listing,
+  onEdit,
+  onDelete,
+  onMessage,
+}: ListingCardProps) {
   return (
     <article className="relative flex flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition hover:shadow-md focus-within:ring-2 focus-within:ring-accent-300">
-      <ListingThumbnail category={listing.category} />
+      <ListingThumbnail
+        category={listing.category}
+        imageUrl={listing.imageUrl}
+        itemName={listing.itemName}
+      />
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-base font-semibold text-zinc-900">
-            <Link to={`/listings/${listing.id}`} className="after:absolute after:inset-0">
+            <Link
+              to={`/listings/${listing.id}`}
+              className="after:absolute after:inset-0"
+            >
               {listing.itemName}
             </Link>
           </h2>
-          <span className="shrink-0 text-base font-semibold text-accent-700">${listing.price.toFixed(2)}</span>
+          <span className="shrink-0 text-base font-semibold text-accent-700">
+            ${listing.price.toFixed(2)}
+          </span>
         </div>
         <div className="flex flex-wrap gap-1.5">
           <span className="rounded-full bg-accent-50 px-2.5 py-0.5 text-xs font-medium text-accent-800">
@@ -36,11 +53,18 @@ export function ListingCard({ listing, onEdit, onDelete }: ListingCardProps) {
           <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-700">
             {CONDITION_LABELS[listing.condition]}
           </span>
+          <ListingStatusBadge status={listing.status} />
         </div>
         <div className="mt-auto flex items-center justify-between gap-2">
-          <p className="text-xs text-zinc-400">
-            {listing.sellerName} · {formatPostedDate(listing.createdAt)}
-          </p>
+          <div
+            data-testid="listing-seller"
+            className="flex flex-wrap items-center gap-x-1.5 gap-y-1"
+          >
+            <p className="text-xs text-zinc-400">
+              {listing.sellerName} · {formatPostedDate(listing.createdAt)}
+            </p>
+            {listing.sellerVerified === true && <VerifiedBadge />}
+          </div>
           {(onEdit || onDelete) && (
             <div className="relative z-10 flex items-center gap-3">
               {onEdit && (
@@ -62,6 +86,16 @@ export function ListingCard({ listing, onEdit, onDelete }: ListingCardProps) {
                 </button>
               )}
             </div>
+          )}
+          {onMessage && (
+            <button
+              type="button"
+              onClick={onMessage}
+              aria-label={`Message seller about ${listing.itemName}`}
+              className="relative z-10 rounded-lg bg-accent-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-accent-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500"
+            >
+              Message
+            </button>
           )}
         </div>
       </div>

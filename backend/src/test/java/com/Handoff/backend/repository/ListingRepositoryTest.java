@@ -5,9 +5,11 @@ import com.Handoff.backend.model.Condition;
 import com.Handoff.backend.model.Listing;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.model.Profile;
+import com.Handoff.backend.dto.ListingBrowseRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import jakarta.persistence.EntityManager;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -18,40 +20,76 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest
 class ListingRepositoryTest {
 
-  @Autowired
-  private ListingRepository listingRepository;
+    @Autowired
+    private ListingRepository listingRepository;
 
-  @Autowired
-  private StudentRepository studentRepository;
+    @Autowired
+    private StudentRepository studentRepository;
 
-  @Autowired
-  private ProfileRepository profileRepository;
+    @Autowired
+    private ProfileRepository profileRepository;
 
-  @Test
-  void findBySchoolDomain_returnsMatchingSellersNewestFirst() {
-    // Persist the seller's tenant separately: listings derive their domain from this profile.
-    Student seller = studentRepository.save(new Student(
-        "Sarah", "sarah@tulane.edu", "hashed", null, null));
-    profileRepository.save(new Profile(seller, "Sarah", "CS", null, "tulane.edu"));
+    @Autowired
+    private EntityManager entityManager;
 
-    Listing older = new Listing("Desk Lamp", "Works great", new BigDecimal("10.00"),
-        Condition.GOOD, Category.FURNITURE, seller);
-    older.setCreatedAt(Instant.now().minusSeconds(60));
-    listingRepository.save(older);
+    @Test
+    void replaceImages_persistsInOrder_andDeleteCascades() {
+        Student seller = studentRepository.save(new Student("Sarah", "sarah2@tulane.edu", "hashed", null, null));
+        Listing listing = new Listing("Lamp", "Works", BigDecimal.TEN, Condition.GOOD, Category.FURNITURE, seller);
+        listing.replaceImages(List.of("https://a", "https://b", "https://c"));
+        Long id = listingRepository.saveAndFlush(listing).getId();
+        entityManager.clear();
+        Listing loaded = listingRepository.findById(id).orElseThrow();
+        assertThat(loaded.getImageUrls()).containsExactly("https://a", "https://b", "https://c");
+        loaded.replaceImages(List.of("https://b"));
+        listingRepository.saveAndFlush(loaded);
+        entityManager.clear();
+        assertThat(listingRepository.findById(id).orElseThrow().getImageUrls()).containsExactly("https://b");
+        listingRepository.deleteById(id);
+        listingRepository.flush();
+        assertThat(entityManager.createNativeQuery("select count(*) from listing_images where listing_id = :id")
+                .setParameter("id", id).getSingleResult()).isEqualTo(0L);
+    }
 
-    Listing newer = new Listing("Mini Fridge", "Barely used", new BigDecimal("40.00"),
-        Condition.LIKE_NEW, Category.KITCHEN, seller);
-    newer.setCreatedAt(Instant.now());
-    listingRepository.save(newer);
+    @Test
+    void findBySchoolDomain_returnsMatchingSellersNewestFirst() {
+        // Persist the seller's tenant separately: listings derive their domain from this profile.
+        Student seller = studentRepository.save(new Student("Sarah", "sarah@tulane.edu", "hashed", null, null));
+        profileRepository.save(new Profile(seller, "Sarah", "CS", null, "tulane.edu"));
 
-    // A newer listing in another school must be filtered by the database, before sorting.
-    Student other = studentRepository.save(new Student("Other", "other@school.edu", "hashed", null, null));
-    profileRepository.save(new Profile(other, "Other", "CS", null, "school.edu"));
-    listingRepository.save(new Listing("Excluded", "Other school", BigDecimal.TEN,
-        Condition.GOOD, Category.FURNITURE, other));
-    List<Listing> listings = listingRepository.findBySchoolDomain("tulane.edu");
+        Listing older = new Listing("Desk Lamp", "Works great", new BigDecimal("10.00"), Condition.GOOD,
+                Category.FURNITURE, seller);
+        older.setCreatedAt(Instant.now().minusSeconds(60));
+        listingRepository.save(older);
 
-    assertThat(listings).extracting(Listing::getItemName)
-        .containsExactly("Mini Fridge", "Desk Lamp");
-  }
+        Listing newer = new Listing("Mini Fridge", "Barely used", new BigDecimal("40.00"), Condition.LIKE_NEW,
+                Category.KITCHEN, seller);
+        newer.setCreatedAt(Instant.now());
+        listingRepository.save(newer);
+
+        // A newer listing in another school must be filtered by the database, before sorting.
+        Student other = studentRepository.save(new Student("Other", "other@school.edu", "hashed", null, null));
+        profileRepository.save(new Profile(other, "Other", "CS", null, "school.edu"));
+        listingRepository.save(
+                new Listing("Excluded", "Other school", BigDecimal.TEN, Condition.GOOD, Category.FURNITURE, other));
+        List<Listing> listings = listingRepository.findBySchoolDomain("tulane.edu");
+
+        assertThat(listings).extracting(Listing::getItemName).containsExactly("Mini Fridge", "Desk Lamp");
+    }
+
+
+    @Test
+    void suspendedSeller_isHiddenFromFeedDetailAndBrowse_butAdminLookupFindsIt() {
+        Student seller = studentRepository.save(new Student("Seller", "seller@tulane.edu", "hash", null, null));
+        profileRepository.save(new Profile(seller, "Seller", "CS", null, "tulane.edu"));
+        Listing listing = listingRepository
+                .save(new Listing("Lamp", "Works", BigDecimal.TEN, Condition.GOOD, Category.FURNITURE, seller));
+        seller.setSuspended(true);
+        studentRepository.saveAndFlush(seller);
+        assertThat(listingRepository.findBySchoolDomain("tulane.edu")).isEmpty();
+        assertThat(listingRepository.findByIdAndSchoolDomain(listing.getId(), "tulane.edu")).isEmpty();
+        assertThat(listingRepository.findByIdInSchoolForAdmin(listing.getId(), "tulane.edu")).isPresent();
+        assertThat(listingRepository.findAll(ListingSpecifications.visibleBrowseResults("tulane.edu",
+                ListingBrowseRequest.parse(null, null, null, null, null, null, null, null)))).isEmpty();
+    }
 }
