@@ -92,7 +92,7 @@ class AuthServiceTest {
         assertThat(student.getSupabaseUserId()).isEqualTo(USER_ID);
         assertThat(student.getPasswordHash()).isNull();
         assertThat(student.isVerified()).isFalse();
-        verify(verificationService).generateAndSendPin(student);
+        verify(verificationService).sendPinUnlessLimited(student);
     }
 
     @Test
@@ -124,7 +124,7 @@ class AuthServiceTest {
         assertThat(student.getSupabaseUserId()).isEqualTo(USER_ID);
         verify(supabase).adminUpdateUser(USER_ID, PASSWORD, false);
         verify(supabase, never()).adminCreateUnconfirmedUser(anyString(), anyString());
-        verify(verificationService).generateAndSendPin(student);
+        verify(verificationService).sendPinUnlessLimited(student);
     }
 
     @Test
@@ -137,7 +137,7 @@ class AuthServiceTest {
         Student student = authService.signup("Jane Doe", EMAIL, PASSWORD);
         assertThat(student.getSupabaseUserId()).isEqualTo(USER_ID);
         verify(supabase).adminUpdateUser(USER_ID, PASSWORD, false);
-        verify(verificationService).generateAndSendPin(student);
+        verify(verificationService).sendPinUnlessLimited(student);
     }
 
     @Test
@@ -177,7 +177,7 @@ class AuthServiceTest {
         assertThat(outcome.response().isRequiresPin()).isTrue();
         assertThat(outcome.response().getMessage()).isEqualTo(AuthService.NEW_DEVICE_MESSAGE);
         assertThat(pendingLogins.get(EMAIL, "device-2")).contains(SESSION);
-        verify(verificationService).generateAndSendPin(student);
+        verify(verificationService).sendPinUnlessLimited(student);
     }
 
     @Test
@@ -189,7 +189,7 @@ class AuthServiceTest {
         LoginOutcome outcome = authService.login(EMAIL, PASSWORD, null);
         assertThat(outcome.session()).isNull();
         assertThat(outcome.response().isRequiresPin()).isTrue();
-        verify(verificationService).generateAndSendPin(student);
+        verify(verificationService).sendPinUnlessLimited(student);
     }
 
     @Test
@@ -202,7 +202,7 @@ class AuthServiceTest {
         assertThat(outcome.session()).isNull();
         assertThat(outcome.response().isRequiresPin()).isTrue();
         assertThat(outcome.response().getMessage()).isEqualTo(AuthService.UNVERIFIED_MESSAGE);
-        verify(verificationService).generateAndSendPin(student);
+        verify(verificationService).sendPinUnlessLimited(student);
         verify(supabase, never()).adminUpdateUser(any(), any(), any());
     }
 
@@ -231,7 +231,7 @@ class AuthServiceTest {
         assertThat(outcome.response().getMessage()).isEqualTo(AuthService.UNVERIFIED_MESSAGE);
         assertThat(student.isVerified()).isFalse();
         assertThat(student.getSupabaseUserId()).isEqualTo(USER_ID);
-        verify(verificationService).generateAndSendPin(student);
+        verify(verificationService).sendPinUnlessLimited(student);
     }
 
     @Test

@@ -395,3 +395,66 @@ The 4 views lost 141 lines and gained 56.
   These now share `getErrorMessage`, but their state handling is still copied. This ticket covers load-on-mount requests only; a `useSubmitState` hook would be the matching extraction for submits.
 
 ---
+
+## SSP1-159 — PIN limits: state moved onto the student, and the limit arithmetic extracted
+
+**Commit:** [`dc32823`](https://github.com/khoaboa1/SoftwareStudioProject1/commit/dc32823cb9e9d6501f175d447d23283641605fd4)
+
+### 1. Move Field: the failed-attempt counter from memory to `Student`
+
+**Code smell:** **Temporary Field / misplaced state.** `VerificationService` held a `ConcurrentHashMap<String, Integer> failedAttempts` keyed by lower-cased email. The count lived apart from the PIN it described, it reset on every restart, and with more than one backend instance each instance would have kept its own count.
+
+**Mechanic:** **Move Field.** `Student.pinFailedAttempts` (column `pin_failed_attempts`, migration V12) now sits next to `verificationPin` and `verificationPinExpiry`, and is saved with them.
+
+```java
+// Before (VerificationService)
+private final ConcurrentHashMap<String, Integer> failedAttempts = new ConcurrentHashMap<>();
+int attempts = failedAttempts.merge(email.toLowerCase(), 1, Integer::sum);
+
+// After
+int attempts = student.getPinFailedAttempts() + 1;
+student.setPinFailedAttempts(attempts);
+studentRepository.save(student);
+```
+
+### 2. Introduce Parameter: inject a `Clock` instead of calling `LocalDateTime.now()`
+
+**Code smell:** **Hidden dependency on the system clock.** Cooldowns and hourly windows can't be tested reliably when the code reads the wall clock directly.
+
+**Mechanic:** **Introduce Parameter / Parameterize Constructor.** A package-private constructor takes `Duration resendCooldown, int maxSendsPerHour, Clock clock`. The `@Autowired` constructor reads the two limits from properties and passes `Clock.systemDefaultZone()`. The existing 3- and 4-argument constructors still work, so no existing test changed. `VerificationServicePinLimitsTest` moves a `MovableClock` forward instead of sleeping.
+
+### 3. Extract Method: `secondsUntil`, and read the clock once in `generateAndSendPin`
+
+**Code smell:** **Duplicated Code.** The cooldown branch and the hourly-cap branch of `sendLimit` both computed `(Duration.between(now, deadline).toMillis() + 999) / 1000`. That round-up is itself a fix the review asked for: with `toSeconds()`, a request a few milliseconds after a PIN was sent reported "59 seconds" and `Retry-After: 59`. `generateAndSendPin` also called `LocalDateTime.now(clock)` twice for one event.
+
+**Mechanic:** **Extract Method** and **Replace Temp with Query, inverted**: the clock is read into one local.
+
+```java
+/** Whole seconds from now until the deadline, rounded up so a wait is never reported as shorter than it is. */
+private static long secondsUntil(LocalDateTime now, LocalDateTime deadline) {
+    return (Duration.between(now, deadline).toMillis() + 999) / 1000;
+}
+```
+
+### 4. Consolidate the PIN-sending paths behind `sendPinUnlessLimited`
+
+**Code smell:** **Shotgun Surgery waiting to happen.** Sign-up and the three login paths each called `generateAndSendPin` directly. The review found that sign-up therefore bypassed the limits: signing up again with the same unverified email emailed a fresh PIN every time.
+
+**Mechanic:** **Substitute Algorithm** at each call site. `AuthService` now only calls `sendPinUnlessLimited`, which checks `sendLimit` first and keeps the current PIN when a limit applies. `resendPin` reports the same `sendLimit` result as a 429.
+
+### Verified
+
+- `./mvnw verify`: 639 tests, 0 failures. Line coverage is 92.7%, and every changed line is covered.
+- New tests:
+  - `VerificationServicePinLimitsTest` (10 tests)
+  - `PinRequestLimitControllerTest` (3 tests, including sign-up not bypassing the cooldown)
+  - `PinLimitMigrationContractTest`
+- Existing auth tests still pass. The test profile sets the cooldown to 0 for tests that resend right after sign-up.
+- Playwright on the sign-up PIN step with a mocked API passed 5/5:
+  - the cooldown message
+  - the hourly-cap message
+  - "Incorrect verification PIN" for wrong guesses
+  - the 5th-guess lockout message
+  - no page errors
+
+---

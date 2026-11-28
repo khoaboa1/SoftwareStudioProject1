@@ -1,5 +1,12 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-159 PIN Attempt and Request Limits (Backend)
+- **Wrong guesses:** counted on the student row (`pin_failed_attempts`, migration `V12__add_pin_limits_to_students.sql`), so a restart no longer resets them. The 5th wrong guess invalidates the PIN: `400 { "message": "Too many incorrect attempts. Please request a new PIN." }`. A correct PIN or a newly sent PIN resets the count. An expired PIN still does not count.
+- **PIN requests:** at most one PIN every 60 seconds and at most 5 per student per hour (`AUTH_PIN_RESEND_COOLDOWN_SECONDS`, `AUTH_PIN_MAX_SENDS_PER_HOUR`). `POST /auth/resend-pin` then returns `429` with a `Retry-After` header and `{ "message": "Please wait N seconds before requesting a new PIN." }` or `{ "message": "Too many PIN requests. Please try again in N minutes." }`.
+- **Login:** when a login would send a PIN but the limit applies, no new PIN is sent and the current one stays valid; the response is still `requiresPin: true`. Sign-up always sends a PIN.
+- **Frontend:** no change needed; the PIN step already shows the backend message for resend and verify errors.
+- **Known gaps:** limits are per student, not per IP address.
+
 ## Handoff Note: SSP1-147 Listing Status (Backend + Frontend)
 
 - **Feature summary:** A seller can mark their own listing Available, Pending or Sold, as on Facebook Marketplace. Buyers see the status. They can still message the seller about a Pending listing, but can't start a new conversation about a Sold one.
