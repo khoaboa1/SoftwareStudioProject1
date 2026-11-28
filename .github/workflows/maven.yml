@@ -9,10 +9,11 @@
 name: Java CI with Maven
 
 on:
+  # SSP1-155: develop is a temporary trigger so feature PRs get CI; remove it later.
   push:
-    branches: [ "main" ]
+    branches: [ "main", "develop" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "develop" ]
 
 jobs:
   build:
@@ -30,9 +31,16 @@ jobs:
         distribution: 'temurin'
         cache: maven
         cache-dependency-path: backend/pom.xml
-    - name: Build with Maven
-
-      run: mvn -B test --file backend/pom.xml
+    - name: Build, test and check coverage
+      # verify runs the tests and the JaCoCo check (line coverage >= 75%).
+      # The formatter is skipped because develop still has unformatted files.
+      run: mvn -B verify -Dformatter.skip=true --file backend/pom.xml
+    - name: Upload coverage report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: jacoco-report
+        path: backend/target/site/jacoco/
 
     # Optional: Uploads the full dependency graph to GitHub to improve the quality of Dependabot alerts this repository can receive
     - name: Update dependency graph
