@@ -395,3 +395,49 @@ The 4 views lost 141 lines and gained 56.
   These now share `getErrorMessage`, but their state handling is still copied. This ticket covers load-on-mount requests only; a `useSubmitState` hook would be the matching extraction for submits.
 
 ---
+
+## SSP1-151 — Coverage summary generator: extract the shared counter parsing
+
+**Commit:** [`c91a0fe`](https://github.com/khoaboa1/SoftwareStudioProject1/commit/c91a0fee99e573d6f5d60b3e0ffaa60bb3708db1)
+
+### Extract Function: `_counters(element)` in `scripts/coverage_summary.py`
+
+**Code smell:** **Duplicated Code.** `totals()` reads the report-level `<counter>` elements and `package_rows()` reads each package's. Both repeated the same loop: read `covered` and `missed`, then store `(covered, covered + missed)` by counter type. A change to how counters are read, for example how missing attributes are handled, would have needed the same edit in both places.
+
+**Mechanic:** **Extract Function.**
+
+```python
+# Before: in totals(), and again inside package_rows()
+result = {}
+for counter in root.findall("counter"):
+    covered = int(counter.get("covered", 0))
+    missed = int(counter.get("missed", 0))
+    result[counter.get("type")] = (covered, covered + missed)
+
+# After
+def _counters(element):
+    """Return {counter type: (covered, total)} for the <counter> children of *element*."""
+    ...
+
+def totals(path):
+    return _counters(ElementTree.parse(path).getroot())
+
+# in package_rows():
+counters = _counters(package)
+```
+
+**Also fixed in review (behavior, not a refactor):** the generated Markdown had no blank lines between blocks, so GitHub showed both tables as plain text. A test now checks the blank lines, and `main()` and its exit code are tested too.
+
+### Verified
+
+- `python3 -m unittest scripts/test_coverage_summary.py`: 7 tests pass. The file now holds a single `findall("counter")`.
+- `bash scripts/coverage-report.sh` regenerates `docs/coverage/README.md` identically, with PASS at 92.4% line coverage.
+- Playwright on `docs/coverage/README.md` as rendered by GitHub's Markdown API passed 6/6:
+  - the title;
+  - the bold PASS verdict;
+  - both tables as real `<table>` elements;
+  - all five counters;
+  - line coverage of at least 70%;
+  - the package rows.
+
+---
