@@ -7,6 +7,7 @@ import { FeedPage } from './pages/FeedPage'
 import { ListingDetailPage } from './pages/ListingDetailPage'
 import { ProfileSetupPage } from './pages/ProfileSetupPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { StudentProfilePage } from './pages/StudentProfilePage'
 import { InboxPage } from './pages/InboxPage'
 import { ConversationPage } from './pages/ConversationPage'
 import { AdminPage } from './pages/AdminPage'
@@ -88,6 +89,14 @@ function App() {
           element={
             <RequireAuth>
               <ProfilePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/students/:studentId"
+          element={
+            <RequireAuth>
+              <StudentProfilePage />
             </RequireAuth>
           }
         />

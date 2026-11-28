@@ -3,6 +3,7 @@ package com.Handoff.backend.service;
 import com.Handoff.backend.dto.ProfileSearchItem;
 import com.Handoff.backend.dto.ProfileSearchPageResponse;
 import com.Handoff.backend.dto.ProfileSearchRequest;
+import com.Handoff.backend.dto.PublicProfileResponse;
 import com.Handoff.backend.model.Profile;
 import com.Handoff.backend.model.Student;
 import com.Handoff.backend.repository.ProfileRepository;
@@ -185,11 +186,27 @@ public class ProfileService {
 
         Sort sort = Sort.by(Sort.Direction.ASC, "name").and(Sort.by(Sort.Direction.ASC, "id"));
         PageRequest pageRequest = PageRequest.of(request.page() - 1, request.limit(), sort);
-        Page<Profile> result = profileRepository.findBySchoolDomainAndStudent_IdNotAndNameContainingIgnoreCase(
-                requesterProfile.getSchoolDomain(), requester.getId(), request.query(), pageRequest);
+        Page<Profile> result = profileRepository.searchSameSchool(requesterProfile.getSchoolDomain(), requester.getId(),
+                request.query(), pageRequest);
 
         List<ProfileSearchItem> items = result.getContent().stream().map(ProfileSearchItem::from).toList();
         return new ProfileSearchPageResponse(items, new ProfileSearchPageResponse.Meta(result.getTotalElements(),
                 request.page(), result.getTotalPages(), request.limit()));
+    }
+
+    /**
+     * Another student's read-only profile, visible only inside the requester's school.
+     */
+    @Transactional(readOnly = true)
+    public PublicProfileResponse getPublicProfile(Student requester, Long studentId) {
+        if (requester == null) {
+            throw new NotAuthenticatedException("User must be authenticated to view profiles.");
+        }
+        Profile requesterProfile = profileRepository.findByStudent_Id(requester.getId())
+                .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
+        Profile profile = profileRepository
+                .findByStudentIdAndSchoolDomain(studentId, requesterProfile.getSchoolDomain())
+                .orElseThrow(() -> new ProfileNotFoundException("Profile not found"));
+        return PublicProfileResponse.from(profile);
     }
 }

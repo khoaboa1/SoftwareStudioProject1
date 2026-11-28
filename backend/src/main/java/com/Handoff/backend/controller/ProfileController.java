@@ -4,6 +4,7 @@ import com.Handoff.backend.dto.CreateProfileRequest;
 import com.Handoff.backend.dto.ErrorResponse;
 import com.Handoff.backend.dto.ProfileSearchPageResponse;
 import com.Handoff.backend.dto.ProfileSearchRequest;
+import com.Handoff.backend.dto.PublicProfileResponse;
 import com.Handoff.backend.dto.UpdateProfileRequest;
 import com.Handoff.backend.model.Profile;
 import com.Handoff.backend.model.Student;
@@ -34,6 +35,7 @@ public class ProfileController {
 
     private static final String NOT_AUTHENTICATED = "User must be authenticated to create a profile.";
     private static final String SEARCH_NOT_AUTHENTICATED = "User must be authenticated to search profiles.";
+    private static final String VIEW_NOT_AUTHENTICATED = "User must be authenticated to view profiles.";
 
     private final ProfileService profileService;
     private final CurrentStudentResolver currentStudentResolver;
@@ -66,6 +68,13 @@ public class ProfileController {
         Student requester = currentStudentResolver.require(httpRequest, SEARCH_NOT_AUTHENTICATED);
         ProfileSearchRequest searchRequest = ProfileSearchRequest.parse(q, page, limit);
         return profileService.searchProfiles(requester, searchRequest);
+    }
+
+    /** Another same-school student's read-only profile. */
+    @GetMapping("/students/{studentId}")
+    public PublicProfileResponse getPublicProfile(@PathVariable Long studentId, HttpServletRequest httpRequest) {
+        Student requester = currentStudentResolver.require(httpRequest, VIEW_NOT_AUTHENTICATED);
+        return profileService.getPublicProfile(requester, studentId);
     }
 
     /**

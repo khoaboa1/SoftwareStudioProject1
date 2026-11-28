@@ -54,3 +54,41 @@ export function updateProfile(
     body: JSON.stringify(input),
   })
 }
+
+/** One student in the same-school @ search. */
+export type ProfileSearchItem = {
+  id: number
+  studentId: number
+  name: string
+  major: string
+  bio: string | null
+  email: string
+  schoolDomain: string
+}
+
+type ProfileSearchPage = {
+  items: ProfileSearchItem[]
+  meta: {
+    totalItems: number
+    currentPage: number
+    totalPages: number
+    pageSize: number
+  }
+}
+
+export async function searchProfiles(
+  query: string,
+  limit = 5
+): Promise<ProfileSearchItem[]> {
+  const page = await request<ProfileSearchPage>(
+    `/api/profiles/search?q=${encodeURIComponent(query)}&limit=${limit}`
+  )
+  return page.items
+}
+
+/** Another student's read-only profile. */
+export type PublicProfile = Profile & { verified: boolean }
+
+export function getPublicProfile(studentId: number): Promise<PublicProfile> {
+  return request<PublicProfile>(`/api/profiles/students/${studentId}`)
+}
