@@ -395,3 +395,41 @@ The 4 views lost 141 lines and gained 56.
   These now share `getErrorMessage`, but their state handling is still copied. This ticket covers load-on-mount requests only; a `useSubmitState` hook would be the matching extraction for submits.
 
 ---
+
+## SSP1-155 — Coverage threshold as a named property, and structure-aware CI checks
+
+**Commit:** [`a0ba7f6`](https://github.com/khoaboa1/SoftwareStudioProject1/commit/a0ba7f683da49782248e8c7f9eacc4675b443264)
+
+### 1. Replace Magic Number with Symbolic Constant: `coverage.line.minimum`
+
+**Code smell:** **Magic Number.** A coverage gate written as `<minimum>0.75</minimum>` inside the JaCoCo rule hides the project's coverage rule deep in plugin XML, and it can't be changed for a single run.
+
+**Mechanic:** **Replace Magic Number with Symbolic Constant.** The pom's `<properties>` defines `<coverage.line.minimum>0.75</coverage.line.minimum>`, and the rule uses `${coverage.line.minimum}`. The same property lets `check-ci-config.sh` prove the gate works: it runs `-Dcoverage.line.minimum=0.99` and expects "Coverage checks have not been met".
+
+### 2. Extract Function: `has_line` in `check-ci-config.sh`
+
+**Code smell:** **Duplicated Code** and a **weak test**. The first version of the script repeated `grep -q '<text>' $workflow` for every check. It passed even when the coder's edit had dropped the indentation of the `on:` block, which turned `push:` and `pull_request:` into top-level keys and made the workflow invalid.
+
+**Mechanic:** **Extract Function.** `has_line` matches a whole line exactly, including its leading spaces (`grep -qxF`). Every structural check now goes through it, so a key at the wrong depth fails the check.
+
+```bash
+# Before: text anywhere in the file
+check "the JaCoCo report is uploaded" "grep -q 'name: jacoco-report' $workflow"
+
+# After: the exact line at the exact depth
+has_line() {
+  grep -qxF -- "$1" "$workflow"
+}
+check "the JaCoCo report is uploaded" \
+  "has_line '      uses: actions/upload-artifact@v4' && has_line '        name: jacoco-report' && has_line '        path: backend/target/site/jacoco/'"
+```
+
+**Also tidied:** the coder flattened the script and moved the workflow comments to column 0, so both were re-indented to match the blocks they belong to.
+
+### Verified
+
+- `bash .github/scripts/check-ci-config.sh` passes all 8 structure checks.
+- With a 0.99 minimum, the coverage gate fails the build as expected.
+- `./mvnw verify -Dformatter.skip=true` passes at the 75% minimum. Backend line coverage on develop is about 92%.
+
+---
