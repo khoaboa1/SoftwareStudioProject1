@@ -12,6 +12,7 @@ import com.Handoff.backend.service.EmailAlreadyRegisteredException;
 import com.Handoff.backend.service.InvalidCredentialsException;
 import com.Handoff.backend.service.InvalidSignupException;
 import com.Handoff.backend.service.InvalidVerificationPinException;
+import com.Handoff.backend.service.PinRequestLimitException;
 import com.Handoff.backend.service.auth.LoginOutcome;
 import com.Handoff.backend.service.auth.SupabaseAuthException;
 import com.Handoff.backend.service.auth.VerifiedLogin;
@@ -118,6 +119,13 @@ public class AuthController {
     @ExceptionHandler(InvalidVerificationPinException.class)
     public ResponseEntity<ErrorResponse> handleInvalidVerificationPin(InvalidVerificationPinException ex) {
         return ResponseEntity.badRequest().body(new ErrorResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(PinRequestLimitException.class)
+    public ResponseEntity<ErrorResponse> handlePinRequestLimit(PinRequestLimitException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()))
+                .body(new ErrorResponse(ex.getMessage()));
     }
 
     @ExceptionHandler(SupabaseAuthException.class)

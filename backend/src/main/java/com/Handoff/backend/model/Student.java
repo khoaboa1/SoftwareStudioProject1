@@ -72,6 +72,23 @@ public class Student {
     @JsonIgnore
     private LocalDateTime verificationPinExpiry;
 
+    /** Wrong PIN guesses since the last PIN was sent (SSP1-159). Stored so a restart does not reset it. */
+    @JsonIgnore
+    @Column(name = "pin_failed_attempts", nullable = false)
+    private int pinFailedAttempts;
+    /** When the last PIN was sent; drives the resend cooldown. */
+    @JsonIgnore
+    @Column(name = "pin_last_sent_at")
+    private LocalDateTime pinLastSentAt;
+    /** Start of the current one-hour PIN sending window. */
+    @JsonIgnore
+    @Column(name = "pin_send_window_start")
+    private LocalDateTime pinSendWindowStart;
+    /** PINs sent in the current window. */
+    @JsonIgnore
+    @Column(name = "pin_send_count", nullable = false)
+    private int pinSendCount;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "student_trusted_devices", joinColumns = @JoinColumn(name = "student_id"))
     @Column(name = "device_id")
@@ -270,6 +287,38 @@ public class Student {
 
     public void setVerificationPinExpiry(LocalDateTime verificationPinExpiry) {
         this.verificationPinExpiry = verificationPinExpiry;
+    }
+
+    public int getPinFailedAttempts() {
+        return pinFailedAttempts;
+    }
+
+    public void setPinFailedAttempts(int pinFailedAttempts) {
+        this.pinFailedAttempts = pinFailedAttempts;
+    }
+
+    public LocalDateTime getPinLastSentAt() {
+        return pinLastSentAt;
+    }
+
+    public void setPinLastSentAt(LocalDateTime pinLastSentAt) {
+        this.pinLastSentAt = pinLastSentAt;
+    }
+
+    public LocalDateTime getPinSendWindowStart() {
+        return pinSendWindowStart;
+    }
+
+    public void setPinSendWindowStart(LocalDateTime pinSendWindowStart) {
+        this.pinSendWindowStart = pinSendWindowStart;
+    }
+
+    public int getPinSendCount() {
+        return pinSendCount;
+    }
+
+    public void setPinSendCount(int pinSendCount) {
+        this.pinSendCount = pinSendCount;
     }
 
     public Set<String> getTrustedDeviceIds() {

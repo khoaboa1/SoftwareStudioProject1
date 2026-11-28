@@ -64,7 +64,7 @@ public class AuthService {
         student.setSupabaseUserId(supabaseUserId);
         student.setCreatedAt(LocalDateTime.now());
         Student saved = studentRepository.save(student);
-        verificationService.generateAndSendPin(saved);
+        verificationService.sendPinUnlessLimited(saved);
         return saved;
     }
 
@@ -93,7 +93,7 @@ public class AuthService {
         } catch (EmailNotConfirmedException unconfirmed) {
             session = confirmEmailIfPinVerified(student, email, password);
             if (session == null) {
-                verificationService.generateAndSendPin(student);
+                verificationService.sendPinUnlessLimited(student);
                 return new LoginOutcome(LoginResponse.requiresPin(email, UNVERIFIED_MESSAGE), null);
             }
         } catch (InvalidCredentialsException ex) {
@@ -107,13 +107,13 @@ public class AuthService {
         if (!student.isVerified()) {
             // Supabase already confirmed this email, but our own PIN has not been entered yet.
             studentRepository.save(student);
-            verificationService.generateAndSendPin(student);
+            verificationService.sendPinUnlessLimited(student);
             return new LoginOutcome(LoginResponse.requiresPin(email, UNVERIFIED_MESSAGE), null);
         }
         if (deviceId == null || deviceId.isBlank() || !student.isDeviceTrusted(deviceId)) {
             Student saved = studentRepository.save(student);
             pendingLogins.put(email, deviceId, session);
-            verificationService.generateAndSendPin(saved);
+            verificationService.sendPinUnlessLimited(saved);
             return new LoginOutcome(LoginResponse.requiresPin(email, NEW_DEVICE_MESSAGE), null);
         }
         Student saved = studentRepository.save(student);
