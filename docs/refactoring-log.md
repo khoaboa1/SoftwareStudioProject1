@@ -395,3 +395,26 @@ The 4 views lost 141 lines and gained 56.
   These now share `getErrorMessage`, but their state handling is still copied. This ticket covers load-on-mount requests only; a `useSubmitState` hook would be the matching extraction for submits.
 
 ---
+
+## SSP1-154 — Design patterns documentation (no production code changed)
+
+**Commit:** [`81e13b1`](https://github.com/khoaboa1/SoftwareStudioProject1/commit/81e13b1456b4288ab89102d049557b2d82cf0612)
+
+This ticket only adds documentation: `README.md ## Design patterns` and `scripts/check-readme-patterns.sh`. No Java or TypeScript was refactored.
+
+The review did restore formatting that the coder agent had dropped:
+- **README section:** the blank lines between paragraphs, lists and code fences, and the indentation of the JPQL text block in the Repository example.
+- **Check script:** its indentation. The section was then compared line by line with the reviewed text.
+
+### Verified
+
+- `bash scripts/check-readme-patterns.sh` passes all 7 checks.
+- The check fails as it should on a copy with a renamed file reference and with lost code indentation.
+- Playwright on the README as rendered by GitHub's Markdown API passed 5/5:
+  - the section heading;
+  - four pattern headings;
+  - a **Where:** and a **Why:** label for every pattern;
+  - code blocks with their indentation;
+  - the refactoring log link.
+
+---
