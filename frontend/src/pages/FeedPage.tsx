@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppHeader } from '../components/AppHeader'
 import { Button } from '../components/ui/Button'
 import { FormAlert } from '../components/ui/FormAlert'
@@ -41,6 +41,7 @@ function resetFormDefaults() {
 
 export function FeedPage() {
   const { student } = useAuth()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = useMemo(() => parseBrowseParams(searchParams), [searchParams])
   const filtersKey = JSON.stringify(filters)
@@ -250,6 +251,9 @@ export function FeedPage() {
           key={`search-${clearVersion}`}
           value={filters.q}
           onSearch={handleSearch}
+          onSelectProfile={(profile) =>
+            navigate(`/students/${profile.studentId}`)
+          }
         />
         <FilterBar
           key={`filter-${clearVersion}`}

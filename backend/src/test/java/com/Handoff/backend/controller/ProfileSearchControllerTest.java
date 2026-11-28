@@ -46,7 +46,8 @@ class ProfileSearchControllerTest {
         mockMvc.perform(get("/api/profiles/search").cookie(session(requester)).param("q", "jane"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].name").value("Jane Doe"))
                 .andExpect(jsonPath("$.items[0].studentId").isNumber())
-                .andExpect(jsonPath("$.items[0].schoolDomain").doesNotExist())
+                .andExpect(jsonPath("$.items[0].schoolDomain").value("tulane.edu"))
+                .andExpect(jsonPath("$.items[0].email").value("jane@tulane.edu"))
                 .andExpect(jsonPath("$.meta.currentPage").value(1)).andExpect(jsonPath("$.meta.pageSize").value(20));
     }
 
@@ -79,6 +80,16 @@ class ProfileSearchControllerTest {
 
         mockMvc.perform(get("/api/profiles/search").cookie(session(requester)).param("q", "jane"))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.message").value("Profile not found"));
+    }
+
+    @Test
+    void matchesByEmailAsWellAsName() throws Exception {
+        Student requester = profile("Viewer", "viewer@tulane.edu", "tulane.edu").getStudent();
+        profile("Pat Lee", "plee@tulane.edu", "tulane.edu");
+        mockMvc.perform(get("/api/profiles/search").cookie(session(requester)).param("q", "plee@"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items[0].name").value("Pat Lee"))
+                .andExpect(jsonPath("$.items[0].email").value("plee@tulane.edu"))
+                .andExpect(jsonPath("$.meta.totalItems").value(1));
     }
 
     private Cookie session(Student student) {

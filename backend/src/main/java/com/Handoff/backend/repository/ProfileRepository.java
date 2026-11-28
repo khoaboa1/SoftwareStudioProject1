@@ -44,11 +44,17 @@ public interface ProfileRepository extends JpaRepository<Profile, Long> {
     Optional<Profile> findByStudent_Id(Long studentId);
 
     /**
-     * Spring Data derives a query that combines all three predicates with AND: same school, not the requester, and a
-     * case-insensitive partial name match.
+     * Same school, not the requester, and a case-insensitive partial match on the profile name or the student's email.
+     * The student is fetched in the same query so each result's email needs no extra select.
      */
-    Page<Profile> findBySchoolDomainAndStudent_IdNotAndNameContainingIgnoreCase(String schoolDomain, Long requesterId,
-            String name, Pageable pageable);
+    @Query("""
+            select profile from Profile profile join fetch profile.student student
+            where profile.schoolDomain = :schoolDomain and student.id <> :requesterId and
+            (lower(profile.name) like lower(concat('%', :query, '%'))
+            or lower(student.email) like lower(concat('%', :query, '%')))
+            """)
+    Page<Profile> searchSameSchool(@Param("schoolDomain") String schoolDomain, @Param("requesterId") Long requesterId,
+            @Param("query") String query, Pageable pageable);
 
     /** Admin student list: one school, optional case-insensitive match on profile name or email. */
     @Query("""

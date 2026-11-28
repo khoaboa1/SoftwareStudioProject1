@@ -1,5 +1,12 @@
 # Two-Developer Workflow
 
+## Handoff Note: SSP1-157 @ Student Search (Backend + Frontend)
+- **Feature summary:** On the feed, typing `@` in the search bar looks up students at your school. Each suggestion shows name, email and school. Picking one fills the bar with `@Name` and opens their read-only profile at `/students/{studentId}`, which shows their profile card and their non-sold listings; each listing links to its page.
+- **Search endpoint (extended):** `GET /api/profiles/search?q=&page=&limit=` items are now `{ id, studentId, name, major, bio, email, schoolDomain }`, and `q` matches the profile name or the student email, case-insensitively. Same school only, the requester excluded, ordered by name then id. Errors are unchanged.
+- **Public profile endpoint (new):** `GET /api/profiles/students/{studentId}` returns `200 { id, studentId, name, major, bio, schoolDomain, createdAt, verified }` with no email. `404 { "message": "Profile not found" }` when the requester has no profile or the student is missing or at another school; `401 { "message": "User must be authenticated to view profiles." }` without a session. The owner-only `GET /api/profiles/{id}` is unchanged.
+- **Frontend:** `SearchBar` only offers `@` suggestions when given `onSelectProfile` (the feed does; the admin Students tab does not). Arrow keys, Enter and Escape work in the list. Your own id at `/students/{id}` redirects to `/profile`.
+- **Known gaps:** suspended students still appear in search and on their profile page; mentions are not stored and nobody is notified.
+
 ## Handoff Note: SSP1-147 Listing Status (Backend + Frontend)
 
 - **Feature summary:** A seller can mark their own listing Available, Pending or Sold, as on Facebook Marketplace. Buyers see the status. They can still message the seller about a Pending listing, but can't start a new conversation about a Sold one.

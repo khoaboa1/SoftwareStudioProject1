@@ -51,8 +51,8 @@ class ProfileSearchQueryTest {
         profile("Ann M", "m@tulane.edu", "tulane.edu");
 
         Sort sort = Sort.by(Sort.Direction.ASC, "name").and(Sort.by(Sort.Direction.ASC, "id"));
-        Page<Profile> result = profileRepository.findBySchoolDomainAndStudent_IdNotAndNameContainingIgnoreCase(
-                requester.getSchoolDomain(), requester.getStudentId(), "ann", PageRequest.of(1, 2, sort));
+        Page<Profile> result = profileRepository.searchSameSchool(requester.getSchoolDomain(), requester.getStudentId(),
+                "ann", PageRequest.of(1, 2, sort));
 
         assertThat(names(result)).containsExactly("Ann Z");
         assertThat(result.getTotalElements()).isEqualTo(3);
@@ -61,12 +61,20 @@ class ProfileSearchQueryTest {
 
     private Page<Profile> search(Profile requester, String query) {
         Sort sort = Sort.by(Sort.Direction.ASC, "name").and(Sort.by(Sort.Direction.ASC, "id"));
-        return profileRepository.findBySchoolDomainAndStudent_IdNotAndNameContainingIgnoreCase(
-                requester.getSchoolDomain(), requester.getStudentId(), query, PageRequest.of(0, 20, sort));
+        return profileRepository.searchSameSchool(requester.getSchoolDomain(), requester.getStudentId(), query,
+                PageRequest.of(0, 20, sort));
     }
 
     private List<String> names(Page<Profile> result) {
         return result.getContent().stream().map(Profile::getName).toList();
+    }
+
+    @Test
+    void matchesEmailInsideTheRequesterSchool() {
+        Profile requester = profile("Viewer", "email-viewer@tulane.edu", "tulane.edu");
+        profile("Jane Doe", "jdoe@tulane.edu", "tulane.edu");
+        profile("Other School", "jdoe@loyola.edu", "loyola.edu");
+        assertThat(names(search(requester, "jdoe@"))).containsExactly("Jane Doe");
     }
 
     private Profile profile(String name, String email, String domain) {

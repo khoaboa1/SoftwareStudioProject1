@@ -13,7 +13,12 @@ import {
   type ListingPage,
 } from '../services/listingService'
 import { resizeImage } from '../lib/resizeImage'
+import { searchProfiles } from '../services/profileService'
 
+vi.mock('../services/profileService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/profileService')>()),
+  searchProfiles: vi.fn(),
+}))
 vi.mock('../lib/resizeImage', () => ({ resizeImage: vi.fn() }))
 
 vi.mock('../lib/auth-context', () => ({
@@ -86,6 +91,32 @@ describe('FeedPage', () => {
     window.scrollTo = vi.fn()
     vi.mocked(deleteListing).mockReset()
     vi.mocked(searchListings).mockReset()
+  })
+
+  it('opens a student profile picked from the @ search', async () => {
+    vi.mocked(searchListings).mockResolvedValue(page([]))
+    vi.mocked(searchProfiles).mockResolvedValue([
+      {
+        id: 3,
+        studentId: 8,
+        name: 'Jane Doe',
+        major: 'CS',
+        bio: null,
+        email: 'jane@tulane.edu',
+        schoolDomain: 'tulane.edu',
+      },
+    ])
+    renderFeed()
+    const user = userEvent.setup()
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Search listings' }),
+      '@jan'
+    )
+    await user.click(
+      await screen.findByRole('option', { name: /Jane Doe/ }, { timeout: 2000 })
+    )
+    expect(screen.getByTestId('location')).toHaveTextContent('/students/8')
+    expect(searchProfiles).toHaveBeenCalledWith('jan')
   })
 
   it('renders the shared app header with navigation', async () => {
