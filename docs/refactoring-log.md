@@ -395,3 +395,82 @@ The 4 views lost 141 lines and gained 56.
   These now share `getErrorMessage`, but their state handling is still copied. This ticket covers load-on-mount requests only; a `useSubmitState` hook would be the matching extraction for submits.
 
 ---
+
+## SSP1-157 — Refactors made while adding @ student search
+
+**Commit:** [`7f43352`](https://github.com/khoaboa1/SoftwareStudioProject1/commit/7f4335280ea46ad2f9269d141dbfb950a850afb1)
+
+The feature was built test-first by a local model (Qwen3-Coder) and the review fixes by Nemotron through OpenCode. These are the refactors made in that change, including the ones the final review asked for.
+
+### 1. Extract Component: `ProfileSuggestionList` out of `SearchBar`
+
+**Code smell:** **Large Class / Long Method.** The first plan put the dropdown markup (loading, error, empty and option states, about 60 lines of JSX) straight into `SearchBar.tsx`, next to its debounce, URL sync and keyboard logic. The unit was too large for the local model's 64k context, and the component would have mixed two jobs: deciding *what* to show and *how* to draw it.
+
+**Mechanic:** **Extract Component.** `frontend/src/components/ProfileSuggestionList.tsx` only renders. It takes `listId`, `status`, `suggestions`, `activeIndex` and `onSelect`. `SearchBar` keeps all state and keyboard handling and renders `<ProfileSuggestionList ... />`.
+
+```tsx
+// After, in SearchBar.tsx
+{listOpen && (
+  <ProfileSuggestionList
+    listId={listId}
+    status={suggestStatus}
+    suggestions={suggestions}
+    activeIndex={activeIndex}
+    onSelect={select}
+  />
+)}
+```
+
+### 2. Move Function: `suggestionOptionId` to `src/lib/suggestionIds.ts`
+
+**Code smell:** **Misplaced function.** `ProfileSuggestionList.tsx` exported a plain helper next to its component, so oxlint reported `react(only-export-components)`: Fast Refresh can't hot-reload a module that mixes components and other exports. The helper is shared by the list (each option's `id`) and `SearchBar` (the input's `aria-activedescendant`), so it belongs to neither component.
+
+**Mechanic:** **Move Function.**
+
+```ts
+// Before: frontend/src/components/ProfileSuggestionList.tsx
+export function suggestionOptionId(listId: string, index: number): string {
+  return `${listId}-option-${index}`
+}
+
+// After: frontend/src/lib/suggestionIds.ts (both components import it)
+export function suggestionOptionId(listId: string, index: number): string {
+  return `${listId}-option-${index}`
+}
+```
+
+### 3. Parameterize `MyListings` instead of copying it for other students
+
+**Code smell:** **Duplicated Code (avoided).** The new student profile page needs the same listing grid, loading skeleton and error handling as "My listings". A second component would have copied all of it.
+
+**Mechanic:** **Parameterize Function.** `MyListings` takes an optional `ownerName`. Without it, nothing changes. With it, the heading reads `"{name}'s listings (n)"`, SOLD listings are hidden, and the empty state drops the "Post one in the marketplace" link.
+
+```tsx
+// Before
+export function MyListings({ sellerId }: { sellerId: number })
+
+// After
+export function MyListings({ sellerId, ownerName }: { sellerId: number; ownerName?: string })
+```
+
+### 4. Replace the derived query method with one named JPQL query
+
+**Code smell:** **Long method name that encodes the query.** `findBySchoolDomainAndStudent_IdNotAndNameContainingIgnoreCase` could not express "name OR email", and each result's email would have needed a lazy load per row.
+
+**Mechanic:** **Rename Method + Substitute Algorithm.** `ProfileRepository.searchSameSchool(schoolDomain, requesterId, query, pageable)` is an explicit `@Query` that `join fetch`es the student, following the existing `findAdminStudents` query.
+
+### Behavior preserved: how it was verified
+
+- Existing tests were kept. The SSP1-105 test that asserted `schoolDomain` was absent now asserts its value, because the contract changed on purpose.
+- Backend `./mvnw verify`: 635 tests, 0 failures. Line coverage is 92.5%, and every new method has 0 missed lines.
+- Frontend: Vitest 426/426, `tsc -b` clean, and oxlint shows only the existing `auth-context.tsx` warning. All changed files pass Prettier.
+- Playwright against the Vite dev server with a mocked API passed 18/18 checks on desktop and at 390 px:
+  - the `@` dropdown;
+  - picking a student by mouse and by keyboard;
+  - Escape;
+  - opening a listing from the profile;
+  - the own-id redirect;
+  - the not-found case;
+  - no page errors.
+
+---
